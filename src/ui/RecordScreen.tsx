@@ -5,7 +5,7 @@ import { addRecord, lastNextAction } from '../data/repo'
 import type { Outcome } from '../domain/types'
 import { Empty, formatAgo, MediaView, requestPersist } from './common'
 import { useAction, useToast } from './feedback'
-import { go, href } from './router'
+import { backHandler, goBack, href } from './router'
 
 const OUTCOMES: { value: Outcome; label: string }[] = [
   { value: 'good', label: '◎ 成功' },
@@ -80,7 +80,7 @@ export function RecordScreen({ skillId }: { skillId: string }) {
         clearDraft()
         void requestPersist()
         toast.show('記録しました')
-        go('/')
+        goBack('/')
       } finally {
         setSaving(false)
       }
@@ -89,7 +89,7 @@ export function RecordScreen({ skillId }: { skillId: string }) {
   return (
     <div className="screen record-screen">
       <header className="screen-header">
-        <a className="back" href={href('/')} aria-label="戻る">
+        <a className="back" href={href('/')} onClick={backHandler('/')} aria-label="戻る">
           ←
         </a>
         <h1>{skill.name}</h1>

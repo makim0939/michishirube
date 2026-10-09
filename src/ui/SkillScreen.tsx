@@ -11,10 +11,14 @@ import {
   revertAchievement,
 } from '../data/repo'
 import { canActivate, computeStates, indexById } from '../domain/logic'
+import { isWebUrl } from '../domain/template'
 import type { Media, PracticeRecord } from '../domain/types'
 import { ConfirmButton, Empty, formatDate, isVideo, MediaView, StateBadge, STATE_ICON } from './common'
 import { useAction, useCelebrate, useToast } from './feedback'
-import { href } from './router'
+import { backHandler, href } from './router'
+
+/** 動画をまとめて読み込むと重いので、記録は少しずつ出す */
+const RECORDS_PAGE = 10
 
 const OUTCOME_LABEL = { good: '◎ 成功', meh: '△ 惜しい', bad: '✕ 失敗' } as const
 
@@ -61,7 +65,9 @@ function Compare({ media }: { media: Media[] }) {
             for (const v of videos.current) {
               if (!v) continue
               v.currentTime = 0
-              void v.play()
+              v.play().catch(() => {
+                // 自動再生が止められた場合は、各動画の再生ボタンで再生してもらう
+              })
             }
           }}
         >
@@ -116,6 +122,7 @@ export function SkillScreen({ id }: { id: string }) {
   const toast = useToast()
   const celebrate = useCelebrate()
   const [askingAchieve, setAskingAchieve] = useState(false)
+  const [shown, setShown] = useState(RECORDS_PAGE)
 
   const data = useLiveQuery(async () => {
     const skill = await db.skills.get(id)
@@ -146,7 +153,12 @@ export function SkillScreen({ id }: { id: string }) {
   return (
     <div className="screen">
       <header className="screen-header">
-        <a className="back" href={href(`/map/${skill.domainId}`)} aria-label="ロードマップへ戻る">
+        <a
+          className="back"
+          href={href(`/map/${skill.domainId}`)}
+          onClick={backHandler(`/map/${skill.domainId}`)}
+          aria-label="戻る"
+        >
           ←
         </a>
         <div className="title-block">
@@ -269,7 +281,7 @@ export function SkillScreen({ id }: { id: string }) {
           <ul className="sources">
             {skill.sources.map((s, i) => (
               <li key={i}>
-                {s.url ? (
+                {s.url && isWebUrl(s.url) ? (
                   <a href={s.url} target="_blank" rel="noopener noreferrer">
                     {s.title}
                   </a>
@@ -321,7 +333,7 @@ export function SkillScreen({ id }: { id: string }) {
           <p className="muted">まだ記録がありません。</p>
         ) : (
           <ul className="records">
-            {records.map((r) => (
+            {records.slice(0, shown).map((r) => (
               <RecordItem
                 key={r.id}
                 record={r}
@@ -329,6 +341,11 @@ export function SkillScreen({ id }: { id: string }) {
               />
             ))}
           </ul>
+        )}
+        {records.length > shown && (
+          <button className="btn" onClick={() => setShown((n) => n + RECORDS_PAGE)}>
+            さらに表示（残り {records.length - shown} 件）
+          </button>
         )}
       </section>
     </div>

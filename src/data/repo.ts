@@ -1,5 +1,5 @@
 import { canActivate, invalidActives, newlyUnlocked, wouldCreateCycle } from '../domain/logic'
-import { parseTemplate, templateToEntities, type RoadmapTemplate } from '../domain/template'
+import { isWebUrl, parseTemplate, templateToEntities, type RoadmapTemplate } from '../domain/template'
 import {
   DEFAULT_SETTINGS,
   MAX_ACTIVE_RANGE,
@@ -93,6 +93,10 @@ export interface SkillInput {
 function cleanInput(input: SkillInput): SkillInput {
   const name = input.name.trim()
   if (!name) throw new RepoError('スキルの名前を入れてください')
+  for (const s of input.sources) {
+    const url = s.url?.trim()
+    if (url && !isWebUrl(url)) throw new RepoError(`出典の URL は http:// か https:// で始めてください（${url}）`)
+  }
   return {
     name,
     description: input.description.trim(),

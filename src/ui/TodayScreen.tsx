@@ -20,7 +20,10 @@ function InstallHint() {
   const standalone =
     window.matchMedia('(display-mode: standalone)').matches ||
     (navigator as Navigator & { standalone?: boolean }).standalone === true
-  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent)
+  // iPadOS の Safari は Mac として名乗るので、タッチ対応かどうかでも判定する
+  const ios =
+    /iPhone|iPad|iPod/.test(navigator.userAgent) ||
+    (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1)
   if (hidden || standalone || !ios) return null
   return (
     <div className="notice">
@@ -89,10 +92,19 @@ export function TodayScreen() {
 
       <InstallHint />
 
-      {data.cards.length === 0 ? (
+      {data.cards.length === 0 && data.total > 0 ? (
         <div className="empty">
           <p>挑戦中のスキルがありません。</p>
-          <p className="muted">下の「挑戦できるスキル」から選ぶと、ここに練習カードが出ます。</p>
+          {data.available.length > 0 ? (
+            <p className="muted">下の「挑戦できるスキル」から選ぶと、ここに練習カードが出ます。</p>
+          ) : (
+            <>
+              <p className="muted">いま挑戦できるスキルもありません。ロードマップに次のスキルを足しましょう。</p>
+              <a className="btn primary" href={href('/map')}>
+                ロードマップを開く
+              </a>
+            </>
+          )}
         </div>
       ) : (
         <ul className="cards">
@@ -118,14 +130,16 @@ export function TodayScreen() {
         </ul>
       )}
 
-      {data.available.length > 0 && (
+      {data.available.length > 0 && room <= 0 && (
+        <p className="muted small">
+          ほかに挑戦できるスキルが {data.available.length} つあります。挑戦中は {data.settings.maxActive}{' '}
+          つまでなので、いまのスキルを達成するか挑戦をやめると選べます。
+        </p>
+      )}
+
+      {data.available.length > 0 && room > 0 && (
         <section className="section">
           <h2>挑戦できるスキル</h2>
-          {room <= 0 && (
-            <p className="muted">
-              挑戦中は {data.settings.maxActive} つまでです。いまのスキルを達成するか、挑戦をやめると選べます。
-            </p>
-          )}
           <ul className="list">
             {data.available.map((s) => (
               <li key={s.id} className="list-row">
@@ -135,7 +149,6 @@ export function TodayScreen() {
                 </a>
                 <button
                   className="btn small primary"
-                  disabled={room <= 0}
                   onClick={() =>
                     run(async () => {
                       await activateSkill(s.id)

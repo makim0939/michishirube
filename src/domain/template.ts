@@ -21,8 +21,22 @@ export interface TemplateSkill {
 
 export class TemplateError extends Error {}
 
+/** 出典のリンクは http(s) だけを許す。共有された JSON に javascript: などが入っていても開かないように */
+export function isWebUrl(url: string): boolean {
+  try {
+    return ['http:', 'https:'].includes(new URL(url).protocol)
+  } catch {
+    return false
+  }
+}
+
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v)
+}
+
+function webUrl(url: string, field: string): string {
+  if (!isWebUrl(url)) throw new TemplateError(`${field} は http(s) の URL にしてください`)
+  return url
 }
 
 function str(v: unknown, field: string): string {
@@ -55,7 +69,7 @@ export function parseTemplate(input: unknown): RoadmapTemplate {
         if (!isRecord(s)) throw new TemplateError(`skills[${i}].sources[${j}] がオブジェクトではありません`)
         return {
           title: str(s.title, `skills[${i}].sources[${j}].title`),
-          ...(typeof s.url === 'string' && s.url ? { url: s.url } : {}),
+          ...(typeof s.url === 'string' && s.url ? { url: webUrl(s.url, `skills[${i}].sources[${j}].url`) } : {}),
         }
       }),
       prereqs: prereqs as string[],

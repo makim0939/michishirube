@@ -46,6 +46,18 @@ export function useCelebrate() {
 const CONFETTI_COLORS = ['#f2b84b', '#1f6f5c', '#e0603f', '#5b8def', '#c86fc9']
 
 function CelebrationOverlay({ celebration, onClose }: { celebration: Celebration; onClose: () => void }) {
+  // 画面を移動したり Esc を押したら閉じる（スワイプで戻ったときに演出だけ残らないように）
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('hashchange', onClose)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('hashchange', onClose)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [onClose])
   const pieces = useMemo(
     () =>
       Array.from({ length: 36 }, (_, i) => ({
@@ -93,17 +105,11 @@ function CelebrationOverlay({ celebration, onClose }: { celebration: Celebration
         )}
         <div className="celebration-actions">
           {celebration.unlocked.length > 0 && (
-            <button
-              className="btn primary"
-              onClick={() => {
-                onClose()
-                go(`/skill/${celebration.unlocked[0].id}`)
-              }}
-            >
+            <button className="btn primary" autoFocus onClick={() => go(`/skill/${celebration.unlocked[0].id}`)}>
               次のスキルを見る
             </button>
           )}
-          <button className="btn" onClick={onClose}>
+          <button className="btn" autoFocus={celebration.unlocked.length === 0} onClick={onClose}>
             閉じる
           </button>
         </div>
@@ -122,6 +128,7 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(timer)
   }, [toast])
 
+  const closeCelebration = useCallback(() => setCelebration(null), [])
   const toastApi = useMemo<ToastApi>(
     () => ({ show: (message, tone = 'ok') => setToast({ message, tone, key: Date.now() }) }),
     [],
@@ -136,7 +143,7 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
             {toast.message}
           </div>
         )}
-        {celebration && <CelebrationOverlay celebration={celebration} onClose={() => setCelebration(null)} />}
+        {celebration && <CelebrationOverlay celebration={celebration} onClose={closeCelebration} />}
       </CelebrationContext.Provider>
     </ToastContext.Provider>
   )

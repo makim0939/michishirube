@@ -16,13 +16,13 @@ function Screen({ route }: { route: Route }) {
     case 'map':
       return <MapScreen domainId={route.domainId} />
     case 'skill':
-      return <SkillScreen id={route.id} />
+      return <SkillScreen key={route.id} id={route.id} />
     case 'edit':
-      return <EditSkillScreen id={route.id} />
+      return <EditSkillScreen key={route.id} id={route.id} />
     case 'new':
-      return <NewSkillScreen domainId={route.domainId} />
+      return <NewSkillScreen key={route.domainId} domainId={route.domainId} />
     case 'record':
-      return <RecordScreen skillId={route.skillId} />
+      return <RecordScreen key={route.skillId} skillId={route.skillId} />
     case 'settings':
       return <SettingsScreen />
   }

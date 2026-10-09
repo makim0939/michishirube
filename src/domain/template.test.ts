@@ -60,3 +60,14 @@ describe('templateToEntities / entitiesToTemplate', () => {
     ])
   })
 })
+
+describe('出典の URL', () => {
+  it('http(s) 以外の URL をはじく', () => {
+    const t = (url: string) => ({
+      ...base,
+      skills: [{ key: 'a', name: 'A', criteria: '', sources: [{ title: 't', url }] }],
+    })
+    expect(() => parseTemplate(t('javascript:alert(1)'))).toThrow(/http/)
+    expect(parseTemplate(t('https://example.com')).skills[0].sources?.[0].url).toBe('https://example.com')
+  })
+})

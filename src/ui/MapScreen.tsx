@@ -1,15 +1,25 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { lazy, Suspense, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { db } from '../data/db'
 import { createDomain, deleteDomain, importTemplate, renameDomain } from '../data/repo'
 import { computeStates, sortByDepth } from '../domain/logic'
 import { entitiesToTemplate } from '../domain/template'
 import { ConfirmButton, saveFile, StateBadge } from './common'
 import { useAction, useToast } from './feedback'
+import { RoadmapGraph } from './RoadmapGraph'
 import { go, href } from './router'
 
-// React Flow は大きいので、ロードマップを開いたときだけ読み込む
-const RoadmapGraph = lazy(() => import('./RoadmapGraph').then((m) => ({ default: m.RoadmapGraph })))
+// React Flow は遅延読み込みしない。PWA の更新で古い分割ファイルが消え、開けなくなるのを避けるため
+
+const LAST_DOMAIN_KEY = 'michishirube:last-domain'
+
+function readLastDomain(): string | undefined {
+  try {
+    return localStorage.getItem(LAST_DOMAIN_KEY) ?? undefined
+  } catch {
+    return undefined
+  }
+}
 
 function NewDomainForm({ onDone }: { onDone: () => void }) {
   const run = useAction()
@@ -46,10 +56,22 @@ export function MapScreen({ domainId }: { domainId?: string }) {
 
   const data = useLiveQuery(async () => {
     const domains = await db.domains.orderBy('order').toArray()
-    const current = domains.find((d) => d.id === domainId) ?? domains[0]
+    // タブから開いたときは、最後に見ていた分野を出す
+    const wanted = domainId ?? readLastDomain()
+    const current = domains.find((d) => d.id === wanted) ?? domains[0]
     const skills = current ? await db.skills.where('domainId').equals(current.id).toArray() : []
     return { domains, current, skills }
   }, [domainId])
+
+  const currentId = data?.current?.id
+  useEffect(() => {
+    if (!currentId) return
+    try {
+      localStorage.setItem(LAST_DOMAIN_KEY, currentId)
+    } catch {
+      // 覚えられなくても先頭の分野が出るだけ
+    }
+  }, [currentId])
 
   if (!data) return null
   const { domains, current, skills } = data
@@ -128,9 +150,7 @@ export function MapScreen({ domainId }: { domainId?: string }) {
 
           {skills.length > 0 ? (
             <>
-              <Suspense fallback={<div className="graph" />}>
-                <RoadmapGraph skills={skills} />
-              </Suspense>
+              <RoadmapGraph key={current.id} skills={skills} />
               <ul className="legend" aria-label="凡例">
                 <li><StateBadge state="done" /></li>
                 <li><StateBadge state="active" /></li>

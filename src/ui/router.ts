@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type MouseEvent } from 'react'
 
 export type Route =
   | { name: 'today' }
@@ -37,10 +37,33 @@ export function go(path: string) {
   window.location.hash = path
 }
 
+/** 履歴を積まずに移動する（保存・削除のあとに、戻るでフォームへ戻らないように） */
+export function replace(path: string) {
+  window.location.replace(href(path))
+}
+
+// アプリ内で何回画面を移動したか。0 ならホーム画面から直接開いた直後なので、戻る先がない
+let inAppDepth = 0
+
+/** 来た画面へ戻る。アプリ内に履歴がなければ fallback へ */
+export function goBack(fallback: string) {
+  if (inAppDepth > 0) window.history.back()
+  else go(fallback)
+}
+
+export function backHandler(fallback: string) {
+  return (e: MouseEvent) => {
+    e.preventDefault()
+    goBack(fallback)
+  }
+}
+
 export function useRoute(): Route {
   const [route, setRoute] = useState(() => parseHash(window.location.hash))
   useEffect(() => {
     const onChange = () => {
+      // 読み込み後にアプリ内で移動していれば、1つ前の履歴はたいていアプリ内の画面
+      inAppDepth += 1
       setRoute(parseHash(window.location.hash))
       window.scrollTo(0, 0)
     }

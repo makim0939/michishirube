@@ -1,5 +1,5 @@
 import dagre from '@dagrejs/dagre'
-import { Handle, Position, ReactFlow, type Edge, type Node, type NodeProps } from '@xyflow/react'
+import { Controls, Handle, Position, ReactFlow, type Edge, type Node, type NodeProps } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useMemo } from 'react'
 import { computeStates } from '../domain/logic'
@@ -27,7 +27,7 @@ function SkillNodeView({ data }: NodeProps<SkillNode>) {
 
 const nodeTypes = { skill: SkillNodeView }
 
-function layout(skills: Skill[]): { nodes: SkillNode[]; edges: Edge[] } {
+function layout(skills: Skill[]): { nodes: SkillNode[]; edges: Edge[]; focus: string[] } {
   const states = computeStates(skills)
   const g = new dagre.graphlib.Graph()
   g.setGraph({ rankdir: 'TB', nodesep: 24, ranksep: 56, marginx: 8, marginy: 8 })
@@ -59,11 +59,24 @@ function layout(skills: Skill[]): { nodes: SkillNode[]; edges: Edge[] } {
       data: { label: s.name, state: states.get(s.id)! },
     }
   })
-  return { nodes, edges }
+  return { nodes, edges, focus: frontier(skills, states) }
+}
+
+/**
+ * 最初に映す範囲。全体を収めるとスマホでは文字が読めないので、
+ * 「いま挑戦できる・挑戦中」のスキルと、その直前・直後だけに寄せる
+ */
+function frontier(skills: Skill[], states: Map<string, SkillState>): string[] {
+  const current = skills.filter((s) => ['available', 'active'].includes(states.get(s.id)!))
+  if (current.length === 0) return []
+  const ids = new Set(current.map((s) => s.id))
+  for (const s of current) for (const p of s.prereqIds) ids.add(p)
+  for (const s of skills) if (s.prereqIds.some((p) => current.some((c) => c.id === p))) ids.add(s.id)
+  return [...ids]
 }
 
 export function RoadmapGraph({ skills }: { skills: Skill[] }) {
-  const { nodes, edges } = useMemo(() => layout(skills), [skills])
+  const { nodes, edges, focus } = useMemo(() => layout(skills), [skills])
   return (
     <div className="graph">
       <ReactFlow
@@ -75,10 +88,12 @@ export function RoadmapGraph({ skills }: { skills: Skill[] }) {
         nodesConnectable={false}
         elementsSelectable={false}
         fitView
-        fitViewOptions={{ padding: 0.1 }}
+        fitViewOptions={focus.length > 0 ? { nodes: focus.map((id) => ({ id })), padding: 0.2, maxZoom: 1 } : { padding: 0.1 }}
         minZoom={0.3}
         maxZoom={1.5}
-      />
+      >
+        <Controls showInteractive={false} fitViewOptions={{ padding: 0.1 }} aria-label="表示の操作" />
+      </ReactFlow>
     </div>
   )
 }

@@ -53,6 +53,9 @@ export function SettingsScreen() {
   const restoreInput = useRef<HTMLInputElement>(null)
   const [pendingRestore, setPendingRestore] = useState<File | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
+  // 書き出しに時間がかかると、共有シートを開くのに必要な「直前のタップ」が切れる。
+  // そのため、作り終えたら改めて「保存する」を押してもらう
+  const [exported, setExported] = useState<{ blob: Blob; name: string } | null>(null)
 
   const data = useLiveQuery(async () => ({
     settings: await getSettings(),
@@ -66,8 +69,9 @@ export function SettingsScreen() {
     run(async () => {
       setBusy(includeMedia ? 'full' : 'notes')
       try {
+        setExported(null)
         const blob = await exportBackup({ includeMedia })
-        await saveFile(blob, backupFileName(includeMedia))
+        setExported({ blob, name: backupFileName(includeMedia) })
       } finally {
         setBusy(null)
       }
@@ -138,6 +142,21 @@ export function SettingsScreen() {
             }}
           />
         </div>
+        {exported && (
+          <div className="confirm">
+            <p>
+              バックアップを作りました（{formatBytes(exported.blob.size)}）。「ファイルに保存」や AirDrop で、この端末の外にも置いてください。
+            </p>
+            <div className="row">
+              <button className="btn primary" onClick={() => run(() => saveFile(exported.blob, exported.name))}>
+                保存する
+              </button>
+              <button className="btn" onClick={() => setExported(null)}>
+                閉じる
+              </button>
+            </div>
+          </div>
+        )}
         {pendingRestore && (
           <div className="confirm">
             <p>

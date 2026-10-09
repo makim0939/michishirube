@@ -14,6 +14,7 @@
   --done-soft: #e3f1e1;
   --gold: #f2b84b;
   --danger: #b4382b;
+  --danger-soft: #f7dfdb;
   --radius: 14px;
   --shadow: 0 1px 2px rgb(0 0 0 / 6%), 0 4px 16px rgb(0 0 0 / 5%);
   --tabbar-h: 60px;
@@ -41,6 +42,7 @@
     --done: #79c47d;
     --done-soft: #1f3420;
     --danger: #ef7a6c;
+    --danger-soft: #3d1f1b;
     --shadow: 0 1px 2px rgb(0 0 0 / 40%);
     color-scheme: dark;
   }
@@ -670,7 +672,7 @@ ul {
 }
 
 .segmented button.selected.outcome-bad {
-  background: #f7dfdb;
+  background: var(--danger-soft);
   color: var(--danger);
 }
 

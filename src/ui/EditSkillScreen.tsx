@@ -6,19 +6,19 @@ import { descendants, sortByDepth } from '../domain/logic'
 import type { Skill } from '../domain/types'
 import { ConfirmButton, Empty } from './common'
 import { useAction, useToast } from './feedback'
-import { go, href } from './router'
+import { backHandler, goBack, href, replace } from './router'
 
 function SkillForm({
   initial,
   candidates,
   onSubmit,
-  cancelHref,
+  cancelPath,
   extra,
 }: {
   initial: SkillInput
   candidates: Skill[]
   onSubmit: (input: SkillInput) => Promise<void>
-  cancelHref: string
+  cancelPath: string
   extra?: React.ReactNode
 }) {
   const [form, setForm] = useState<SkillInput>(initial)
@@ -117,7 +117,7 @@ function SkillForm({
         <button className="btn primary" type="submit" disabled={busy}>
           保存する
         </button>
-        <a className="btn" href={cancelHref}>
+        <a className="btn" href={href(cancelPath)} onClick={backHandler(cancelPath)}>
           やめる
         </a>
       </div>
@@ -145,7 +145,7 @@ export function EditSkillScreen({ id }: { id: string }) {
   return (
     <div className="screen">
       <header className="screen-header">
-        <a className="back" href={href(`/skill/${id}`)} aria-label="戻る">
+        <a className="back" href={href(`/skill/${id}`)} onClick={backHandler(`/skill/${id}`)} aria-label="戻る">
           ←
         </a>
         <h1>スキルを編集</h1>
@@ -160,7 +160,7 @@ export function EditSkillScreen({ id }: { id: string }) {
           prereqIds: skill.prereqIds,
         }}
         candidates={candidates}
-        cancelHref={href(`/skill/${id}`)}
+        cancelPath={`/skill/${id}`}
         onSubmit={async (input) => {
           const ok = await run(async () => {
             await updateSkill(id, input)
@@ -168,7 +168,7 @@ export function EditSkillScreen({ id }: { id: string }) {
           })
           if (ok) {
             toast.show('保存しました')
-            go(`/skill/${id}`)
+            goBack(`/skill/${id}`)
           }
         }}
         extra={
@@ -182,7 +182,7 @@ export function EditSkillScreen({ id }: { id: string }) {
                   await deleteSkill(id)
                   return true
                 })
-                if (ok) go(`/map/${skill.domainId}`)
+                if (ok) replace(`/map/${skill.domainId}`)
               }}
             >
               このスキルを削除
@@ -207,7 +207,7 @@ export function NewSkillScreen({ domainId }: { domainId: string }) {
   return (
     <div className="screen">
       <header className="screen-header">
-        <a className="back" href={href(`/map/${domainId}`)} aria-label="戻る">
+        <a className="back" href={href(`/map/${domainId}`)} onClick={backHandler(`/map/${domainId}`)} aria-label="戻る">
           ←
         </a>
         <h1>{data.domain.name} にスキルを追加</h1>
@@ -215,10 +215,10 @@ export function NewSkillScreen({ domainId }: { domainId: string }) {
       <SkillForm
         initial={{ name: '', description: '', criteria: '', sources: [], prereqIds: [] }}
         candidates={sortByDepth(data.skills)}
-        cancelHref={href(`/map/${domainId}`)}
+        cancelPath={`/map/${domainId}`}
         onSubmit={async (input) => {
           const id = await run(() => createSkill(domainId, input))
-          if (id) go(`/skill/${id}`)
+          if (id) replace(`/skill/${id}`)
         }}
       />
     </div>
