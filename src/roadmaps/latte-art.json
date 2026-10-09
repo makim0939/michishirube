@@ -1,0 +1,114 @@
+{
+  "version": 1,
+  "domain": "ラテアート",
+  "skills": [
+    {
+      "key": "steam",
+      "name": "ミルクのスチーム（マイクロフォーム）",
+      "description": "最初の2〜3秒だけノズルの先を表面すれすれにして空気を含ませ、その後ノズルを沈めて渦を作り、60℃前後で止める。泡が見えず、艶のあるミルクが目標。泡とミルクが上下に分かれたら、マイクロフォームになっていない。スチームの失敗は注ぎ方では取り返せないので、柄の練習より先にここを固める。\n練習法：水に食器用洗剤を1滴入れてスチームすると、ミルクを使わずにノズルの位置と渦の作り方を練習できる。",
+      "criteria": "6回連続でスチームし、5回以上が「泡が見えない・艶がある・55〜65℃」を満たす",
+      "sources": [
+        { "title": "Barista Life: How to learn latte art（温度・2段階のスチーム・洗剤水の練習）", "url": "https://baristalife.co/blogs/blog/learn-latte-art" },
+        { "title": "Barista Life: Latte art for beginners（艶・分離・注ぎでは取り返せない）", "url": "https://baristalife.co/blogs/blog/latte-art-for-beginners" },
+        { "title": "Roasters.app: 12週間のラテアート研修カリキュラム（6回中5回の合格基準）", "url": "https://roasters.app/business/latte-art-training-12-week-curriculum" }
+      ]
+    },
+    {
+      "key": "dot",
+      "name": "ドット（白い円を置く）",
+      "description": "高い位置から細く注いでミルクをクレマの下に沈め、ピッチャーを下げてゆっくり注ぐと白い円が浮かぶ。注ぐ高さと流量の切り替えを覚える段階。\n練習法：水（洗剤を1滴）で、一定の高さ・一定の太さで注ぎ続ける練習をする。週に1回、横から注ぎを撮影する。\n※出典に回数の基準はないので、必要なら「10回中◯回」を自分で書き足す。",
+      "criteria": "狙ったときに、カップの中央へきれいなドットを置ける",
+      "sources": [
+        { "title": "Barista Life: Latte art for beginners（質感→ドット→ハート→チューリップ→ロゼッタの順）", "url": "https://baristalife.co/blogs/blog/latte-art-for-beginners" },
+        { "title": "Barista Life: How to learn latte art（水で注ぐ練習）", "url": "https://baristalife.co/blogs/blog/learn-latte-art" }
+      ],
+      "prereqs": ["steam"]
+    },
+    {
+      "key": "heart",
+      "name": "ハート",
+      "description": "ドットを大きく育て、最後にピッチャーを持ち上げて細い流れで真ん中を切る。注ぐ高さとカット（切り）を身につける、すべての柄の土台。\n目安：毎日練習して1週間ほど。\n参考：業務用の研修カリキュラムでは「6ozカップで6回中4回、ハートと分かる形」が合格基準。",
+      "criteria": "中央に左右対称のハートが、10回中8回描ける",
+      "sources": [
+        { "title": "Barista Life: How to learn latte art（10回中8回の基準）", "url": "https://baristalife.co/blogs/blog/learn-latte-art" },
+        { "title": "Roasters.app: 12週間のラテアート研修カリキュラム（6回中4回の基準）", "url": "https://roasters.app/business/latte-art-training-12-week-curriculum" },
+        { "title": "Coffee Parts: Heart / Tulip / Rosetta / Swan / Wave（難易度順・習得期間の目安）", "url": "https://know.coffeeparts.com.au/glossary/heart-tulip-rosetta-swan-wave-stacked-tulip" }
+      ],
+      "prereqs": ["dot"]
+    },
+    {
+      "key": "tulip2",
+      "name": "チューリップ（2段）",
+      "description": "1つ目のドットを置いて一度止め、2回目の注ぎで前の層に押し込むように重ねてから切る。注ぎを「止めて、また始める」動きを身につける。\n目安：毎日練習して1か月ほど。",
+      "criteria": "きれいな2段のチューリップが、6ozと8ozのどちらのカップでも6回中4回描ける",
+      "sources": [
+        { "title": "Roasters.app: 12週間のラテアート研修カリキュラム（6回中4回の基準）", "url": "https://roasters.app/business/latte-art-training-12-week-curriculum" },
+        { "title": "Coffee Parts: Heart / Tulip / Rosetta / Swan / Wave（習得期間の目安）", "url": "https://know.coffeeparts.com.au/glossary/heart-tulip-rosetta-swan-wave-stacked-tulip" }
+      ],
+      "prereqs": ["heart"]
+    },
+    {
+      "key": "tulip3",
+      "name": "チューリップ（3段）",
+      "description": "ドットを3つ、前の層に押し込みながら重ねて最後に切る。層同士が混ざらないように、1回ごとの注ぎ量と止めるタイミングをそろえる。",
+      "criteria": "3つの層が混ざらず、はっきり分かれて重なる",
+      "sources": [
+        { "title": "Barista Life: How to learn latte art（3層を混ぜずに重ねる基準）", "url": "https://baristalife.co/blogs/blog/learn-latte-art" }
+      ],
+      "prereqs": ["tulip2"]
+    },
+    {
+      "key": "streak",
+      "name": "ハート・チューリップを連続で安定させる",
+      "description": "1杯だけうまくいくのではなく、続けて何杯作っても崩れない状態にする。\n参考：出典はカフェのピーク時間を想定した基準（6杯を8分以内）。家庭では杯数だけを基準にしている。",
+      "criteria": "6杯連続で、ハートまたはシンプルなチューリップを描ける",
+      "sources": [
+        { "title": "Roasters.app: 12週間のラテアート研修カリキュラム（6杯中6杯の基準）", "url": "https://roasters.app/business/latte-art-training-12-week-curriculum" }
+      ],
+      "prereqs": ["tulip2"]
+    },
+    {
+      "key": "rosetta",
+      "name": "ロゼッタ（リーフ）",
+      "description": "ドットを広げたら、ピッチャーを左右に小刻みに振りながら手前へ引き、最後に切る。ハート・チューリップ・ロゼッタの中で、安定させるのが最も難しい。\n目安：安定して描けるまで3〜6か月。\n参考：業務用の研修カリキュラムでは「6回中3回、ロゼッタと分かる形」が合格基準。",
+      "criteria": "左右それぞれに6枚以上の葉がはっきり出る",
+      "sources": [
+        { "title": "Barista Life: How to learn latte art（左右6枚以上の基準）", "url": "https://baristalife.co/blogs/blog/learn-latte-art" },
+        { "title": "Roasters.app: 12週間のラテアート研修カリキュラム（チューリップの後に練習・6回中3回）", "url": "https://roasters.app/business/latte-art-training-12-week-curriculum" },
+        { "title": "Coffee Parts: Heart / Tulip / Rosetta / Swan / Wave（習得期間の目安）", "url": "https://know.coffeeparts.com.au/glossary/heart-tulip-rosetta-swan-wave-stacked-tulip" }
+      ],
+      "prereqs": ["tulip2"]
+    },
+    {
+      "key": "wave",
+      "name": "ウェーブ（スタックドチューリップ）",
+      "description": "チューリップの注ぎを何層も重ねる。\n※出典に合格基準がないので、達成条件は自分で決めて書き換える。",
+      "criteria": "（出典に基準なし）自分で決めて書き換える",
+      "sources": [
+        { "title": "Coffee Parts: Heart / Tulip / Rosetta / Swan / Wave（チューリップを重ねた発展形）", "url": "https://know.coffeeparts.com.au/glossary/heart-tulip-rosetta-swan-wave-stacked-tulip" }
+      ],
+      "prereqs": ["tulip3"]
+    },
+    {
+      "key": "wing-tulip",
+      "name": "ウイングチューリップ",
+      "description": "研修カリキュラムで、基本の柄の後に練習する上級の柄として挙げられている。\n※出典に合格基準がないので、達成条件は自分で決めて書き換える。",
+      "criteria": "（出典に基準なし）自分で決めて書き換える",
+      "sources": [
+        { "title": "Roasters.app: 12週間のラテアート研修カリキュラム（11〜12週目の上級の柄）", "url": "https://roasters.app/business/latte-art-training-12-week-curriculum" }
+      ],
+      "prereqs": ["tulip2"]
+    },
+    {
+      "key": "swan",
+      "name": "スワン",
+      "description": "ロゼッタに、首を描くための注ぎを足した形。挙げた柄の中で最も難しい部類。\n※出典に合格基準がないので、達成条件は自分で決めて書き換える。",
+      "criteria": "（出典に基準なし）自分で決めて書き換える",
+      "sources": [
+        { "title": "Coffee Parts: Heart / Tulip / Rosetta / Swan / Wave（ロゼッタ＋首の注ぎ）", "url": "https://know.coffeeparts.com.au/glossary/heart-tulip-rosetta-swan-wave-stacked-tulip" },
+        { "title": "Roasters.app: 12週間のラテアート研修カリキュラム（11〜12週目の上級の柄）", "url": "https://roasters.app/business/latte-art-training-12-week-curriculum" }
+      ],
+      "prereqs": ["rosetta"]
+    }
+  ]
+}
