@@ -69,7 +69,12 @@ export function App() {
       {route.name !== 'record' && (
         <nav className="tabbar">
           {TABS.map((t) => (
-            <a key={t.path} href={href(t.path)} className={t.match(route) ? 'selected' : ''}>
+            <a
+              key={t.path}
+              href={href(t.path)}
+              className={t.match(route) ? 'selected' : ''}
+              aria-current={t.match(route) ? 'page' : undefined}
+            >
               <span aria-hidden="true">{t.icon}</span>
               {t.label}
             </a>
