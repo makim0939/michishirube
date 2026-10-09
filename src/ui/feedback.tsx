@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { activateSkill } from '../data/repo'
 import type { Skill } from '../domain/types'
 import { go } from './router'
 
@@ -45,7 +46,16 @@ export function useCelebrate() {
 
 const CONFETTI_COLORS = ['#f2b84b', '#1f6f5c', '#e0603f', '#5b8def', '#c86fc9']
 
-function CelebrationOverlay({ celebration, onClose }: { celebration: Celebration; onClose: () => void }) {
+function CelebrationOverlay({
+  celebration,
+  onClose,
+  onError,
+}: {
+  celebration: Celebration
+  onClose: () => void
+  onError: (message: string) => void
+}) {
+  const { unlocked } = celebration
   // 画面を移動したり Esc を押したら閉じる（スワイプで戻ったときに演出だけ残らないように）
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -91,11 +101,11 @@ function CelebrationOverlay({ celebration, onClose }: { celebration: Celebration
         </div>
         <p className="celebration-kicker">実績解除</p>
         <h2 id="celebration-title">{celebration.skill.name}</h2>
-        {celebration.unlocked.length > 0 ? (
+        {unlocked.length > 0 ? (
           <div className="celebration-unlocked">
             <p>新しく解放されたスキル</p>
             <ul>
-              {celebration.unlocked.map((s) => (
+              {unlocked.map((s) => (
                 <li key={s.id}>🔓 {s.name}</li>
               ))}
             </ul>
@@ -104,12 +114,30 @@ function CelebrationOverlay({ celebration, onClose }: { celebration: Celebration
           <p className="muted">この道の先に、まだ解放されていないスキルはありません。</p>
         )}
         <div className="celebration-actions">
-          {celebration.unlocked.length > 0 && (
-            <button className="btn primary" autoFocus onClick={() => go(`/skill/${celebration.unlocked[0].id}`)}>
-              次のスキルを見る
+          {unlocked.length === 1 && (
+            <button
+              className="btn primary"
+              autoFocus
+              onClick={async () => {
+                try {
+                  await activateSkill(unlocked[0].id)
+                  go('/')
+                } catch (e) {
+                  // 上限などで挑戦にできなければ、スキルの画面で選んでもらう
+                  onError(e instanceof Error ? e.message : String(e))
+                  go(`/skill/${unlocked[0].id}`)
+                }
+              }}
+            >
+              「{unlocked[0].name}」に挑戦する
             </button>
           )}
-          <button className="btn" autoFocus={celebration.unlocked.length === 0} onClick={onClose}>
+          {unlocked.length > 1 && (
+            <button className="btn primary" autoFocus onClick={() => go('/')}>
+              次に挑戦するスキルを選ぶ
+            </button>
+          )}
+          <button className="btn" autoFocus={unlocked.length === 0} onClick={onClose}>
             閉じる
           </button>
         </div>
@@ -143,7 +171,13 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
             {toast.message}
           </div>
         )}
-        {celebration && <CelebrationOverlay celebration={celebration} onClose={closeCelebration} />}
+        {celebration && (
+          <CelebrationOverlay
+            celebration={celebration}
+            onClose={closeCelebration}
+            onError={(message) => toastApi.show(message, 'error')}
+          />
+        )}
       </CelebrationContext.Provider>
     </ToastContext.Provider>
   )

@@ -173,7 +173,10 @@ export async function saveFile(blob: Blob, fileName: string) {
 
 /** ブラウザに「容量が足りなくなっても消さないで」と頼む */
 export async function requestPersist(): Promise<boolean> {
-  if (!navigator.storage?.persist) return false
-  if (await navigator.storage.persisted()) return true
-  return navigator.storage.persist()
+  try {
+    if (await navigator.storage?.persisted?.()) return true
+    return (await navigator.storage?.persist?.()) ?? false
+  } catch {
+    return false
+  }
 }

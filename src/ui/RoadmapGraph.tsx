@@ -87,6 +87,7 @@ export function RoadmapGraph({ skills }: { skills: Skill[] }) {
         nodesDraggable={false}
         nodesConnectable={false}
         elementsSelectable={false}
+        colorMode="system"
         fitView
         fitViewOptions={focus.length > 0 ? { nodes: focus.map((id) => ({ id })), padding: 0.2, maxZoom: 1 } : { padding: 0.1 }}
         minZoom={0.3}

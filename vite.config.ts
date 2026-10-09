@@ -9,6 +9,8 @@ const base = process.env.BASE_PATH ?? '/'
 export default defineConfig({
   base,
   define: { __APP_VERSION__: JSON.stringify(pkg.version) },
+  // オフラインで確実に動くよう1ファイルにまとめているので、警告の閾値を上げる
+  build: { chunkSizeWarningLimit: 800 },
   plugins: [
     react(),
     VitePWA({
@@ -26,7 +28,7 @@ export default defineConfig({
         scope: base,
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,webmanifest}'],
+        globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest}'],
       },
     }),
   ],

@@ -52,6 +52,7 @@ export function RecordScreen({ skillId }: { skillId: string }) {
   const [outcome, setOutcome] = useState<Outcome>()
   const [draft, setDraft, clearDraft] = useDraft(`michishirube:draft:${skillId}`)
   const [saving, setSaving] = useState(false)
+  const [confirmLeave, setConfirmLeave] = useState(false)
   const videoInput = useRef<HTMLInputElement>(null)
   const photoInput = useRef<HTMLInputElement>(null)
   const libraryInput = useRef<HTMLInputElement>(null)
@@ -89,11 +90,38 @@ export function RecordScreen({ skillId }: { skillId: string }) {
   return (
     <div className="screen record-screen">
       <header className="screen-header">
-        <a className="back" href={href('/')} onClick={backHandler('/')} aria-label="戻る">
+        <a
+          className="back"
+          href={href('/')}
+          onClick={(e) => {
+            // 撮った動画・写真はここで保存しないと消えるので、黙って戻らない
+            if (files.length > 0) {
+              e.preventDefault()
+              setConfirmLeave(true)
+            } else {
+              backHandler('/')(e)
+            }
+          }}
+          aria-label="戻る"
+        >
           ←
         </a>
         <h1>{skill.name}</h1>
       </header>
+
+      {confirmLeave && (
+        <div className="confirm">
+          <p>撮った動画・写真が {files.length} 件あります。保存せずに戻ると消えます。</p>
+          <div className="row">
+            <button className="btn danger" onClick={() => goBack('/')}>
+              保存せずに戻る
+            </button>
+            <button className="btn" onClick={() => setConfirmLeave(false)}>
+              記録を続ける
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className={`next-action big ${next ? '' : 'none'}`}>
         <span className="next-label">前回の次の一手{next && `（${formatAgo(next.at)}）`}</span>
