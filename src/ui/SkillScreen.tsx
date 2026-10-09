@@ -51,7 +51,14 @@ function Compare({ media }: { media: Media[] }) {
       <div className="compare">
         {[first, latest].map((m, i) => (
           <figure key={m.id}>
-            <MediaView blob={m.blob} type={m.type} videoRef={(el) => (videos.current[i] = el)} />
+            <MediaView
+              blob={m.blob}
+              type={m.type}
+              cacheKey={m.id}
+              videoRef={(el) => {
+                videos.current[i] = el
+              }}
+            />
             <figcaption>
               {i === 0 ? '最初' : '最新'}・{formatDate(m.createdAt)}
             </figcaption>
@@ -89,7 +96,7 @@ function RecordItem({ record, media }: { record: PracticeRecord; media: Media[] 
       {media.length > 0 && (
         <div className="record-media">
           {media.map((m) => (
-            <MediaView key={m.id} blob={m.blob} type={m.type} />
+            <MediaView key={m.id} blob={m.blob} type={m.type} cacheKey={m.id} />
           ))}
         </div>
       )}

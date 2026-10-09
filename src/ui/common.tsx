@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Media, SkillState } from '../domain/types'
 
 export const STATE_LABEL: Record<SkillState, string> = {
@@ -47,17 +47,25 @@ export function formatBytes(n: number): string {
   return `${(n / 1024 ** 3).toFixed(2)} GB`
 }
 
-export function useObjectUrl(blob: Blob | undefined): string | undefined {
+/**
+ * Blob の表示用 URL。IndexedDB から読み直すたびに中身が同じでも別の Blob が返るので、
+ * cacheKey（メディアの id）を渡すと、同じ id の間は URL を作り直さない（再生中の動画が止まらない）
+ */
+export function useObjectUrl(blob: Blob | undefined, cacheKey?: string): string | undefined {
   const [url, setUrl] = useState<string>()
+  const latest = useRef(blob)
+  latest.current = blob
+  const dep = cacheKey ?? blob
   useEffect(() => {
-    if (!blob) return
-    const u = URL.createObjectURL(blob)
+    const b = latest.current
+    if (!b) return
+    const u = URL.createObjectURL(b)
     setUrl(u)
     return () => {
       URL.revokeObjectURL(u)
       setUrl(undefined)
     }
-  }, [blob])
+  }, [dep])
   return url
 }
 
@@ -68,15 +76,17 @@ export function isVideo(m: Pick<Media, 'type'>) {
 export function MediaView({
   blob,
   type,
+  cacheKey,
   className,
   videoRef,
 }: {
   blob: Blob
   type: string
+  cacheKey?: string
   className?: string
   videoRef?: (el: HTMLVideoElement | null) => void
 }) {
-  const url = useObjectUrl(blob)
+  const url = useObjectUrl(blob, cacheKey)
   if (!url) return <div className={`media ${className ?? ''}`} />
   if (type.startsWith('video/')) {
     // #t=0.001 を付けると iOS でも最初のフレームがサムネイルとして出る

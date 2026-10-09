@@ -92,37 +92,68 @@ export async function estimateBackupSize(includeMedia: boolean): Promise<number>
   return total
 }
 
-export async function exportBackup(opts: { includeMedia: boolean }): Promise<Blob> {
-  const [domains, skills, records, meta] = await Promise.all([
+/**
+ * ZIP 1つあたりの上限。fflate は ZIP64 を書けないので 4GB を超えると壊れる。
+ * 余裕を持たせ、スマホのメモリにも優しい大きさで分割する
+ */
+export const PART_LIMIT = 1.5 * 1024 ** 3
+
+class ZipWriter {
+  private sink = new BlobSink()
+  private error: Error | null = null
+  private zip = new Zip((err, chunk) => {
+    if (err) this.error = err
+    else {
+      this.sink.push(chunk)
+      this.size += chunk.length
+    }
+  })
+  size = 0
+  mediaCount = 0
+
+  addText(name: string, text: string) {
+    const entry = new ZipPassThrough(name)
+    this.zip.add(entry)
+    entry.push(strToU8(text), true)
+  }
+
+  async addMedia(name: string, blob: Blob) {
+    // 動画や写真はすでに圧縮済みなので、無圧縮で格納する
+    const entry = new ZipPassThrough(name)
+    this.zip.add(entry)
+    await pipeBlob(blob, (chunk, final) => entry.push(chunk, final))
+    this.mediaCount += 1
+  }
+
+  finish(): Blob {
+    this.zip.end()
+    if (this.error) throw this.error
+    return this.sink.toBlob('application/zip')
+  }
+}
+
+export interface BackupPart {
+  blob: Blob
+  name: string
+}
+
+export async function exportBackup(opts: {
+  includeMedia: boolean
+  partLimit?: number
+  now?: Date
+}): Promise<BackupPart[]> {
+  const partLimit = opts.partLimit ?? PART_LIMIT
+  const [domains, skills, records, media, meta] = await Promise.all([
     db.domains.toArray(),
     db.skills.toArray(),
     db.records.toArray(),
+    db.media.toArray(),
     db.meta.toArray(),
   ])
-  const mediaIds = (await db.media.toCollection().primaryKeys()) as string[]
-  const mediaRows: BackupMedia[] = []
-
-  const sink = new BlobSink()
-  let zipError: Error | null = null
-  const zip = new Zip((err, chunk) => {
-    if (err) zipError = err
-    else sink.push(chunk)
-  })
-
-  for (const id of mediaIds) {
-    const m = await db.media.get(id)
-    if (!m) continue
-    const { blob, ...rest } = m
-    const path = opts.includeMedia ? `media/${m.id}${extension(m)}` : null
-    mediaRows.push({ ...rest, path })
-    if (path) {
-      // 動画や写真はすでに圧縮済みなので、無圧縮で格納する
-      const entry = new ZipPassThrough(path)
-      zip.add(entry)
-      await pipeBlob(blob, (chunk, final) => entry.push(chunk, final))
-    }
-  }
-
+  const rows: BackupMedia[] = media.map(({ blob: _blob, ...rest }) => ({
+    ...rest,
+    path: opts.includeMedia ? `media/${rest.id}${extension(rest)}` : null,
+  }))
   const data: BackupData = {
     format: FORMAT,
     version: VERSION,
@@ -130,16 +161,30 @@ export async function exportBackup(opts: { includeMedia: boolean }): Promise<Blo
     domains,
     skills,
     records,
-    media: mediaRows,
+    media: rows,
     meta,
   }
-  const json = new ZipPassThrough('data.json')
-  zip.add(json)
-  json.push(strToU8(JSON.stringify(data, null, 2)), true)
-  zip.end()
 
-  if (zipError) throw zipError
-  return sink.toBlob('application/zip')
+  // data.json は1つ目に入れ、動画・写真は上限を超えないように次の ZIP へ送る
+  const blobs: Blob[] = []
+  let writer = new ZipWriter()
+  writer.addText('data.json', JSON.stringify(data, null, 2))
+  for (let i = 0; i < media.length; i++) {
+    const path = rows[i].path
+    if (!path) continue
+    if (writer.mediaCount > 0 && writer.size + media[i].size > partLimit) {
+      blobs.push(writer.finish())
+      writer = new ZipWriter()
+    }
+    await writer.addMedia(path, media[i].blob)
+  }
+  blobs.push(writer.finish())
+
+  const base = backupFileName(opts.includeMedia, opts.now)
+  return blobs.map((blob, i) => ({
+    blob,
+    name: blobs.length === 1 ? `${base}.zip` : `${base}-${i + 1}of${blobs.length}.zip`,
+  }))
 }
 
 function parseBackupData(text: string): BackupData {
@@ -191,16 +236,24 @@ export interface ImportSummary {
   missingMedia: number
 }
 
-/** バックアップで全データを置き換える */
-export async function importBackup(file: Blob): Promise<ImportSummary> {
-  let files: Map<string, Blob>
-  try {
-    files = await readZip(file)
-  } catch {
-    throw new BackupError('ZIP ファイルとして読み込めませんでした')
+/** バックアップで全データを置き換える。分割されたバックアップは全部まとめて渡す */
+export async function importBackup(zips: Blob[]): Promise<ImportSummary> {
+  const files = new Map<string, Blob>()
+  let dataFile: Blob | undefined
+  for (const zip of zips) {
+    let entries: Map<string, Blob>
+    try {
+      entries = await readZip(zip)
+    } catch {
+      throw new BackupError('ZIP ファイルとして読み込めませんでした')
+    }
+    for (const [name, blob] of entries) {
+      if (name !== 'data.json') files.set(name, blob)
+      else if (dataFile) throw new BackupError('別々のバックアップが混ざっています。1回分の ZIP だけを選んでください')
+      else dataFile = blob
+    }
   }
-  const dataFile = files.get('data.json')
-  if (!dataFile) throw new BackupError('バックアップに data.json がありません')
+  if (!dataFile) throw new BackupError('バックアップに data.json がありません（分割されている場合は、1つ目の ZIP も選んでください）')
   const data = parseBackupData(strFromU8(new Uint8Array(await dataFile.arrayBuffer())))
 
   const media: Media[] = []
@@ -232,8 +285,8 @@ export async function importBackup(file: Blob): Promise<ImportSummary> {
   }
 }
 
-export function backupFileName(includeMedia: boolean, now = new Date()): string {
+function backupFileName(includeMedia: boolean, now = new Date()): string {
   const pad = (n: number) => String(n).padStart(2, '0')
   const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`
-  return `michishirube-${includeMedia ? 'full' : 'notes'}-${stamp}.zip`
+  return `michishirube-${includeMedia ? 'full' : 'notes'}-${stamp}`
 }

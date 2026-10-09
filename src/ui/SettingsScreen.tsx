@@ -1,6 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useRef, useState } from 'react'
-import { backupFileName, estimateBackupSize, exportBackup, importBackup } from '../data/backup'
+import { estimateBackupSize, exportBackup, importBackup, type BackupPart } from '../data/backup'
 import { db } from '../data/db'
 import { BUNDLED_TEMPLATES, getSettings, importTemplate, setMaxActive } from '../data/repo'
 import { MAX_ACTIVE_RANGE } from '../domain/types'
@@ -51,11 +51,12 @@ export function SettingsScreen() {
   const run = useAction()
   const toast = useToast()
   const restoreInput = useRef<HTMLInputElement>(null)
-  const [pendingRestore, setPendingRestore] = useState<File | null>(null)
+  const [pendingRestore, setPendingRestore] = useState<File[]>([])
   const [busy, setBusy] = useState<string | null>(null)
   // 書き出しに時間がかかると、共有シートを開くのに必要な「直前のタップ」が切れる。
-  // そのため、作り終えたら改めて「保存する」を押してもらう
-  const [exported, setExported] = useState<{ blob: Blob; name: string } | null>(null)
+  // そのため、作り終えたら改めて「保存する」を押してもらう（分割されたときは1つずつ）
+  const [exported, setExported] = useState<BackupPart[]>([])
+  const [saved, setSaved] = useState<Set<string>>(new Set())
 
   const data = useLiveQuery(async () => ({
     settings: await getSettings(),
@@ -69,9 +70,9 @@ export function SettingsScreen() {
     run(async () => {
       setBusy(includeMedia ? 'full' : 'notes')
       try {
-        setExported(null)
-        const blob = await exportBackup({ includeMedia })
-        setExported({ blob, name: backupFileName(includeMedia) })
+        setExported([])
+        setSaved(new Set())
+        setExported(await exportBackup({ includeMedia }))
       } finally {
         setBusy(null)
       }
@@ -136,31 +137,48 @@ export function SettingsScreen() {
             hidden
             type="file"
             accept="application/zip,.zip"
+            multiple
             onChange={(e) => {
-              setPendingRestore(e.target.files?.[0] ?? null)
+              setPendingRestore(Array.from(e.target.files ?? []))
               e.target.value = ''
             }}
           />
         </div>
-        {exported && (
+        {exported.length > 0 && (
           <div className="confirm">
             <p>
-              バックアップを作りました（{formatBytes(exported.blob.size)}）。「ファイルに保存」や AirDrop で、この端末の外にも置いてください。
+              バックアップを作りました
+              {exported.length > 1 && `。大きいので ${exported.length} つの ZIP に分けています。復元するときは全部を選んでください`}
+              。「ファイルに保存」や AirDrop で、この端末の外にも置いてください。
             </p>
-            <div className="row">
-              <button className="btn primary" onClick={() => run(() => saveFile(exported.blob, exported.name))}>
-                保存する
-              </button>
-              <button className="btn" onClick={() => setExported(null)}>
+            <div className="stack">
+              {exported.map((part) => (
+                <button
+                  key={part.name}
+                  className={saved.has(part.name) ? 'btn' : 'btn primary'}
+                  onClick={() =>
+                    run(async () => {
+                      await saveFile(part.blob, part.name)
+                      setSaved((prev) => new Set(prev).add(part.name))
+                    })
+                  }
+                >
+                  {saved.has(part.name) ? '✓ ' : ''}
+                  {exported.length > 1 ? `${part.name.match(/(\d+)of\d+\.zip$/)?.[1]} つ目を保存` : '保存する'}（
+                  {formatBytes(part.blob.size)}）
+                </button>
+              ))}
+              <button className="btn ghost" onClick={() => setExported([])}>
                 閉じる
               </button>
             </div>
           </div>
         )}
-        {pendingRestore && (
+        {pendingRestore.length > 0 && (
           <div className="confirm">
             <p>
-              「{pendingRestore.name}」（{formatBytes(pendingRestore.size)}）で、
+              {pendingRestore.length === 1 ? `「${pendingRestore[0].name}」` : `${pendingRestore.length} つの ZIP`}（
+              {formatBytes(pendingRestore.reduce((sum, f) => sum + f.size, 0))}）で、
               <strong>いまのデータをすべて置き換えます。</strong>元に戻せません。
             </p>
             <div className="row">
@@ -172,11 +190,11 @@ export function SettingsScreen() {
                     setBusy('restore')
                     try {
                       const s = await importBackup(pendingRestore)
+                      setPendingRestore([])
                       toast.show(
                         `復元しました（スキル ${s.skills}・記録 ${s.records}・動画と写真 ${s.media}）` +
                           (s.missingMedia > 0 ? `。含まれていなかった動画・写真 ${s.missingMedia} 件は外しました` : ''),
                       )
-                      setPendingRestore(null)
                       go('/')
                     } finally {
                       setBusy(null)
@@ -186,7 +204,7 @@ export function SettingsScreen() {
               >
                 {busy === 'restore' ? '復元中…' : '置き換える'}
               </button>
-              <button className="btn" onClick={() => setPendingRestore(null)}>
+              <button className="btn" onClick={() => setPendingRestore([])}>
                 やめる
               </button>
             </div>

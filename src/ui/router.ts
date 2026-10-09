@@ -9,9 +9,18 @@ export type Route =
   | { name: 'record'; skillId: string }
   | { name: 'settings' }
 
+function safeDecode(part: string): string {
+  try {
+    return decodeURIComponent(part)
+  } catch {
+    // 壊れた % エスケープは、そのまま使う（見つからない画面として扱われる）
+    return part
+  }
+}
+
 // GitHub Pages でもサーバー設定なしで動くよう、ハッシュでルーティングする
 export function parseHash(hash: string): Route {
-  const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean).map(decodeURIComponent)
+  const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean).map(safeDecode)
   switch (parts[0]) {
     case 'map':
       return { name: 'map', domainId: parts[1] }

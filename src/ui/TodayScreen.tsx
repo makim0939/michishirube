@@ -1,22 +1,17 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useState } from 'react'
 import { db } from '../data/db'
-import { activateSkill, getSettings, lastNextAction } from '../data/repo'
+import { activateSkill, getSettings, recordsOf } from '../data/repo'
 import { computeStates, sortByDepth } from '../domain/logic'
 import { formatAgo } from './common'
 import { useAction, useToast } from './feedback'
 import { href } from './router'
+import { readStorage, writeStorage } from './storage'
 
 const HINT_KEY = 'michishirube:install-hint-dismissed'
 
 function InstallHint() {
-  const [hidden, setHidden] = useState(() => {
-    try {
-      return localStorage.getItem(HINT_KEY) === '1'
-    } catch {
-      return false
-    }
-  })
+  const [hidden, setHidden] = useState(() => readStorage('local', HINT_KEY) === '1')
   const standalone =
     window.matchMedia('(display-mode: standalone)').matches ||
     (navigator as Navigator & { standalone?: boolean }).standalone === true
@@ -34,11 +29,7 @@ function InstallHint() {
       <button
         className="btn small"
         onClick={() => {
-          try {
-            localStorage.setItem(HINT_KEY, '1')
-          } catch {
-            // 保存できなくても閉じるだけでよい
-          }
+          writeStorage('local', HINT_KEY, '1')
           setHidden(true)
         }}
       >
@@ -52,24 +43,25 @@ export function TodayScreen() {
   const run = useAction()
   const toast = useToast()
   const data = useLiveQuery(async () => {
-    const [skills, domains, settings, records] = await Promise.all([
+    const [skills, domains, settings] = await Promise.all([
       db.skills.toArray(),
       db.domains.orderBy('order').toArray(),
       getSettings(),
-      db.records.toArray(),
     ])
     const states = computeStates(skills)
     const active = skills
       .filter((s) => s.status === 'active')
       .sort((a, b) => (a.activatedAt ?? 0) - (b.activatedAt ?? 0))
+    // 挑戦中のスキルの記録だけを読む（新しい順）
     const cards = await Promise.all(
       active.map(async (s) => {
-        const mine = records.filter((r) => r.skillId === s.id)
+        const records = await recordsOf(s.id)
+        const next = records.find((r) => r.nextAction)
         return {
           skill: s,
-          next: await lastNextAction(s.id),
-          count: mine.length,
-          last: mine.reduce((max, r) => Math.max(max, r.createdAt), 0),
+          next: next && { text: next.nextAction, at: next.createdAt },
+          count: records.length,
+          last: records[0]?.createdAt ?? 0,
         }
       }),
     )

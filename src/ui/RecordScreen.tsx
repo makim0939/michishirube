@@ -6,6 +6,7 @@ import type { Outcome } from '../domain/types'
 import { Empty, formatAgo, MediaView, requestPersist } from './common'
 import { useAction, useToast } from './feedback'
 import { backHandler, goBack, href } from './router'
+import { readStorage, removeStorage, writeStorage } from './storage'
 
 const OUTCOMES: { value: Outcome; label: string }[] = [
   { value: 'good', label: '◎ 成功' },
@@ -14,30 +15,18 @@ const OUTCOMES: { value: Outcome; label: string }[] = [
 ]
 
 // 書きかけのメモは、カメラから戻ったときにページが再読み込みされても残るようにする
+type Draft = { reason?: string; nextAction?: string }
+
 function useDraft(key: string) {
-  const read = () => {
+  const [draft, setDraft] = useState<Draft>(() => {
     try {
-      return JSON.parse(sessionStorage.getItem(key) ?? '{}') as { reason?: string; nextAction?: string }
+      return JSON.parse(readStorage('session', key) ?? '{}') as Draft
     } catch {
       return {}
     }
-  }
-  const [draft, setDraft] = useState(read)
-  useEffect(() => {
-    try {
-      sessionStorage.setItem(key, JSON.stringify(draft))
-    } catch {
-      // 保存できなくても入力は続けられる
-    }
-  }, [key, draft])
-  const clear = () => {
-    try {
-      sessionStorage.removeItem(key)
-    } catch {
-      // 同上
-    }
-  }
-  return [draft, setDraft, clear] as const
+  })
+  useEffect(() => writeStorage('session', key, JSON.stringify(draft)), [key, draft])
+  return [draft, setDraft, () => removeStorage('session', key)] as const
 }
 
 export function RecordScreen({ skillId }: { skillId: string }) {

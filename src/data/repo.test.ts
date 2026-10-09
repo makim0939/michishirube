@@ -107,11 +107,13 @@ describe('バックアップ', () => {
       nextAction: '同じ手順で3回',
       files: [new Blob(['movie-bytes'], { type: 'video/quicktime' })],
     })
-    const zip = await exportBackup({ includeMedia: true })
+    const parts = await exportBackup({ includeMedia: true })
+    expect(parts).toHaveLength(1)
+    expect(parts[0].name).toMatch(/^michishirube-full-\d{8}-\d{4}\.zip$/)
 
     await db.domains.clear()
     await db.media.clear()
-    const summary = await importBackup(zip)
+    const summary = await importBackup(parts.map((p) => p.blob))
     expect(summary).toMatchObject({ domains: 1, skills: 3, records: 1, media: 1, missingMedia: 0 })
     expect((await db.domains.get(domainId))?.name).toBe('ピアノ')
     const [m] = await db.media.toArray()
@@ -123,12 +125,34 @@ describe('バックアップ', () => {
   it('メディアを含めない書き出しでは、記録からメディアへの参照を外す', async () => {
     const { a } = await chain()
     await addRecord({ skillId: a, reason: 'x', nextAction: '', files: [new Blob(['v'], { type: 'image/jpeg' })] })
-    const summary = await importBackup(await exportBackup({ includeMedia: false }))
+    const parts = await exportBackup({ includeMedia: false })
+    const summary = await importBackup(parts.map((p) => p.blob))
     expect(summary).toMatchObject({ media: 0, missingMedia: 1 })
     expect((await db.records.toArray())[0].mediaIds).toEqual([])
   })
 
-  it('別の ZIP や壊れたファイルは読み込まない', async () => {
-    await expect(importBackup(new Blob(['not a zip']))).rejects.toThrow()
+  it('上限を超える分は別の ZIP に分け、全部そろえると元に戻る', async () => {
+    const { a } = await chain()
+    for (const text of ['first-video', 'second-video', 'third-video']) {
+      await addRecord({ skillId: a, reason: text, nextAction: '', files: [new Blob([text], { type: 'video/mp4' })] })
+    }
+    const parts = await exportBackup({ includeMedia: true, partLimit: 1 })
+    expect(parts.map((p) => p.name.replace(/^.*-(\d+of\d+)\.zip$/, '$1'))).toEqual(['1of3', '2of3', '3of3'])
+
+    const all = await importBackup(parts.map((p) => p.blob))
+    expect(all).toMatchObject({ media: 3, missingMedia: 0 })
+    expect((await db.media.toArray()).map((m) => m.size).sort()).toEqual([11, 11, 12])
+
+    // 一部の ZIP が欠けていても、ある分だけ戻して欠けた件数を返す
+    const partial = await importBackup(parts.slice(0, 2).map((p) => p.blob))
+    expect(partial).toMatchObject({ media: 2, missingMedia: 1 })
+  })
+
+  it('別の ZIP や壊れたファイル、別々のバックアップの混在は読み込まない', async () => {
+    await expect(importBackup([new Blob(['not a zip'])])).rejects.toThrow()
+    await chain()
+    const [first] = await exportBackup({ includeMedia: false })
+    const [second] = await exportBackup({ includeMedia: false })
+    await expect(importBackup([first.blob, second.blob])).rejects.toThrow(/混ざって/)
   })
 })

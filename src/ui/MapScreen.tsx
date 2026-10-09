@@ -8,18 +8,11 @@ import { ConfirmButton, saveFile, StateBadge } from './common'
 import { useAction, useToast } from './feedback'
 import { RoadmapGraph } from './RoadmapGraph'
 import { go, href } from './router'
+import { readStorage, writeStorage } from './storage'
 
 // React Flow は遅延読み込みしない。PWA の更新で古い分割ファイルが消え、開けなくなるのを避けるため
 
 const LAST_DOMAIN_KEY = 'michishirube:last-domain'
-
-function readLastDomain(): string | undefined {
-  try {
-    return localStorage.getItem(LAST_DOMAIN_KEY) ?? undefined
-  } catch {
-    return undefined
-  }
-}
 
 function NewDomainForm({ onDone }: { onDone: () => void }) {
   const run = useAction()
@@ -57,7 +50,7 @@ export function MapScreen({ domainId }: { domainId?: string }) {
   const data = useLiveQuery(async () => {
     const domains = await db.domains.orderBy('order').toArray()
     // タブから開いたときは、最後に見ていた分野を出す
-    const wanted = domainId ?? readLastDomain()
+    const wanted = domainId ?? readStorage('local', LAST_DOMAIN_KEY)
     const current = domains.find((d) => d.id === wanted) ?? domains[0]
     const skills = current ? await db.skills.where('domainId').equals(current.id).toArray() : []
     return { domains, current, skills }
@@ -65,12 +58,7 @@ export function MapScreen({ domainId }: { domainId?: string }) {
 
   const currentId = data?.current?.id
   useEffect(() => {
-    if (!currentId) return
-    try {
-      localStorage.setItem(LAST_DOMAIN_KEY, currentId)
-    } catch {
-      // 覚えられなくても先頭の分野が出るだけ
-    }
+    if (currentId) writeStorage('local', LAST_DOMAIN_KEY, currentId)
   }, [currentId])
 
   if (!data) return null
@@ -129,8 +117,12 @@ export function MapScreen({ domainId }: { domainId?: string }) {
                 className="inline-form"
                 onSubmit={async (e) => {
                   e.preventDefault()
-                  await run(() => renameDomain(current.id, renaming))
-                  setRenaming(null)
+                  const ok = await run(async () => {
+                    await renameDomain(current.id, renaming)
+                    return true
+                  })
+                  // 失敗したときは入力を残して、その場で直せるようにする
+                  if (ok) setRenaming(null)
                 }}
               >
                 <input autoFocus value={renaming} onChange={(e) => setRenaming(e.target.value)} />
@@ -197,8 +189,11 @@ export function MapScreen({ domainId }: { domainId?: string }) {
                 confirmLabel="削除する"
                 message={`「${current.name}」のスキルと、記録・動画・写真をすべて削除します。元に戻せません。`}
                 onConfirm={async () => {
-                  await run(() => deleteDomain(current.id))
-                  go('/map')
+                  const ok = await run(async () => {
+                    await deleteDomain(current.id)
+                    return true
+                  })
+                  if (ok) go('/map')
                 }}
               >
                 この分野を削除
