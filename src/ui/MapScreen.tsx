@@ -133,12 +133,12 @@ export function MapScreen({ domainId }: { domainId?: string }) {
 
       {current && skills.length === 0 && (
         <div className="empty">
-          <p>まだ型がありません。下の「型を追加」から作るか、ロードマップの JSON を読み込んでください。</p>
+          <p>まだ型がありません。下の「型と分野の管理」から追加するか、設定の「用意されているロードマップ」から入れてください。</p>
         </div>
       )}
       {!current && (
         <div className="empty">
-          <p>分野がありません。下の「分野を追加」から作るか、ロードマップの JSON を読み込んでください。</p>
+          <p>分野がありません。設定の「用意されているロードマップ」から入れるか、下の「型と分野の管理」から作ってください。</p>
         </div>
       )}
 
@@ -253,7 +253,8 @@ export function MapScreen({ domainId }: { domainId?: string }) {
         </section>
       )}
 
-      <details className="section manage">
+      {/* 型がまだ無いときは、追加のボタンがすぐ見えるように開いておく */}
+      <details className="section manage" open={!current || skills.length === 0}>
         <summary>型と分野の管理</summary>
         <div className="stack">
           {current && (

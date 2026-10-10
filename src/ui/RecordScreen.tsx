@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { db } from '../data/db'
 import { compressPhoto, inMemory, makePoster } from '../data/mediaPrep'
 import { addRecord, deleteRecord, lastNextAction, updateRecord, type NewMedia } from '../data/repo'
+import { OUTCOME_LABEL } from '../domain/format'
 import type { Media, Outcome } from '../domain/types'
 import { ConfirmButton, Empty, formatAgo, formatBytes, isVideo, MediaView, requestPersist, splitName } from './common'
 import { useAction, useToast } from './feedback'
@@ -13,11 +14,10 @@ import { readStorage, removeStorage, writeStorage } from './storage'
 import { Trimmer } from './Trimmer'
 import { BackIcon, CameraIcon, PhotoIcon, ScissorsIcon, VideoIcon } from './icons'
 
-const OUTCOMES: { value: Outcome; label: string }[] = [
-  { value: 'good', label: '◎ 成功' },
-  { value: 'meh', label: '△ 惜しい' },
-  { value: 'bad', label: '✕ 失敗' },
-]
+const OUTCOMES: { value: Outcome; label: string }[] = (['good', 'meh', 'bad'] as const).map((value) => ({
+  value,
+  label: OUTCOME_LABEL[value],
+}))
 
 // 書きかけのメモは、カメラから戻ったときにページが再読み込みされても残るようにする
 type Draft = { reason?: string; nextAction?: string }

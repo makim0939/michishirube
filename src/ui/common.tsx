@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { formatDateTime } from '../domain/format'
-import type { Media, Outcome, SkillState } from '../domain/types'
+import type { Media, SkillState } from '../domain/types'
 import { PlayIcon } from './icons'
 
 export const STATE_LABEL: Record<SkillState, string> = {
@@ -9,8 +9,6 @@ export const STATE_LABEL: Record<SkillState, string> = {
   active: '練習中',
   done: 'できた',
 }
-
-export const OUTCOME_MARK: Record<Outcome, string> = { good: '◎', meh: '△', bad: '✕' }
 
 /** 「ミルクのスチーム（マイクロフォーム）」→ 大きく出す名前と、小さく添える補足 */
 export function splitName(name: string): { main: string; sub?: string } {
