@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { db } from '../data/db'
+import { makePoster } from '../data/mediaPrep'
 import { setMediaKeep } from '../data/repo'
 import { fetchPhoto } from '../data/sync'
 import { MAX_UPLOAD_ATTEMPTS, retryUpload, youtubeUrl } from '../data/youtube'
@@ -34,6 +36,22 @@ function useRemotePhoto(media: Media): Blob | undefined {
   return media.blob ?? blob
 }
 
+/** サムネイル作りは1本ずつ順に（一覧で一度に動画を読み込まないように） */
+let posterQueue: Promise<unknown> = Promise.resolve()
+
+function usePosterBackfill(media: Media) {
+  const needs = isVideo(media) && !!media.blob && !media.poster
+  useEffect(() => {
+    if (!needs || !media.blob) return
+    const blob = media.blob
+    posterQueue = posterQueue.then(async () => {
+      const poster = await makePoster(blob)
+      // 中身とサムネイルはこの端末だけのものなので、同期の対象にしない（updatedAt も変えない）
+      if (poster) await db.media.update(media.id, { poster })
+    })
+  }, [media.id, needs])
+}
+
 /**
  * 記録の動画・写真1つ。端末に中身があれば再生し、無ければ YouTube やサーバーから見る。
  * 動画は YouTube へのアップ状況と、自動整理で消さない「残す」印も出す
@@ -50,6 +68,7 @@ export function MediaItem({
 }) {
   const run = useAction()
   const blob = useRemotePhoto(media)
+  usePosterBackfill(media)
   const video = isVideo(media)
 
   return (

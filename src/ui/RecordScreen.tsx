@@ -1,7 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useRef, useState } from 'react'
 import { db } from '../data/db'
-import { compressPhoto, makePoster } from '../data/mediaPrep'
+import { compressPhoto, inMemory, makePoster } from '../data/mediaPrep'
 import { addRecord, deleteRecord, lastNextAction, updateRecord, type NewMedia } from '../data/repo'
 import type { Media, Outcome } from '../domain/types'
 import { ConfirmButton, Empty, formatAgo, formatBytes, isVideo, MediaView, requestPersist } from './common'
@@ -48,6 +48,11 @@ function itemBlob(item: Item): Blob | undefined {
 
 function itemType(item: Item): string {
   return item.kind === 'new' ? item.file.type : (item.replaced?.file.type ?? item.media.type)
+}
+
+/** File をメモリ上のコピーにする（名前と種類は残す） */
+async function detach(file: File): Promise<File> {
+  return new File([await inMemory(file)], file.name, { type: file.type })
 }
 
 let keySeq = 0
@@ -168,29 +173,17 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
       try {
         const reason = draft.reason ?? ''
         const nextAction = draft.nextAction ?? ''
+        const added: NewMedia[] = []
+        const replace: ({ id: string } & NewMedia)[] = []
+        for (const i of items) {
+          if (i.kind === 'new') added.push({ blob: await detach(i.file), poster: i.poster })
+          else if (i.replaced) replace.push({ id: i.media.id, blob: await detach(i.replaced.file), poster: i.replaced.poster })
+        }
         if (recordId) {
-          await updateRecord({
-            recordId,
-            outcome,
-            reason,
-            nextAction,
-            addFiles: items.flatMap((i): NewMedia[] => (i.kind === 'new' ? [{ blob: i.file, poster: i.poster }] : [])),
-            removeMediaIds: removed,
-            replace: items.flatMap((i) =>
-              i.kind === 'existing' && i.replaced
-                ? [{ id: i.media.id, blob: i.replaced.file, poster: i.replaced.poster }]
-                : [],
-            ),
-          })
+          await updateRecord({ recordId, outcome, reason, nextAction, addFiles: added, removeMediaIds: removed, replace })
           toast.show('記録を直しました')
         } else {
-          await addRecord({
-            skillId,
-            outcome,
-            reason,
-            nextAction,
-            files: items.flatMap((i) => (i.kind === 'new' ? [{ blob: i.file, poster: i.poster }] : [])),
-          })
+          await addRecord({ skillId, outcome, reason, nextAction, files: added })
           clearDraft()
           toast.show('記録しました')
         }
@@ -329,15 +322,17 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
                   ) : (
                     <div className="media placeholder">この端末にはありません</div>
                   )}
-                  {blob && <span className="preview-size">{formatBytes(blob.size)}</span>}
                   <button type="button" className="remove" aria-label="外す" onClick={() => removeItem(item)}>
                     ×
                   </button>
-                  {blob && isVideo({ type }) && (
-                    <button type="button" className="trim-button" onClick={() => setTrimming(item.key)}>
-                      ✂ 切り取る
-                    </button>
-                  )}
+                  <div className="preview-actions">
+                    {blob && <span className="muted">{formatBytes(blob.size)}</span>}
+                    {blob && isVideo({ type }) && (
+                      <button type="button" className="btn small" onClick={() => setTrimming(item.key)}>
+                        ✂ 切り取る
+                      </button>
+                    )}
+                  </div>
                 </li>
               )
             })}

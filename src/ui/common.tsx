@@ -80,6 +80,7 @@ function VideoView({
   blob,
   type,
   poster,
+  cacheKey,
   autoLoad,
   className,
   videoRef,
@@ -87,6 +88,7 @@ function VideoView({
   blob: Blob
   type: string
   poster?: Blob
+  cacheKey?: string
   autoLoad: boolean
   className?: string
   videoRef?: (el: HTMLVideoElement | null) => void
@@ -95,7 +97,7 @@ function VideoView({
   const [playOnLoad, setPlayOnLoad] = useState(false)
   const [url, setUrl] = useState<string>()
   const [failed, setFailed] = useState(false)
-  const posterUrl = useObjectUrl(poster)
+  const posterUrl = useObjectUrl(poster, poster && cacheKey ? `${cacheKey}-poster-${poster.size}` : undefined)
   const latest = useRef(blob)
   latest.current = blob
 
@@ -175,6 +177,7 @@ export function MediaView({
         blob={blob}
         type={type}
         poster={poster}
+        cacheKey={cacheKey}
         autoLoad={autoLoad}
         className={className}
         videoRef={videoRef}
