@@ -71,34 +71,136 @@ export function isVideo(m: Pick<Media, 'type'>) {
   return m.type.startsWith('video/')
 }
 
-export function MediaView({
+/**
+ * 動画は、押されたときにメモリへ写してから再生する。
+ * iPhone の Safari は IndexedDB に置いた動画をそのまま再生できないことがあり、
+ * 一覧で全部を読み込むとメモリも食うため。押す前はサムネイル（poster）を出す
+ */
+function VideoView({
   blob,
   type,
+  poster,
   cacheKey,
+  autoLoad,
   className,
   videoRef,
 }: {
   blob: Blob
   type: string
+  poster?: Blob
   cacheKey?: string
+  autoLoad: boolean
   className?: string
   videoRef?: (el: HTMLVideoElement | null) => void
 }) {
-  const url = useObjectUrl(blob, cacheKey)
-  if (!url) return <div className={`media ${className ?? ''}`} />
-  if (type.startsWith('video/')) {
-    // #t=0.001 を付けると iOS でも最初のフレームがサムネイルとして出る
+  const [requested, setRequested] = useState(autoLoad)
+  const [playOnLoad, setPlayOnLoad] = useState(false)
+  const [url, setUrl] = useState<string>()
+  const [failed, setFailed] = useState(false)
+  const posterUrl = useObjectUrl(poster, poster && cacheKey ? `${cacheKey}-poster-${poster.size}` : undefined)
+  const latest = useRef(blob)
+  latest.current = blob
+
+  useEffect(() => {
+    if (!requested) return
+    let cancelled = false
+    let u: string | undefined
+    latest.current
+      .arrayBuffer()
+      .then((buf) => {
+        if (cancelled) return
+        u = URL.createObjectURL(new Blob([buf], { type }))
+        setUrl(u)
+      })
+      .catch(() => setFailed(true))
+    return () => {
+      cancelled = true
+      if (u) URL.revokeObjectURL(u)
+    }
+  }, [requested, type])
+
+  if (failed) {
+    return <div className={`media placeholder ${className ?? ''}`}>動画を読み込めませんでした</div>
+  }
+  if (!url) {
     return (
-      <video
-        ref={videoRef}
-        className={`media ${className ?? ''}`}
-        src={`${url}#t=0.001`}
-        controls
-        playsInline
-        preload="metadata"
+      <button
+        type="button"
+        className={`media video-thumb ${className ?? ''}`}
+        style={posterUrl ? { backgroundImage: `url(${posterUrl})` } : undefined}
+        aria-label="動画を再生"
+        onClick={() => {
+          setPlayOnLoad(true)
+          setRequested(true)
+        }}
+      >
+        <span aria-hidden="true">{requested ? '…' : '▶'}</span>
+      </button>
+    )
+  }
+  return (
+    <video
+      ref={videoRef}
+      className={`media ${className ?? ''}`}
+      src={url}
+      poster={posterUrl}
+      controls
+      playsInline
+      preload="metadata"
+      onLoadedData={(e) => {
+        if (!playOnLoad) return
+        const el = e.currentTarget
+        setPlayOnLoad(false)
+        // 押してから読み込むまでの間に、音つきの自動再生が許されなくなることがある（iPhone）
+        el.play().catch(() => {
+          el.muted = true
+          el.play().catch(() => {
+            // それでも止められたら、プレーヤーの再生ボタンで再生してもらう
+          })
+        })
+      }}
+    />
+  )
+}
+
+export function MediaView({
+  blob,
+  type,
+  poster,
+  cacheKey,
+  autoLoad = false,
+  className,
+  videoRef,
+}: {
+  blob: Blob
+  type: string
+  poster?: Blob
+  cacheKey?: string
+  /** 動画をすぐ読み込む（比べるとき・撮った直後のプレビュー） */
+  autoLoad?: boolean
+  className?: string
+  videoRef?: (el: HTMLVideoElement | null) => void
+}) {
+  if (type.startsWith('video/')) {
+    return (
+      <VideoView
+        key={cacheKey}
+        blob={blob}
+        type={type}
+        poster={poster}
+        cacheKey={cacheKey}
+        autoLoad={autoLoad}
+        className={className}
+        videoRef={videoRef}
       />
     )
   }
+  return <ImageView blob={blob} cacheKey={cacheKey} className={className} />
+}
+
+function ImageView({ blob, cacheKey, className }: { blob: Blob; cacheKey?: string; className?: string }) {
+  const url = useObjectUrl(blob, cacheKey)
+  if (!url) return <div className={`media ${className ?? ''}`} />
   return <img className={`media ${className ?? ''}`} src={url} alt="" />
 }
 

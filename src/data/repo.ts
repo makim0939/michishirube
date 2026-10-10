@@ -281,12 +281,49 @@ export async function revertAchievement(id: string) {
 
 // ---- 記録 ----
 
+/** 記録に付ける動画・写真。動画には一覧用のサムネイルを添えられる */
+export interface NewMedia {
+  blob: Blob
+  poster?: Blob
+}
+
 export interface RecordInput {
   skillId: string
   outcome?: Outcome
   reason: string
   nextAction: string
-  files: Blob[]
+  files: (Blob | NewMedia)[]
+}
+
+function asNewMedia(f: Blob | NewMedia): NewMedia {
+  return f instanceof Blob ? { blob: f } : f
+}
+
+/** 中身を差し替えたときの項目。動画は YouTube に上げ直す */
+function contentFields(m: NewMedia): Partial<Media> {
+  const type = m.blob.type || 'application/octet-stream'
+  return {
+    blob: m.blob,
+    poster: m.poster,
+    type,
+    name: m.blob instanceof File ? m.blob.name : undefined,
+    size: m.blob.size,
+    // 動画は YouTube へ、写真はサーバーへ。どちらも連携していれば自動で送る
+    ...(type.startsWith('video/')
+      ? { upload: 'pending' as const, youtubeId: undefined, uploadError: undefined, uploadAttempts: undefined }
+      : { cloudPhoto: false }),
+  }
+}
+
+function newMediaRows(recordId: string, skillId: string, files: NewMedia[], now: number): Media[] {
+  return files.map((m, i) => ({
+    id: newId(),
+    recordId,
+    skillId,
+    createdAt: now + i,
+    updatedAt: now,
+    ...(contentFields(m) as Pick<Media, 'type' | 'size'>),
+  }))
 }
 
 export async function addRecord(input: RecordInput): Promise<string> {
@@ -297,22 +334,7 @@ export async function addRecord(input: RecordInput): Promise<string> {
   }
   const now = Date.now()
   const recordId = newId()
-  const media: Media[] = input.files.map((blob, i) => {
-    const type = blob.type || 'application/octet-stream'
-    return {
-      id: newId(),
-      recordId,
-      skillId: input.skillId,
-      blob,
-      type,
-      name: blob instanceof File ? blob.name : undefined,
-      size: blob.size,
-      createdAt: now + i,
-      updatedAt: now,
-      // 動画は YouTube へ、写真はサーバーへ。どちらも連携していれば自動で送る
-      ...(type.startsWith('video/') ? { upload: 'pending' as const } : {}),
-    }
-  })
+  const media = newMediaRows(recordId, input.skillId, input.files.map(asNewMedia), now)
   const record: PracticeRecord = {
     id: recordId,
     skillId: input.skillId,
@@ -333,6 +355,51 @@ export async function addRecord(input: RecordInput): Promise<string> {
     await markDirty('record', [recordId])
   })
   return recordId
+}
+
+export interface RecordUpdate {
+  recordId: string
+  outcome?: Outcome
+  reason: string
+  nextAction: string
+  /** 足す動画・写真 */
+  addFiles: NewMedia[]
+  /** 外す動画・写真 */
+  removeMediaIds: string[]
+  /** 中身を差し替える（切り取った動画など） */
+  replace: ({ id: string } & NewMedia)[]
+}
+
+/** 保存した記録を直す。結果・理由・次の一手と、動画・写真の追加・削除・差し替え */
+export async function updateRecord(input: RecordUpdate) {
+  const reason = input.reason.trim()
+  const nextAction = input.nextAction.trim()
+  await db.transaction('rw', db.records, db.media, db.outbox, async () => {
+    const record = await db.records.get(input.recordId)
+    if (!record) throw new RepoError('記録が見つかりません')
+    const now = Date.now()
+    const removed = new Set(input.removeMediaIds)
+    const kept = record.mediaIds.filter((id) => !removed.has(id))
+    const added = newMediaRows(record.id, record.skillId, input.addFiles, now)
+    if (!reason && !nextAction && !input.outcome && kept.length + added.length === 0) {
+      throw new RepoError('動画・写真か、メモを1つ以上入れてください')
+    }
+    await db.media.bulkDelete([...removed])
+    await db.media.bulkAdd(added)
+    for (const r of input.replace) {
+      if (removed.has(r.id)) continue
+      await db.media.update(r.id, { ...contentFields(r), updatedAt: now })
+    }
+    await db.records.update(record.id, {
+      outcome: input.outcome,
+      reason,
+      nextAction,
+      mediaIds: [...kept, ...added.map((m) => m.id)],
+      updatedAt: now,
+    })
+    await markDirty('media', [...removed, ...added.map((m) => m.id), ...input.replace.map((r) => r.id)])
+    await markDirty('record', [record.id])
+  })
 }
 
 export async function deleteRecord(id: string) {

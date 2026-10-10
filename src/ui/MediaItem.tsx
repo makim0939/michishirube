@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { db } from '../data/db'
+import { inMemory, makePoster } from '../data/mediaPrep'
 import { setMediaKeep } from '../data/repo'
 import { fetchPhoto } from '../data/sync'
 import { MAX_UPLOAD_ATTEMPTS, retryUpload, youtubeUrl } from '../data/youtube'
@@ -34,19 +36,57 @@ function useRemotePhoto(media: Media): Blob | undefined {
   return media.blob ?? blob
 }
 
+/** サムネイル作りは1本ずつ順に（一覧で一度に動画を読み込まないように） */
+let posterQueue: Promise<unknown> = Promise.resolve()
+
+function usePosterBackfill(media: Media) {
+  const needs = isVideo(media) && !!media.blob && !media.poster
+  useEffect(() => {
+    if (!needs || !media.blob) return
+    const blob = media.blob
+    posterQueue = posterQueue
+      .then(async () => {
+        // iPhone では IndexedDB の動画を直接読めないことがあるので、メモリに写してから作る
+        const poster = await makePoster(await inMemory(blob))
+        // 中身とサムネイルはこの端末だけのものなので、同期の対象にしない（updatedAt も変えない）
+        if (poster) await db.media.update(media.id, { poster })
+      })
+      .catch(() => {
+        // 作れなくても、ほかの動画のサムネイル作りは続ける
+      })
+  }, [media.id, needs])
+}
+
 /**
  * 記録の動画・写真1つ。端末に中身があれば再生し、無ければ YouTube やサーバーから見る。
  * 動画は YouTube へのアップ状況と、自動整理で消さない「残す」印も出す
  */
-export function MediaItem({ media, videoRef }: { media: Media; videoRef?: (el: HTMLVideoElement | null) => void }) {
+export function MediaItem({
+  media,
+  videoRef,
+  autoLoad = false,
+}: {
+  media: Media
+  videoRef?: (el: HTMLVideoElement | null) => void
+  /** 動画をすぐ読み込む（最初と最新を比べるとき） */
+  autoLoad?: boolean
+}) {
   const run = useAction()
   const blob = useRemotePhoto(media)
+  usePosterBackfill(media)
   const video = isVideo(media)
 
   return (
     <figure className="media-item">
       {blob ? (
-        <MediaView blob={blob} type={media.type} cacheKey={media.id} videoRef={videoRef} />
+        <MediaView
+          blob={blob}
+          type={media.type}
+          poster={media.poster}
+          cacheKey={media.id}
+          autoLoad={autoLoad}
+          videoRef={videoRef}
+        />
       ) : video && media.youtubeId ? (
         <a className="media placeholder" href={youtubeUrl(media.youtubeId)} target="_blank" rel="noopener noreferrer">
           <span aria-hidden="true">▶</span>

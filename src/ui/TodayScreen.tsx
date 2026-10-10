@@ -169,7 +169,7 @@ export function TodayScreen() {
                 </span>
               </a>
               <a className="card-sub-link" href={href(`/skill/${skill.id}`)}>
-                達成条件と過去の記録を見る
+                {count > 0 ? `過去の記録（${count}件）・達成条件を見る →` : '達成条件・やり方を見る →'}
               </a>
             </li>
           ))}
