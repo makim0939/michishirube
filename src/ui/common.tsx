@@ -97,6 +97,7 @@ function VideoView({
   const [playOnLoad, setPlayOnLoad] = useState(false)
   const [url, setUrl] = useState<string>()
   const [failed, setFailed] = useState(false)
+  const videoEl = useRef<HTMLVideoElement | null>(null)
   const posterUrl = useObjectUrl(poster, poster && cacheKey ? `${cacheKey}-poster-${poster.size}` : undefined)
   const latest = useRef(blob)
   latest.current = blob
@@ -119,6 +120,20 @@ function VideoView({
     }
   }, [requested, type])
 
+  // 読み込めたらすぐ再生する。押してからの読み込みの間に音つきの自動再生が許されなくなっていたら（iPhone）、
+  // 音なしで始める（音はプレーヤーで出せる）
+  useEffect(() => {
+    const el = videoEl.current
+    if (!url || !el || !playOnLoad) return
+    setPlayOnLoad(false)
+    el.play().catch(() => {
+      el.muted = true
+      el.play().catch(() => {
+        // それでも止められたら、プレーヤーの再生ボタンで再生してもらう
+      })
+    })
+  }, [url, playOnLoad])
+
   if (failed) {
     return <div className={`media placeholder ${className ?? ''}`}>動画を読み込めませんでした</div>
   }
@@ -140,25 +155,16 @@ function VideoView({
   }
   return (
     <video
-      ref={videoRef}
-      className={`media ${className ?? ''}`}
+      ref={(el) => {
+        videoEl.current = el
+        videoRef?.(el)
+      }}
+      className={`media playing ${className ?? ''}`}
       src={url}
       poster={posterUrl}
       controls
       playsInline
       preload="metadata"
-      onLoadedData={(e) => {
-        if (!playOnLoad) return
-        const el = e.currentTarget
-        setPlayOnLoad(false)
-        // 押してから読み込むまでの間に、音つきの自動再生が許されなくなることがある（iPhone）
-        el.play().catch(() => {
-          el.muted = true
-          el.play().catch(() => {
-            // それでも止められたら、プレーヤーの再生ボタンで再生してもらう
-          })
-        })
-      }}
     />
   )
 }
