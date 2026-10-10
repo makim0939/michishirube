@@ -26,8 +26,9 @@ export function RecordsScreen() {
     const records = await query.limit(limit + 1).toArray()
     const mediaIds = records.slice(0, limit).flatMap((r) => r.mediaIds ?? [])
     const media = (await db.media.bulkGet(mediaIds)).filter((m): m is Media => !!m)
-    // 記録のあるスキルだけを絞り込みの候補にする
-    const recorded = new Set((await db.records.orderBy('skillId').uniqueKeys()) as string[])
+    // 記録のある型だけを絞り込みの候補にする。
+    // iPhone の Safari は、記録が0件のときに重複なしのカーソル（uniqueKeys）を開けずに落ちるので、キーを全部読んでまとめる
+    const recorded = new Set((await db.records.orderBy('skillId').keys()) as string[])
     return { skills, domains, records, media, total, recorded }
   }, [limit, skillFilter])
 
@@ -49,18 +50,18 @@ export function RecordsScreen() {
   return (
     <div className="screen">
       <header className="screen-header">
-        <h1>記録</h1>
+        <h1>カップ帳</h1>
         <span className="pill">{data.total} 件</span>
       </header>
 
       {data.recorded.size > 1 && (
         <label className="field">
-          <span className="sr-only">スキルで絞り込む</span>
+          <span className="sr-only">型で絞り込む</span>
           <select value={skillFilter} onChange={(e) => {
             setSkillFilter(e.target.value)
             setLimit(PAGE)
           }}>
-            <option value="">すべてのスキル</option>
+            <option value="">すべての型</option>
             {data.skills
               .filter((s) => data.recorded.has(s.id))
               .map((s) => (

@@ -7,6 +7,7 @@ import type { Skill } from '../domain/types'
 import { ConfirmButton, Empty } from './common'
 import { useAction, useToast } from './feedback'
 import { backHandler, goBack, href, replace } from './router'
+import { BackIcon } from './icons'
 
 function SkillForm({
   initial,
@@ -43,14 +44,14 @@ function SkillForm({
         <input value={form.name} onChange={(e) => set('name', e.target.value)} required placeholder="例：ハート" />
       </label>
       <label className="field">
-        <span>達成条件</span>
+        <span>合格の目安</span>
         <textarea
           rows={2}
           value={form.criteria}
           onChange={(e) => set('criteria', e.target.value)}
           placeholder="例：中央に左右対称のハートが10回中8回描ける"
         />
-        <small className="muted">「できた気がする」ではなく、回数や状態で判定できる書き方にすると、達成の判断がぶれません。</small>
+        <small className="muted">「できた気がする」ではなく、回数や状態で判定できる書き方にすると、「できた」の判断がぶれません。</small>
       </label>
       <label className="field">
         <span>説明・やり方</span>
@@ -87,9 +88,9 @@ function SkillForm({
       </fieldset>
 
       <fieldset className="field">
-        <legend>前提（先に達成しておくスキル）</legend>
+        <legend>前提（先にできておく型）</legend>
         {candidates.length === 0 ? (
-          <p className="muted">この分野にほかのスキルはありません。</p>
+          <p className="muted">この分野にほかの型はありません。</p>
         ) : (
           <ul className="checks">
             {candidates.map((c) => (
@@ -137,7 +138,7 @@ export function EditSkillScreen({ id }: { id: string }) {
 
   if (!data) return null
   const { skill, skills } = data
-  if (!skill) return <Empty>スキルが見つかりません。</Empty>
+  if (!skill) return <Empty>型が見つかりません。</Empty>
   // 自分より後ろのスキルを前提にすると循環するので、候補から外す
   const after = descendants(skill.id, skills)
   const candidates = sortByDepth(skills.filter((s) => s.id !== skill.id && !after.has(s.id)))
@@ -146,9 +147,9 @@ export function EditSkillScreen({ id }: { id: string }) {
     <div className="screen">
       <header className="screen-header">
         <a className="back" href={href(`/skill/${id}`)} onClick={backHandler(`/skill/${id}`)} aria-label="戻る">
-          ←
+          <BackIcon size={26} />
         </a>
-        <h1>スキルを編集</h1>
+        <h1>型を編集</h1>
       </header>
       <SkillForm
         key={skill.id}
@@ -176,7 +177,7 @@ export function EditSkillScreen({ id }: { id: string }) {
             <ConfirmButton
               className="btn ghost"
               confirmLabel="削除する"
-              message="このスキルと、その記録・動画・写真をすべて削除します。元に戻せません。"
+              message="この型と、その記録・動画・写真をすべて削除します。元に戻せません。"
               onConfirm={async () => {
                 const ok = await run(async () => {
                   await deleteSkill(id)
@@ -185,7 +186,7 @@ export function EditSkillScreen({ id }: { id: string }) {
                 if (ok) replace(`/map/${skill.domainId}`)
               }}
             >
-              このスキルを削除
+              この型を削除
             </ConfirmButton>
           </div>
         }
@@ -208,9 +209,9 @@ export function NewSkillScreen({ domainId }: { domainId: string }) {
     <div className="screen">
       <header className="screen-header">
         <a className="back" href={href(`/map/${domainId}`)} onClick={backHandler(`/map/${domainId}`)} aria-label="戻る">
-          ←
+          <BackIcon size={26} />
         </a>
-        <h1>{data.domain.name} にスキルを追加</h1>
+        <h1>{data.domain.name} に型を追加</h1>
       </header>
       <SkillForm
         initial={{ name: '', description: '', criteria: '', sources: [], prereqIds: [] }}

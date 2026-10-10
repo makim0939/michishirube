@@ -129,7 +129,7 @@ export interface SkillInput {
 
 function cleanInput(input: SkillInput): SkillInput {
   const name = input.name.trim()
-  if (!name) throw new RepoError('スキルの名前を入れてください')
+  if (!name) throw new RepoError('型の名前を入れてください')
   for (const s of input.sources) {
     const url = s.url?.trim()
     if (url && !isWebUrl(url)) throw new RepoError(`出典の URL は http:// か https:// で始めてください（${url}）`)
@@ -204,7 +204,7 @@ export async function addReference(skillId: string, input: { url: string; title?
   }
   await db.transaction('rw', db.skills, db.outbox, async () => {
     const skill = await db.skills.get(skillId)
-    if (!skill) throw new RepoError('スキルが見つかりません')
+    if (!skill) throw new RepoError('型が見つかりません')
     await db.skills.update(skillId, { references: [...skill.references, reference], updatedAt: Date.now() })
     await markDirty('skill', [skillId])
   })
@@ -233,10 +233,10 @@ export function defaultReferenceTitle(url: string): string {
 // ---- 挑戦・達成 ----
 
 const ACTIVATE_MESSAGES = {
-  locked: '前提のスキルに、まだ挑戦していません',
-  done: 'すでに達成しています',
-  already: 'すでに挑戦中です',
-  limit: '挑戦中の上限に達しています。どれかを達成するか、挑戦をやめてください',
+  locked: '前提の型を、まだ練習していません',
+  done: 'すでにできています',
+  already: 'すでに練習中です',
+  limit: '練習中の上限に達しています。どれかを「できた」にするか、練習をやめてください',
 } as const
 
 async function setSkill(id: string, patch: Partial<Skill>) {
@@ -248,7 +248,7 @@ export async function activateSkill(id: string) {
   await db.transaction('rw', [db.skills, db.meta, db.outbox], async () => {
     const skills = await db.skills.toArray()
     const skill = skills.find((s) => s.id === id)
-    if (!skill) throw new RepoError('スキルが見つかりません')
+    if (!skill) throw new RepoError('型が見つかりません')
     const check = canActivate(skill, skills, (await getSettings()).maxActive)
     if (!check.ok) throw new RepoError(ACTIVATE_MESSAGES[check.reason])
     await setSkill(id, { status: 'active', activatedAt: Date.now() })
@@ -264,10 +264,10 @@ export async function achieveSkill(id: string): Promise<{ skill: Skill; unlocked
   return db.transaction('rw', db.skills, db.outbox, async () => {
     const skills = await db.skills.toArray()
     const skill = skills.find((s) => s.id === id)
-    if (!skill) throw new RepoError('スキルが見つかりません')
-    if (skill.status === 'done') throw new RepoError('すでに達成しています')
+    if (!skill) throw new RepoError('型が見つかりません')
+    if (skill.status === 'done') throw new RepoError('すでにできています')
     if (!skill.prereqIds.every((p) => skills.find((s) => s.id === p)?.status === 'done')) {
-      throw new RepoError('前提のスキルをまだ達成していません')
+      throw new RepoError('前提の型が、まだできていません')
     }
     const unlocked = newlyUnlocked(id, skills)
     await setSkill(id, { status: 'done', achievedAt: Date.now(), activatedAt: undefined })

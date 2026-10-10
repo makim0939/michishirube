@@ -12,6 +12,7 @@ import {
 import { ConfirmButton, formatAgo, formatDate } from './common'
 import { useAction, useToast } from './feedback'
 import { replace } from './router'
+import { AlertIcon, CheckIcon } from './icons'
 
 const SETUP_GUIDE = 'https://github.com/makim0939/michishirube/blob/main/docs/setup.md'
 
@@ -127,8 +128,9 @@ function YoutubeSection({ notice }: { notice?: string }) {
   }
   return (
     <div className="stack">
-      <p>
-        {status.connected ? '✅ 連携しています。' : '⚠️ まだ連携していません。'}
+      <p className="status-line">
+        {status.connected ? <CheckIcon size={16} /> : <AlertIcon size={16} />}
+        {status.connected ? '連携しています。' : 'まだ連携していません。'}
         {!!pending && `アップ待ちの動画が ${pending} 本あります。`}
       </p>
       {status.connected ? (
@@ -182,8 +184,9 @@ export function SyncSettings({ notice }: { notice?: string }) {
         <h2>クラウド同期</h2>
         {config ? (
           <div className="stack">
-            <p>
-              {status.error ? `⚠️ ${status.error}` : '✅ つながっています。'}
+            <p className="status-line">
+              {status.error ? <AlertIcon size={16} /> : <CheckIcon size={16} />}
+              {status.error ? status.error : 'つながっています。'}
               {status.lastSyncedAt && (
                 <span className="muted">
                   {' '}

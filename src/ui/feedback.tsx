@@ -1,7 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { activateSkill } from '../data/repo'
 import type { Skill } from '../domain/types'
+import { splitName } from './common'
 import { go } from './router'
+import { patternFor, patternUrl } from './world'
 
 // ---- トースト ----
 
@@ -44,7 +46,7 @@ export function useCelebrate() {
   return useContext(CelebrationContext)
 }
 
-const CONFETTI_COLORS = ['#f2b84b', '#1f6f5c', '#e0603f', '#5b8def', '#c86fc9']
+const CONFETTI_COLORS = ['#c99b66', '#8a5a34', '#e8d2b0', '#4f5a3a', '#faf7f2']
 
 function CelebrationOverlay({
   celebration,
@@ -56,6 +58,7 @@ function CelebrationOverlay({
   onError: (message: string) => void
 }) {
   const { unlocked } = celebration
+  const pattern = patternFor(celebration.skill.name)
   // 画面を移動したり Esc を押したら閉じる（スワイプで戻ったときに演出だけ残らないように）
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -96,22 +99,24 @@ function CelebrationOverlay({
         ))}
       </div>
       <div className="celebration-card">
-        <div className="celebration-badge" aria-hidden="true">
-          🏆
-        </div>
-        <p className="celebration-kicker">実績解除</p>
-        <h2 id="celebration-title">{celebration.skill.name}</h2>
+        {pattern ? (
+          <img className="celebration-badge" src={patternUrl(pattern)} alt="" />
+        ) : (
+          <div className="celebration-badge empty" aria-hidden="true" />
+        )}
+        <p className="celebration-kicker">できた</p>
+        <h2 id="celebration-title">{splitName(celebration.skill.name).main}</h2>
         {unlocked.length > 0 ? (
           <div className="celebration-unlocked">
-            <p>達成を目指せるようになったスキル</p>
+            <p>次に目指せるようになった型</p>
             <ul>
               {unlocked.map((s) => (
-                <li key={s.id}>🔓 {s.name}</li>
+                <li key={s.id}>{splitName(s.name).main}</li>
               ))}
             </ul>
           </div>
         ) : (
-          <p className="muted">この道の先に、まだ解放されていないスキルはありません。</p>
+          <p className="muted">この型の先に、新しく開く型はありません。</p>
         )}
         <div className="celebration-actions">
           {unlocked.length === 1 && (
@@ -120,22 +125,24 @@ function CelebrationOverlay({
               autoFocus
               onClick={async () => {
                 try {
-                  // 先取りで挑戦中なら、そのまま練習を続ける
+                  // 先取りで練習中なら、そのまま練習を続ける
                   if (unlocked[0].status !== 'active') await activateSkill(unlocked[0].id)
                   go('/')
                 } catch (e) {
-                  // 上限などで挑戦にできなければ、スキルの画面で選んでもらう
+                  // 上限などで練習中にできなければ、型の画面で選んでもらう
                   onError(e instanceof Error ? e.message : String(e))
                   go(`/skill/${unlocked[0].id}`)
                 }
               }}
             >
-              {unlocked[0].status === 'active' ? `「${unlocked[0].name}」の練習を続ける` : `「${unlocked[0].name}」に挑戦する`}
+              {unlocked[0].status === 'active'
+                ? `「${splitName(unlocked[0].name).main}」の練習を続ける`
+                : `「${splitName(unlocked[0].name).main}」の練習を始める`}
             </button>
           )}
           {unlocked.length > 1 && (
             <button className="btn primary" autoFocus onClick={() => go('/')}>
-              次に挑戦するスキルを選ぶ
+              次に練習する型を選ぶ
             </button>
           )}
           <button className="btn" autoFocus={unlocked.length === 0} onClick={onClose}>

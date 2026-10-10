@@ -1,27 +1,26 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { formatDateTime } from '../domain/format'
 import type { Media, SkillState } from '../domain/types'
+import { PlayIcon } from './icons'
 
 export const STATE_LABEL: Record<SkillState, string> = {
-  locked: 'ロック中',
+  locked: 'まだ先',
   available: '挑戦できる',
-  active: '挑戦中',
-  done: '達成',
+  active: '練習中',
+  done: 'できた',
 }
 
-export const STATE_ICON: Record<SkillState, string> = {
-  locked: '🔒',
-  available: '✨',
-  active: '🔥',
-  done: '🏆',
+/** 「ミルクのスチーム（マイクロフォーム）」→ 大きく出す名前と、小さく添える補足 */
+export function splitName(name: string): { main: string; sub?: string } {
+  const m = name.match(/^(.+?)[（(](.+)[）)]$/)
+  if (!m) return { main: name }
+  // 「チューリップ（2段）」のような短い区別は、名前の一部として残す
+  if (m[2].length <= 2) return { main: `${m[1]} ${m[2]}` }
+  return { main: m[1], sub: m[2] }
 }
 
 export function StateBadge({ state }: { state: SkillState }) {
-  return (
-    <span className={`badge state-${state}`}>
-      <span aria-hidden="true">{STATE_ICON[state]}</span> {STATE_LABEL[state]}
-    </span>
-  )
+  return <span className={`badge state-${state}`}>{STATE_LABEL[state]}</span>
 }
 
 const DAY = 24 * 60 * 60 * 1000
@@ -149,7 +148,7 @@ function VideoView({
           setRequested(true)
         }}
       >
-        <span aria-hidden="true">{requested ? '…' : '▶'}</span>
+        <span aria-hidden="true">{requested ? '…' : <PlayIcon size={22} />}</span>
       </button>
     )
   }

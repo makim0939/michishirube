@@ -1,11 +1,10 @@
+import { OUTCOME_LABEL } from '../domain/format'
 import type { Media, PracticeRecord, Skill } from '../domain/types'
-import { formatDate } from './common'
+import { formatDate, splitName } from './common'
 import { MediaItem } from './MediaItem'
 import { href } from './router'
 
-const OUTCOME_LABEL = { good: '◎ 成功', meh: '△ 惜しい', bad: '✕ 失敗' } as const
-
-/** 記録1件。スキル画面と「記録」タブで使う。直す・消すは編集画面から */
+/** 記録1件。型の詳細とカップ帳で使う。直す・消すは編集画面から */
 export function RecordCard({
   record,
   media,
@@ -27,7 +26,7 @@ export function RecordCard({
       {skill && (
         <a className="record-skill" href={href(`/skill/${skill.id}`)}>
           {domainName && <span className="muted">{domainName}・</span>}
-          {skill.name}
+          {splitName(skill.name).main}
         </a>
       )}
       {media.length > 0 && (

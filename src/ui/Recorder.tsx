@@ -7,6 +7,7 @@ import {
   RECORDER_BITRATE,
 } from '../data/mediaPrep'
 import { readStorage, writeStorage } from './storage'
+import { MicIcon } from './icons'
 
 const AUDIO_KEY = 'michishirube:recorder-audio'
 
@@ -156,7 +157,8 @@ export function Recorder({
               setAudio(!audio)
             }}
           >
-            {audio ? '🎤 音あり' : '🔇 音なし'}
+            <MicIcon size={18} off={!audio} />
+            {audio ? '音あり' : '音なし'}
           </button>
         )}
       </div>

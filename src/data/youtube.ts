@@ -1,6 +1,6 @@
 import { liveQuery } from 'dexie'
-import { formatDateTime } from '../domain/format'
-import type { Media, Outcome } from '../domain/types'
+import { formatDateTime, OUTCOME_LABEL } from '../domain/format'
+import type { Media } from '../domain/types'
 import { db, markDirty } from './db'
 import { api, getSyncConfig, SyncError, type SyncConfig } from './sync'
 
@@ -18,7 +18,6 @@ const PAUSE_KEY = 'youtube:pausedUntil'
 /** 続けてこの回数失敗したら、自動では上げ直さない（壊れた動画を何度も送らないように） */
 export const MAX_UPLOAD_ATTEMPTS = 3
 const UPLOAD_BASE = 'https://www.googleapis.com/upload/youtube/v3/videos?part=snippet,status&uploadType='
-const OUTCOME_LABEL: Record<Outcome, string> = { good: '◎ 成功', meh: '△ 惜しい', bad: '✕ 失敗' }
 
 export async function youtubeStatus(): Promise<YoutubeStatus | undefined> {
   const config = await getSyncConfig()
@@ -78,7 +77,7 @@ export async function videoMeta(media: Media): Promise<VideoMeta> {
   if (record?.outcome) lines.push(OUTCOME_LABEL[record.outcome])
   if (record?.reason) lines.push(`なぜ：${record.reason}`)
   if (record?.nextAction) lines.push(`次の一手：${record.nextAction}`)
-  lines.push('', '道しるべで記録')
+  lines.push('', 'ラテリエで記録')
   // YouTube のタイトルは100文字まで
   return { title: title.slice(0, 100), description: lines.join('\n').slice(0, 4900) }
 }

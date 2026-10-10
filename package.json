@@ -9,14 +9,11 @@
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc --noEmit && tsc --noEmit -p worker",
-    "icons": "pwa-assets-generator",
     "worker:dev": "wrangler dev --config worker/wrangler.jsonc --port 8787",
     "worker:migrate": "wrangler d1 migrations apply michishirube --config worker/wrangler.jsonc",
     "worker:deploy": "wrangler deploy --config worker/wrangler.jsonc"
   },
   "dependencies": {
-    "@dagrejs/dagre": "^3.1.1",
-    "@xyflow/react": "^12.11.6",
     "dexie": "^4.4.5",
     "dexie-react-hooks": "^4.4.0",
     "fflate": "^0.8.2",
@@ -29,7 +26,6 @@
     "@types/node": "^24",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@vite-pwa/assets-generator": "^1.0.4",
     "@vitejs/plugin-react": "^6.1.1",
     "fake-indexeddb": "^6.2.4",
     "typescript": "~5.9.3",

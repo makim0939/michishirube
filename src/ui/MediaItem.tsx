@@ -7,6 +7,7 @@ import { MAX_UPLOAD_ATTEMPTS, retryUpload, youtubeUrl } from '../data/youtube'
 import type { Media } from '../domain/types'
 import { isVideo, MediaView } from './common'
 import { useAction } from './feedback'
+import { PhotoIcon, PlayIcon, StarIcon, VideoIcon } from './icons'
 
 const UPLOAD_LABEL = {
   pending: 'YouTube へのアップ待ち',
@@ -89,13 +90,13 @@ export function MediaItem({
         />
       ) : video && media.youtubeId ? (
         <a className="media placeholder" href={youtubeUrl(media.youtubeId)} target="_blank" rel="noopener noreferrer">
-          <span aria-hidden="true">▶</span>
+          <PlayIcon size={22} />
           YouTube で見る
           <small>（非公開・YouTube アプリで再生）</small>
         </a>
       ) : (
         <div className="media placeholder">
-          <span aria-hidden="true">{video ? '🎥' : '📷'}</span>
+          {video ? <VideoIcon size={22} /> : <PhotoIcon size={22} />}
           この端末にはありません
         </div>
       )}
@@ -128,7 +129,8 @@ export function MediaItem({
             title="自動整理で、この端末から消さない"
             onClick={() => run(() => setMediaKeep(media.id, !media.keep))}
           >
-            {media.keep ? '★ 残す' : '☆ 残す'}
+            <StarIcon size={13} filled={media.keep} />
+            残す
           </button>
         </figcaption>
       )}

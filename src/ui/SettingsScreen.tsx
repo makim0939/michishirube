@@ -9,6 +9,7 @@ import { ConfirmButton, formatBytes, requestPersist, saveFile } from './common'
 import { useAction, useToast } from './feedback'
 import { go } from './router'
 import { SyncSettings } from './SyncSettings'
+import { AlertIcon, CheckIcon } from './icons'
 
 function StorageStatus() {
   const [info, setInfo] = useState<{ usage?: number; quota?: number; persisted?: boolean }>()
@@ -29,10 +30,11 @@ function StorageStatus() {
           {info.quota ? ` / 上限の目安 ${formatBytes(info.quota)}` : ''}
         </p>
       )}
-      <p>
+      <p className="status-line">
+        {info.persisted ? <CheckIcon size={16} /> : <AlertIcon size={16} />}
         {info.persisted
-          ? '✅ 容量が足りなくなっても、ブラウザが自動で消さない設定になっています。'
-          : '⚠️ 容量が足りなくなると、ブラウザが自動で消す可能性があります。'}
+          ? '容量が足りなくなっても、ブラウザが自動で消さない設定になっています。'
+          : '容量が足りなくなると、ブラウザが自動で消す可能性があります。'}
       </p>
       {!info.persisted && (
         <button
@@ -89,7 +91,7 @@ export function SettingsScreen({ notice }: { notice?: string }) {
       <SyncSettings notice={notice} />
 
       <section className="section">
-        <h2>同時に挑戦できる数</h2>
+        <h2>同時に練習できる数</h2>
         <p className="muted">全分野の合計です。少ないほど、1つあたりの練習が濃くなります。</p>
         <div className="stepper">
           <button
@@ -110,7 +112,7 @@ export function SettingsScreen({ notice }: { notice?: string }) {
             ＋
           </button>
         </div>
-        <p className="muted small">上限を下げても、すでに挑戦中のスキルは外れません。</p>
+        <p className="muted small">上限を下げても、すでに練習中の型は外れません。</p>
       </section>
 
       <section className="section">
@@ -128,7 +130,7 @@ export function SettingsScreen({ notice }: { notice?: string }) {
           <span>
             YouTube に上げ終えた古い動画を、端末から自動で消す
             <small className="muted">
-              {TIDY_POLICY.minAgeDays}日より前のもの。スキルごとの最初の1本・最新{TIDY_POLICY.keepLatest}本・「残す」印を付けたものは消しません。
+              {TIDY_POLICY.minAgeDays}日より前のもの。型ごとの最初の1本・最新{TIDY_POLICY.keepLatest}本・「残す」印を付けたものは消しません。
             </small>
           </span>
         </label>
@@ -210,7 +212,7 @@ export function SettingsScreen({ notice }: { notice?: string }) {
                       const s = await importBackup(pendingRestore)
                       setPendingRestore([])
                       toast.show(
-                        `復元しました（スキル ${s.skills}・記録 ${s.records}・動画と写真 ${s.media}）` +
+                        `復元しました（型 ${s.skills}・記録 ${s.records}・動画と写真 ${s.media}）` +
                           (s.missingMedia > 0 ? `。含まれていなかった動画・写真 ${s.missingMedia} 件は外しました` : ''),
                       )
                       go('/')
@@ -237,7 +239,7 @@ export function SettingsScreen({ notice }: { notice?: string }) {
             <li key={t.domain} className="list-row">
               <span className="list-main">
                 <span>{t.domain}</span>
-                <span className="list-sub">{t.skills.length} スキル・出典つき</span>
+                <span className="list-sub">型 {t.skills.length}</span>
               </span>
               <button
                 className="btn small"
@@ -283,7 +285,7 @@ export function SettingsScreen({ notice }: { notice?: string }) {
       </section>
 
       <p className="muted small center">
-        道しるべ v{__APP_VERSION__}・
+        ラテリエ v{__APP_VERSION__}・
         <a href={`${import.meta.env.BASE_URL}privacy.html`} target="_blank" rel="noopener noreferrer">
           プライバシーポリシー
         </a>
