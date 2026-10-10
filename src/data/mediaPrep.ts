@@ -16,17 +16,13 @@ export const CAMERA_CONSTRAINTS: MediaTrackConstraints = {
 /** 録画は5分まで（撮り忘れで大きくなりすぎないように） */
 export const MAX_RECORDING_MS = 5 * 60 * 1000
 
-const MIME_CANDIDATES = [
-  // iPhone の Safari は MP4（H.264）。YouTube もそのまま受け付ける
-  'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
-  'video/mp4',
-  'video/webm;codecs=vp9,opus',
-  'video/webm;codecs=vp8,opus',
-  'video/webm',
-]
+// iPhone の Safari は MP4（H.264）。YouTube もそのまま受け付ける
+const WITH_AUDIO = ['video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm']
+const VIDEO_ONLY = ['video/mp4;codecs=avc1.42E01E', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm']
 
-export function pickRecorderMimeType(isSupported: (type: string) => boolean): string | undefined {
-  return MIME_CANDIDATES.find((t) => isSupported(t))
+/** 音を録らないときに音声コーデックを指定すると、録画を始められないブラウザがあるので分ける */
+export function pickRecorderMimeType(isSupported: (type: string) => boolean, withAudio = true): string | undefined {
+  return (withAudio ? WITH_AUDIO : VIDEO_ONLY).find((t) => isSupported(t))
 }
 
 export function extensionFor(mimeType: string): string {

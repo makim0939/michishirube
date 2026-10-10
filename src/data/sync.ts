@@ -89,9 +89,31 @@ function toWire(kind: EntityKind, row: Record<string, unknown>): Record<string, 
   return rest
 }
 
+/**
+ * 動画・写真を上げた結果は、上げた端末だけが書く。別の端末の古い行（まだ結果を知らない）で上書きされたら、
+ * 端末の結果を残し、直した行をもう一度送る（同じ動画を二重に上げないため）
+ */
+function mergeMedia(remote: Media, local: Media | undefined): { row: Media; repaired: boolean } {
+  const row: Media = { ...remote }
+  if (local?.blob) row.blob = local.blob
+  let repaired = false
+  if (local?.youtubeId && !remote.youtubeId) {
+    row.youtubeId = local.youtubeId
+    row.upload = 'done'
+    delete row.uploadError
+    repaired = true
+  }
+  if (local?.cloudPhoto && !remote.cloudPhoto) {
+    row.cloudPhoto = true
+    repaired = true
+  }
+  if (repaired) row.updatedAt = Date.now()
+  return { row, repaired }
+}
+
 /** サーバーから来た変更を端末に反映する。端末のほうが新しければ何もしない */
 export async function applyRemote(changes: EntityChange[]) {
-  await db.transaction('rw', [db.domains, db.skills, db.records, db.media, db.meta], async () => {
+  await db.transaction('rw', [db.domains, db.skills, db.records, db.media, db.meta, db.outbox], async () => {
     for (const c of changes) {
       const local = await readLocal(c.kind, c.id)
       if (local && local.updatedAt >= c.updatedAt) continue
@@ -106,9 +128,10 @@ export async function applyRemote(changes: EntityChange[]) {
       }
       const row = { ...c.data, id: c.id, updatedAt: c.updatedAt } as Record<string, unknown>
       if (c.kind === 'media') {
-        // 中身はこの端末だけのものなので、持っていれば残す
-        const blob = (local as Media | undefined)?.blob
-        if (blob) row.blob = blob
+        const merged = mergeMedia(row as unknown as Media, local as Media | undefined)
+        await db.media.put(merged.row)
+        if (merged.repaired) await db.outbox.put({ kind: 'media', id: c.id, at: Date.now() })
+        continue
       }
       await (table as typeof db.domains).put(row as never)
     }

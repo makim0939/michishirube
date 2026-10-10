@@ -1,4 +1,5 @@
 import { liveQuery } from 'dexie'
+import { formatDateTime } from '../domain/format'
 import type { Media, Outcome } from '../domain/types'
 import { db, markDirty } from './db'
 import { api, getSyncConfig, SyncError, type SyncConfig } from './sync'
@@ -14,6 +15,8 @@ export interface YoutubeStatus {
 }
 
 const PAUSE_KEY = 'youtube:pausedUntil'
+/** 続けてこの回数失敗したら、自動では上げ直さない（壊れた動画を何度も送らないように） */
+export const MAX_UPLOAD_ATTEMPTS = 3
 const UPLOAD_BASE = 'https://www.googleapis.com/upload/youtube/v3/videos?part=snippet,status&uploadType='
 const OUTCOME_LABEL: Record<Outcome, string> = { good: '◎ 成功', meh: '△ 惜しい', bad: '✕ 失敗' }
 
@@ -70,9 +73,7 @@ export interface VideoMeta {
 export async function videoMeta(media: Media): Promise<VideoMeta> {
   const [record, skill] = await Promise.all([db.records.get(media.recordId), db.skills.get(media.skillId)])
   const domain = skill ? await db.domains.get(skill.domainId) : undefined
-  const d = new Date(media.createdAt)
-  const stamp = `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`
-  const title = [domain?.name, skill?.name, stamp].filter(Boolean).join('｜')
+  const title = [domain?.name, skill?.name, formatDateTime(media.createdAt)].filter(Boolean).join('｜')
   const lines: string[] = []
   if (record?.outcome) lines.push(OUTCOME_LABEL[record.outcome])
   if (record?.reason) lines.push(`なぜ：${record.reason}`)
@@ -186,7 +187,7 @@ async function doUploads() {
       await db.media
         .where('upload')
         .anyOf('pending', 'uploading', 'failed')
-        .filter((m) => !!m.blob)
+        .filter((m) => !!m.blob && (m.upload !== 'failed' || (m.uploadAttempts ?? 0) < MAX_UPLOAD_ATTEMPTS))
         .sortBy('createdAt')
     ).filter((m) => !tried.has(m.id))
     if (targets.length === 0) return
@@ -196,7 +197,7 @@ async function doUploads() {
         const tokenValue = await accessToken(config)
         await db.media.update(m.id, { upload: 'uploading' })
         const youtubeId = await uploadVideo(m.blob!, await videoMeta(m), tokenValue)
-        await setUpload(m.id, { upload: 'done', youtubeId, uploadError: undefined })
+        await setUpload(m.id, { upload: 'done', youtubeId, uploadError: undefined, uploadAttempts: undefined })
       } catch (e) {
         if (e instanceof SyncError && (e.status === 409 || e.status === 400)) {
           // 連携していない・切れた・サーバーに Google の設定が無い：上げずに待つ（設定画面で連携すると再開する）
@@ -215,10 +216,20 @@ async function doUploads() {
           await db.media.update(m.id, { upload: 'pending' })
           return
         }
-        await setUpload(m.id, { upload: 'failed', uploadError: e instanceof Error ? e.message : String(e) })
+        await setUpload(m.id, {
+          upload: 'failed',
+          uploadError: e instanceof Error ? e.message : String(e),
+          uploadAttempts: (m.uploadAttempts ?? 0) + 1,
+        })
       }
     }
   }
+}
+
+/** 自動で上げ直すのをやめた動画を、もう一度上げる */
+export async function retryUpload(id: string) {
+  await setUpload(id, { upload: 'pending', uploadError: undefined, uploadAttempts: 0 })
+  return resumeUploads()
 }
 
 /** 上げる動画ができたら上げる。画面に戻ったとき・電波が戻ったときにも試す */

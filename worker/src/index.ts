@@ -24,13 +24,14 @@ interface Env {
 
 const app = new Hono<{ Bindings: Env }>()
 
-app.use('/api/*', (c, next) =>
+app.use(
+  '/api/*',
   cors({
-    origin: (origin) => (parseOrigins(c.env.ALLOWED_ORIGINS).includes(origin) ? origin : null),
+    origin: (origin, c) => (parseOrigins(c.env.ALLOWED_ORIGINS).includes(origin) ? origin : null),
     allowHeaders: ['Authorization', 'Content-Type'],
     allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     maxAge: 86400,
-  })(c, next),
+  }),
 )
 
 // Google から戻ってくる callback 以外は、APP_TOKEN を知っている人だけが使える

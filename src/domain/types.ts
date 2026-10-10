@@ -78,6 +78,8 @@ export interface Media {
   /** 動画を YouTube に上げた結果 */
   upload?: UploadState
   uploadError?: string
+  /** 続けて失敗した回数。上限に達したら、手で再試行するまで上げない */
+  uploadAttempts?: number
   youtubeId?: string
   /** 写真をサーバーに置いた */
   cloudPhoto?: boolean

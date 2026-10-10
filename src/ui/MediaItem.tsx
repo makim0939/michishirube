@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { setMediaKeep } from '../data/repo'
 import { fetchPhoto } from '../data/sync'
-import { youtubeUrl } from '../data/youtube'
+import { MAX_UPLOAD_ATTEMPTS, retryUpload, youtubeUrl } from '../data/youtube'
 import type { Media } from '../domain/types'
 import { isVideo, MediaView } from './common'
 import { useAction } from './feedback'
@@ -61,7 +61,16 @@ export function MediaItem({ media, videoRef }: { media: Media; videoRef?: (el: H
       )}
       {video && (
         <figcaption className="media-caption">
-          {media.upload && media.upload !== 'done' ? (
+          {media.upload === 'failed' && (media.uploadAttempts ?? 0) >= MAX_UPLOAD_ATTEMPTS && blob ? (
+            <button
+              type="button"
+              className="keep"
+              title={media.uploadError}
+              onClick={() => run(() => retryUpload(media.id))}
+            >
+              ↻ アップを再試行
+            </button>
+          ) : media.upload && media.upload !== 'done' ? (
             <span className={`upload upload-${media.upload}`} title={media.uploadError}>
               {UPLOAD_LABEL[media.upload]}
             </span>

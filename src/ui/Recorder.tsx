@@ -88,14 +88,20 @@ export function Recorder({
 
   const start = () => {
     const s = stream.current
-    const mimeType = pickRecorderMimeType((t) => MediaRecorder.isTypeSupported(t))
+    const mimeType = pickRecorderMimeType((t) => MediaRecorder.isTypeSupported(t), audio)
     if (!s || !mimeType) return
     const chunks: Blob[] = []
-    const r = new MediaRecorder(s, {
-      mimeType,
-      videoBitsPerSecond: RECORDER_BITRATE.video,
-      audioBitsPerSecond: RECORDER_BITRATE.audio,
-    })
+    let r: MediaRecorder
+    try {
+      r = new MediaRecorder(s, {
+        mimeType,
+        videoBitsPerSecond: RECORDER_BITRATE.video,
+        ...(audio ? { audioBitsPerSecond: RECORDER_BITRATE.audio } : {}),
+      })
+    } catch {
+      setError('この端末では録画を始められませんでした。標準のカメラを使ってください。')
+      return
+    }
     r.ondataavailable = (e) => {
       if (e.data.size > 0) chunks.push(e.data)
     }
@@ -111,7 +117,12 @@ export function Recorder({
       onDone(new File([blob], `rec-${stamp}.${extensionFor(type)}`, { type: blob.type }))
     }
     recorder.current = r
-    r.start(1000)
+    try {
+      r.start(1000)
+    } catch {
+      setError('この端末では録画を始められませんでした。標準のカメラを使ってください。')
+      return
+    }
     setStartedAt(Date.now())
     setNow(Date.now())
   }

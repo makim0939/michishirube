@@ -297,6 +297,8 @@ export async function importBackup(zips: Blob[]): Promise<ImportSummary> {
     await markDirty('record', records.map((r) => r.id))
     await markDirty('media', media.map((m) => m.id))
     await markDirty('settings', ['settings'])
+    // 同期していれば、次の同期でサーバーの内容を最初から受け取り直す（サーバーのほうが新しいものに揃える）
+    if (await db.meta.get('sync:cursor')) await db.meta.put({ key: 'sync:cursor', value: 0 })
   })
 
   return {

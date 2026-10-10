@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { exportBackup, importBackup } from './backup'
 import { db } from './db'
 import { pickRecorderMimeType } from './mediaPrep'
 import { addRecord, createDomain, createSkill, ensureSeeded, setMediaKeep } from './repo'
@@ -179,5 +180,47 @@ describe('YouTube へのアップロード（アップロード先を読めな�
       'xyz',
     )
     expect(urls[1]).toMatch(/uploadType=multipart/)
+  })
+})
+
+describe('レビュー2回目の修正', () => {
+  it('別の端末の古い行で、YouTube に上げた結果を消さない（直した行を送り直す）', async () => {
+    const domainId = await createDomain('ラテアート')
+    await addRecord({
+      skillId: await createSkill(domainId, input('ハート')),
+      reason: '',
+      nextAction: '',
+      files: [new Blob(['v'], { type: 'video/mp4' })],
+    })
+    const [m] = await db.media.toArray()
+    await db.media.update(m.id, { upload: 'done', youtubeId: 'yt1', updatedAt: m.updatedAt + 10 })
+    await db.outbox.clear()
+    await applyRemote([
+      {
+        kind: 'media',
+        id: m.id,
+        updatedAt: m.updatedAt + 20,
+        deleted: false,
+        data: { ...m, blob: undefined, upload: 'pending', keep: true },
+      },
+    ])
+    const after = (await db.media.get(m.id))!
+    expect(after).toMatchObject({ youtubeId: 'yt1', upload: 'done', keep: true })
+    expect(await after.blob?.text()).toBe('v')
+    expect(await db.outbox.get(['media', m.id])).toBeDefined()
+  })
+
+  it('同期している端末で復元したら、サーバーの内容を最初から受け取り直す', async () => {
+    await createDomain('ピアノ')
+    const parts = await exportBackup({ includeMedia: false })
+    await db.meta.put({ key: 'sync:cursor', value: 42 })
+    await importBackup(parts.map((p) => p.blob))
+    expect((await db.meta.get('sync:cursor'))?.value).toBe(0)
+  })
+
+  it('音を録らないときは、音声コーデックを含まない形式を選ぶ', () => {
+    const supported = (t: string) => t.startsWith('video/mp4')
+    expect(pickRecorderMimeType(supported, false)).toBe('video/mp4;codecs=avc1.42E01E')
+    expect(pickRecorderMimeType(supported, true)).toContain('mp4a')
   })
 })
