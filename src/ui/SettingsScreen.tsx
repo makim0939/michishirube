@@ -282,7 +282,12 @@ export function SettingsScreen({ notice }: { notice?: string }) {
         </ConfirmButton>
       </section>
 
-      <p className="muted small center">道しるべ v{__APP_VERSION__}</p>
+      <p className="muted small center">
+        道しるべ v{__APP_VERSION__}・
+        <a href={`${import.meta.env.BASE_URL}privacy.html`} target="_blank" rel="noopener noreferrer">
+          プライバシーポリシー
+        </a>
+      </p>
     </div>
   )
 }

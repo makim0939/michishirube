@@ -78,8 +78,13 @@ YouTube への自動アップロードには、Google Cloud で「アプリ」�
 
 1. 「API とサービス」→「OAuth 同意画面」（Google Auth Platform）を開き、「開始」を押します。
 2. アプリ名は「道しるべ」、サポートメールは自分のアドレスにします。対象は **外部** を選びます。
-3. 「データアクセス」で「スコープを追加」から `https://www.googleapis.com/auth/youtube.upload` を追加します。
-4. 「対象」で公開ステータスを **本番環境にする（アプリを公開）** にします。
+3. 「ブランディング」で、次を入れます（本番環境にするのに必要です）。
+   - アプリのホームページ：`https://makim0939.github.io/michishirube/`
+   - プライバシー ポリシーのリンク：`https://makim0939.github.io/michishirube/privacy.html`
+   - 承認済みドメイン：`makim0939.github.io` と `makim0939.workers.dev`（サーバーの URL のドメイン）
+   - デベロッパーの連絡先：自分のアドレス
+4. 「データアクセス」で「スコープを追加」から `https://www.googleapis.com/auth/youtube.upload` を追加します。
+5. 「対象」で公開ステータスを **本番環境にする（アプリを公開）** にします。
    - 「テスト」のままだと、7日ごとに連携が切れます。
    - 審査は受けなくて大丈夫です。自分だけで使うので、連携のときに「確認されていないアプリ」の警告が出るだけです。
 

@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>プライバシーポリシー｜道しるべ</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: system-ui, -apple-system, 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+        line-height: 1.75;
+      }
+      body {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 32px 16px 64px;
+        background: Canvas;
+        color: CanvasText;
+      }
+      h1 {
+        font-size: 1.5rem;
+      }
+      h2 {
+        font-size: 1.1rem;
+        margin-top: 2em;
+      }
+      .muted {
+        opacity: 0.7;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>道しるべ プライバシーポリシー</h1>
+    <p class="muted">最終更新日：2026年10月10日</p>
+
+    <p>
+      「道しるべ」（以下「本アプリ」）は、個人が趣味や勉強の練習を記録するためのアプリです。本アプリの作者は、利用者の情報を集めて保有するサーバーを運営していません。このページでは、本アプリが扱う情報と、その保存先を説明します。
+    </p>
+
+    <h2>1. 扱う情報と保存先</h2>
+    <ul>
+      <li>
+        <strong>練習の記録・ロードマップ・写真・動画</strong>：利用者の端末のブラウザの中（IndexedDB）に保存します。
+      </li>
+      <li>
+        <strong>クラウド同期を設定した場合</strong>：記録・ロードマップ・縮小した写真を、<strong>利用者自身が用意した</strong> Cloudflare
+        のアカウント（Workers・D1）に保存します。作者はこのデータにアクセスできません。
+      </li>
+      <li>
+        <strong>YouTube と連携した場合</strong>：利用者が撮った練習の動画を、<strong>利用者自身の YouTube チャンネル</strong>に「非公開」でアップロードします。
+      </li>
+    </ul>
+
+    <h2>2. Google ユーザーデータの取り扱い</h2>
+    <ul>
+      <li>
+        本アプリが Google に求める権限は、YouTube への動画のアップロード（<code>https://www.googleapis.com/auth/youtube.upload</code>）だけです。
+      </li>
+      <li>
+        この権限は、利用者が本アプリで撮った動画を、利用者自身のチャンネルへアップロードするためだけに使います。チャンネルの動画の一覧や視聴履歴など、ほかの情報は読み取りません。
+      </li>
+      <li>
+        連携のために Google から受け取る認可情報（リフレッシュトークン）は、利用者自身の Cloudflare アカウントのサーバー（D1）にだけ保存します。端末には、1時間で切れるアクセストークンだけを渡します。
+      </li>
+      <li>
+        Google から受け取った情報を、第三者に提供・販売したり、広告に使ったり、人が読んだりすることはありません。本アプリによる
+        Google API から受け取った情報の利用と他のアプリへの転送は、
+        <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API サービスのユーザーデータに関するポリシー</a>
+        （限定的な使用の要件を含む）に従います。
+      </li>
+    </ul>
+
+    <h2>3. 連携の解除とデータの削除</h2>
+    <ul>
+      <li>本アプリの「設定 → YouTube → 連携を解除」で、保存している認可情報を削除し、Google 側の許可も取り消します。</li>
+      <li>
+        Google アカウントの<a href="https://myaccount.google.com/permissions">サードパーティのアクセス</a>からも、いつでも許可を取り消せます。
+      </li>
+      <li>YouTube にアップロードした動画は、YouTube のアプリやサイトから削除できます。</li>
+      <li>端末のデータは「設定 → この端末のデータをすべて削除」で、サーバーのデータは利用者自身の Cloudflare アカウントから削除できます。</li>
+    </ul>
+
+    <h2>4. 第三者への提供</h2>
+    <p>本アプリの作者は、利用者の情報を第三者に提供しません。アクセス解析や広告のためのツールも使っていません。</p>
+
+    <h2>5. お問い合わせ</h2>
+    <p>
+      <a href="https://github.com/makim0939/michishirube/issues">GitHub の Issues</a> からご連絡ください。
+    </p>
+
+    <p><a href="./">道しるべを開く</a></p>
+  </body>
+</html>
