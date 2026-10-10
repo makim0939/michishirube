@@ -51,3 +51,14 @@ describe('同期リクエストの検査', () => {
     )
   })
 })
+
+describe('連携結果のページ', () => {
+  it('アプリへ飛ばさず閉じるよう案内し、戻り先は HTML として安全に埋め込む', async () => {
+    const { resultPage } = await import('./resultPage')
+    const html = resultPage('connected', 'https://makim0939.github.io/michishirube/"><script>')
+    expect(html).toContain('YouTube と連携しました')
+    expect(html).toContain('閉じる')
+    expect(html).not.toContain('<script>')
+    expect(html).not.toMatch(/http-equiv="refresh"/)
+  })
+})
