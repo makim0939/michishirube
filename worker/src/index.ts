@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { PHOTO_MAX_BYTES } from '../../shared/protocol'
 import { bearerToken, isAllowedReturn, parseOrigins, safeEqual, signState, verifyState } from './auth'
+import { resultPage } from './resultPage'
 import { BadRequest, parseSyncRequest, sync } from './sync'
 import {
   accessToken,
@@ -116,17 +117,16 @@ app.get('/api/youtube/callback', async (c) => {
   const config = googleConfig(c.env)
   const state = c.env.APP_TOKEN ? await verifyState(c.req.query('state') ?? '', c.env.APP_TOKEN) : null
   if (!config || !state || !isAllowedReturn(state.returnTo, parseOrigins(c.env.ALLOWED_ORIGINS))) {
-    return c.text('連携を確認できませんでした。アプリの設定画面からやり直してください。', 400)
+    return c.html(resultPage('invalid'), 400)
   }
-  const back = (result: string) => c.redirect(`${state.returnTo.split('#')[0]}#/settings/youtube-${result}`)
   const code = c.req.query('code')
-  if (!code) return back('cancelled')
+  if (!code) return c.html(resultPage('cancelled', state.returnTo))
   try {
     await exchangeCode(c.env.DB, config, code, callbackUrl(c.req.url))
-    return back('connected')
+    return c.html(resultPage('connected', state.returnTo))
   } catch (e) {
     console.error(e)
-    return back('failed')
+    return c.html(resultPage('failed', state.returnTo), 502)
   }
 })
 
