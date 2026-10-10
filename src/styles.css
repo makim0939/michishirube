@@ -712,6 +712,20 @@ textarea {
   resize: vertical;
 }
 
+/* 入力中の枠は、端末の青ではなくクレマの色で示す */
+input:not([type='checkbox']):focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--active);
+  box-shadow: 0 0 0 3px rgb(138 90 52 / 18%);
+}
+
+:focus-visible {
+  outline: 2px solid var(--active);
+  outline-offset: 2px;
+}
+
 .source-row {
   display: grid;
   grid-template-columns: 1fr;

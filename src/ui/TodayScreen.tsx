@@ -1,5 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { db } from '../data/db'
 import { activateSkill, getSettings, recordsOf } from '../data/repo'
 import { getSyncConfig, getSyncStatus } from '../data/sync'
@@ -20,6 +20,24 @@ const HERO_LOOKBACK = 20
 const RECENT = 4
 
 const WEEKDAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
+
+/** いまの時刻。開いたままや、裏から戻ったときにも、日付と光が古いままにならないようにする */
+function useNow(intervalMs = 60_000): Date {
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const tick = () => setNow(new Date())
+    const timer = setInterval(tick, intervalMs)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') tick()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [intervalMs])
+  return now
+}
 
 function startOfWeek(now: number): number {
   const d = new Date(now)
@@ -117,7 +135,7 @@ function Hero({
 }) {
   const blob = useCupImage(media)
   const url = useObjectUrl(blob, media ? `${media.id}-hero-${blob?.size ?? 0}` : undefined)
-  const now = new Date()
+  const now = useNow()
   const light = lightFor(now)
   const date = `${now.getMonth() + 1}.${now.getDate()} ${WEEKDAYS[now.getDay()]} · ${LIGHT_LABEL[light]}`
   // 自分の写真が無いあいだは、いまの時刻の光の絵を出す（自分の1杯ではないので説明は付けない）
@@ -138,7 +156,7 @@ function Hero({
         <div className="hero-caption">
           <span className="hero-no">No.{number}</span>
           <span>
-            {formatAgo(record.createdAt)}
+            {formatAgo(record.createdAt, now.getTime())}
             {skillName && `　${splitName(skillName).main}`}
             {record.outcome && `　${OUTCOME_MARK[record.outcome]}`}
           </span>
@@ -191,7 +209,9 @@ export function TodayScreen() {
     )
     // 新しい記録から、メイン写真にする1杯と、最近の杯を選ぶ
     const latest = await db.records.orderBy('createdAt').reverse().limit(HERO_LOOKBACK).toArray()
-    const mediaOf = await Promise.all(latest.map(async (r) => pickCupMedia(await db.media.bulkGet(r.mediaIds))))
+    const media = await db.media.bulkGet(latest.flatMap((r) => r.mediaIds ?? []))
+    const mediaById = new Map(media.filter((m) => !!m).map((m) => [m.id, m]))
+    const mediaOf = latest.map((r) => pickCupMedia((r.mediaIds ?? []).map((id) => mediaById.get(id))))
     const numbered = latest.map((record, i) => ({ record, media: mediaOf[i], number: total - i }))
     const hero = numbered.find((n) => hasPhoto(n.media))
     const thisWeek = await db.records.where('createdAt').aboveOrEqual(startOfWeek(Date.now())).count()
@@ -232,7 +252,7 @@ export function TodayScreen() {
             <div className="sheet-head">
               <h2>練習中の型</h2>
               <span className="muted small">
-                この型 {current.count}杯 · 今週 {data.thisWeek}杯
+                この型 {current.count}杯 · 今週ぜんぶで {data.thisWeek}杯
               </span>
             </div>
             <div className="focus-title">
@@ -320,14 +340,16 @@ export function TodayScreen() {
         {data.available.length > 0 && room > 0 && (
           <section className="section">
             <h2>挑戦できる型</h2>
-            <ul className="list">
+            <ul className="type-rows">
               {data.available.map((s) => (
-                <li key={s.id} className="list-row">
-                  <PatternImage name={s.name} className="small" />
-                  <a href={href(`/skill/${s.id}`)} className="list-main">
-                    <span>{splitName(s.name).main}</span>
-                    <span className="list-sub">
-                      {[splitName(s.name).sub, s.parallel && '前提と並行して練習できる'].filter(Boolean).join('・')}
+                <li key={s.id} className="type-row">
+                  <a href={href(`/skill/${s.id}`)} className="type-row-main">
+                    <PatternImage name={s.name} className="small" />
+                    <span className="type-row-text">
+                      <span className="type-name">{splitName(s.name).main}</span>
+                      <span className="muted small">
+                        {s.parallel ? '前提と並行して練習できる' : (splitName(s.name).sub ?? '')}
+                      </span>
                     </span>
                   </a>
                   <button

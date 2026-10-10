@@ -319,7 +319,10 @@ export function SkillScreen({ id }: { id: string }) {
               <ul className="chips">
                 {prereqs.map((p) => (
                   <li key={p.id}>
-                    <a href={href(`/skill/${p.id}`)}>
+                    <a
+                      href={href(`/skill/${p.id}`)}
+                      aria-label={`${splitName(p.name).main}（${STATE_LABEL[states.get(p.id)!]}）`}
+                    >
                       {splitName(p.name).main}
                       <span className="chip-state">{STATE_LABEL[states.get(p.id)!]}</span>
                     </a>
@@ -334,7 +337,10 @@ export function SkillScreen({ id }: { id: string }) {
               <ul className="chips">
                 {leadsTo.map((s) => (
                   <li key={s.id}>
-                    <a href={href(`/skill/${s.id}`)}>
+                    <a
+                      href={href(`/skill/${s.id}`)}
+                      aria-label={`${splitName(s.name).main}（${STATE_LABEL[states.get(s.id)!]}）`}
+                    >
                       {splitName(s.name).main}
                       <span className="chip-state">{STATE_LABEL[states.get(s.id)!]}</span>
                     </a>
