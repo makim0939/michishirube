@@ -38,7 +38,7 @@ function useDraft(key: string, enabled: boolean) {
 
 /** 画面に並べる動画・写真。新しく撮ったものと、保存済みの記録にあるもの */
 type Item =
-  | { kind: 'new'; key: string; file: File; poster?: Blob }
+  | { kind: 'new'; key: string; file: File; poster?: Blob; inMemory: boolean }
   | { kind: 'existing'; key: string; media: Media; replaced?: { file: File; poster?: Blob } }
 
 function itemBlob(item: Item): Blob | undefined {
@@ -137,13 +137,20 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
     })
   }
 
-  const addFiles = async (list: FileList | File[] | null) => {
+  /** inMemory：アプリ内の録画のように、もともとメモリ上にあるファイル */
+  const addFiles = async (list: FileList | File[] | null, inMemory = false) => {
     // FileList は input の value を空にすると中身も消えるので、先に配列へ写す
     const picked = list ? Array.from(list) : []
     if (picked.length === 0) return
     // 写真は縮小してから持つ（端末の容量と同期の量を抑える）
     const prepared = await Promise.all(picked.map((f) => (f.type.startsWith('image/') ? compressPhoto(f) : f)))
-    const added = prepared.map((file) => ({ kind: 'new' as const, key: nextKey(), file }))
+    // 縮小した写真もメモリ上に作り直したもの
+    const added = prepared.map((file, i) => ({
+      kind: 'new' as const,
+      key: nextKey(),
+      file,
+      inMemory: inMemory || file !== picked[i],
+    }))
     setItems((prev) => [...prev, ...added])
     change()
     for (const a of added) if (a.file.type.startsWith('video/')) attachPoster(a.key, a.file)
@@ -159,7 +166,7 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
     setItems((prev) =>
       prev.map((i) => {
         if (i.key !== key) return i
-        return i.kind === 'new' ? { ...i, file, poster: undefined } : { ...i, replaced: { file } }
+        return i.kind === 'new' ? { ...i, file, poster: undefined, inMemory: true } : { ...i, replaced: { file } }
       }),
     )
     setTrimming(null)
@@ -176,8 +183,9 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
         const added: NewMedia[] = []
         const replace: ({ id: string } & NewMedia)[] = []
         for (const i of items) {
-          if (i.kind === 'new') added.push({ blob: await detach(i.file), poster: i.poster })
-          else if (i.replaced) replace.push({ id: i.media.id, blob: await detach(i.replaced.file), poster: i.replaced.poster })
+          // 切り取った動画は、もともとメモリ上にある
+          if (i.kind === 'new') added.push({ blob: i.inMemory ? i.file : await detach(i.file), poster: i.poster })
+          else if (i.replaced) replace.push({ id: i.media.id, blob: i.replaced.file, poster: i.replaced.poster })
         }
         if (recordId) {
           await updateRecord({ recordId, outcome, reason, nextAction, addFiles: added, removeMediaIds: removed, replace })
@@ -416,7 +424,7 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
         <Recorder
           onDone={(file) => {
             setRecording(false)
-            void addFiles([file])
+            void addFiles([file], true)
           }}
           onClose={() => setRecording(false)}
           onFallback={() => {

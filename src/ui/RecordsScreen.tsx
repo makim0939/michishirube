@@ -18,7 +18,7 @@ export function RecordsScreen() {
     const [skills, domains, total] = await Promise.all([
       db.skills.toArray(),
       db.domains.toArray(),
-      db.records.count(),
+      db.records.orderBy('createdAt').count(),
     ])
     const query = skillFilter
       ? db.records.where('[skillId+createdAt]').between([skillFilter, -Infinity], [skillFilter, Infinity]).reverse()

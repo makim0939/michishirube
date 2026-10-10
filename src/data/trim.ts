@@ -27,6 +27,15 @@ export function clampRange(range: TrimRange, duration: number): TrimRange {
   return { start: Math.max(0, Math.min(start, duration - 0.3)), end: Math.min(duration, Math.max(start, 0) + 0.3) }
 }
 
+/**
+ * 実際に録れた長さが、指定した範囲の半分以上か。
+ * 途中で止まった・1コマしか録れなかったものを、成功として元の動画と入れ替えないための確認
+ */
+export function isLongEnough(recordedSeconds: number, range: TrimRange): boolean {
+  const wanted = range.end - range.start
+  return recordedSeconds >= Math.min(wanted * 0.5, wanted - 0.3)
+}
+
 /** 録画の解像度の上限（元の動画と同じ 720p 相当） */
 const MAX_EDGE = 1280
 
@@ -48,10 +57,23 @@ export function startTrim(video: HTMLVideoElement, audio: AudioContext, range: T
   void audio.resume()
   const source = audioSourceFor(video, audio)
   const audioOut = audio.createMediaStreamDestination()
+  // 録り直している間はスピーカーから鳴らさず、録音にだけ流す
+  source.disconnect()
   source.connect(audioOut)
   video.muted = false
+  // タップの中で一度だけ再生を始めて止め、この video の音つき再生を許可させる。
+  // 実際の再生は、始めの位置へ移動し終えてから行う（移動中に再生を始めると、先頭がずれるため）
+  video.play().catch(() => {
+    // すぐ止めるので AbortError になる。許可を得るのが目的なので無視する
+  })
+  video.pause()
   video.currentTime = range.start
-  const playing = video.play()
+  const playing = (async () => {
+    if (video.seeking || Math.abs(video.currentTime - range.start) > 0.05) {
+      await new Promise<void>((resolve) => video.addEventListener('seeked', () => resolve(), { once: true }))
+    }
+    await video.play()
+  })()
   // ------------------------------------------------------------------------------
 
   const scale = Math.min(1, MAX_EDGE / Math.max(video.videoWidth, video.videoHeight))
@@ -72,6 +94,15 @@ export function startTrim(video: HTMLVideoElement, audio: AudioContext, range: T
 
   let stopped = false
   let cancelled = false
+  let failed: string | null = null
+  // 実際に録れた範囲（コマの時刻）。指定より大きく足りなければ失敗にする
+  let firstTime: number | null = null
+  let lastTime = 0
+  recorder.onerror = (e: Event) => {
+    const err = (e as Event & { error?: DOMException }).error
+    failed = err?.message || 'エンコードに失敗しました'
+    finish()
+  }
   const v = video as VideoWithFrameCallback
   const nextFrame = (cb: (mediaTime: number) => void) => {
     if (v.requestVideoFrameCallback) v.requestVideoFrameCallback((_, meta) => cb(meta.mediaTime))
@@ -81,6 +112,8 @@ export function startTrim(video: HTMLVideoElement, audio: AudioContext, range: T
   const frame = (mediaTime: number) => {
     if (stopped) return
     draw.drawImage(video, 0, 0, canvas.width, canvas.height)
+    firstTime ??= mediaTime
+    lastTime = mediaTime
     // 始めの位置へ移動し終わる前の位置で「終わり」と判定しない
     if (!video.seeking && (mediaTime >= range.end || video.ended)) {
       finish()
@@ -89,17 +122,26 @@ export function startTrim(video: HTMLVideoElement, audio: AudioContext, range: T
     nextFrame(frame)
   }
 
+  let settled = false
   let resolveDone!: (file: File) => void
   let rejectDone!: (e: Error) => void
   const done = new Promise<File>((resolve, reject) => {
-    resolveDone = resolve
-    rejectDone = reject
+    resolveDone = (f) => {
+      if (!settled) resolve(f)
+      settled = true
+    }
+    rejectDone = (e) => {
+      if (!settled) reject(e)
+      settled = true
+    }
   })
 
   const cleanup = () => {
     video.pause()
     video.muted = true
+    // 録り終えたら、プレビューの音がまたスピーカーから出るように戻す
     source.disconnect()
+    source.connect(audio.destination)
     stream.getTracks().forEach((t) => t.stop())
   }
 
@@ -116,10 +158,15 @@ export function startTrim(video: HTMLVideoElement, audio: AudioContext, range: T
       rejectDone(new Error('キャンセルしました'))
       return
     }
+    if (failed) {
+      rejectDone(new Error(`動画を作り直せませんでした（${failed}）。元の動画はそのままです`))
+      return
+    }
     const type = (recorder.mimeType || mimeType).split(';')[0]
     const blob = new Blob(chunks, { type })
-    if (blob.size === 0) {
-      rejectDone(new Error('動画を作り直せませんでした'))
+    const recorded = firstTime === null ? 0 : lastTime - firstTime
+    if (blob.size === 0 || !isLongEnough(recorded, range)) {
+      rejectDone(new Error('途中で止まり、最後まで作り直せませんでした。元の動画はそのままです'))
       return
     }
     const base = fileName.replace(/\.[^.]+$/, '')
@@ -127,9 +174,7 @@ export function startTrim(video: HTMLVideoElement, audio: AudioContext, range: T
   }
 
   playing
-    .then(async () => {
-      // 始めの位置へ移動し終えてから、先頭のコマを描いて録り始める
-      if (video.seeking) await new Promise<void>((resolve) => video.addEventListener('seeked', () => resolve(), { once: true }))
+    .then(() => {
       if (stopped) return
       // 再生が実際に進んで最初のコマが出てから録り始める（止まったコマが先頭に入らないように）
       nextFrame((mediaTime) => {
@@ -149,8 +194,8 @@ export function startTrim(video: HTMLVideoElement, audio: AudioContext, range: T
     done,
     cancel: () => {
       cancelled = true
-      if (!stopped && recorder.state === 'inactive') {
-        // まだ録り始めていない
+      if (recorder.state === 'inactive') {
+        // まだ録り始めていない、または録画がすでに止まっている
         stopped = true
         cleanup()
         rejectDone(new Error('キャンセルしました'))

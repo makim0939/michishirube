@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { db } from '../data/db'
-import { makePoster } from '../data/mediaPrep'
+import { inMemory, makePoster } from '../data/mediaPrep'
 import { setMediaKeep } from '../data/repo'
 import { fetchPhoto } from '../data/sync'
 import { MAX_UPLOAD_ATTEMPTS, retryUpload, youtubeUrl } from '../data/youtube'
@@ -44,11 +44,16 @@ function usePosterBackfill(media: Media) {
   useEffect(() => {
     if (!needs || !media.blob) return
     const blob = media.blob
-    posterQueue = posterQueue.then(async () => {
-      const poster = await makePoster(blob)
-      // 中身とサムネイルはこの端末だけのものなので、同期の対象にしない（updatedAt も変えない）
-      if (poster) await db.media.update(media.id, { poster })
-    })
+    posterQueue = posterQueue
+      .then(async () => {
+        // iPhone では IndexedDB の動画を直接読めないことがあるので、メモリに写してから作る
+        const poster = await makePoster(await inMemory(blob))
+        // 中身とサムネイルはこの端末だけのものなので、同期の対象にしない（updatedAt も変えない）
+        if (poster) await db.media.update(media.id, { poster })
+      })
+      .catch(() => {
+        // 作れなくても、ほかの動画のサムネイル作りは続ける
+      })
   }, [media.id, needs])
 }
 

@@ -147,7 +147,18 @@ function VideoView({
       controls
       playsInline
       preload="metadata"
-      autoPlay={playOnLoad}
+      onLoadedData={(e) => {
+        if (!playOnLoad) return
+        const el = e.currentTarget
+        setPlayOnLoad(false)
+        // 押してから読み込むまでの間に、音つきの自動再生が許されなくなることがある（iPhone）
+        el.play().catch(() => {
+          el.muted = true
+          el.play().catch(() => {
+            // それでも止められたら、プレーヤーの再生ボタンで再生してもらう
+          })
+        })
+      }}
     />
   )
 }
