@@ -6,7 +6,7 @@ export type Route =
   | { name: 'skill'; id: string }
   | { name: 'edit'; id: string }
   | { name: 'new'; domainId: string }
-  | { name: 'record'; skillId: string; recordId?: string }
+  | { name: 'record'; skillId: string; recordId?: string; camera?: boolean }
   | { name: 'records' }
   | { name: 'settings'; notice?: string }
 
@@ -35,6 +35,8 @@ export function parseHash(hash: string): Route {
     case 'record':
       // 保存した記録を直す：#/record/<skillId>/edit/<recordId>
       if (parts[1] && parts[2] === 'edit' && parts[3]) return { name: 'record', skillId: parts[1], recordId: parts[3] }
+      // 今日の画面の「撮る」から来たとき：すぐにカメラを開く
+      if (parts[1] && parts[2] === 'camera') return { name: 'record', skillId: parts[1], camera: true }
       if (parts[1]) return { name: 'record', skillId: parts[1] }
       break
     case 'records':

@@ -1,5 +1,5 @@
 import type { Media, PracticeRecord, Skill } from '../domain/types'
-import { formatDate } from './common'
+import { formatDate, splitName } from './common'
 import { MediaItem } from './MediaItem'
 import { href } from './router'
 
@@ -27,7 +27,7 @@ export function RecordCard({
       {skill && (
         <a className="record-skill" href={href(`/skill/${skill.id}`)}>
           {domainName && <span className="muted">{domainName}・</span>}
-          {skill.name}
+          {splitName(skill.name).main}
         </a>
       )}
       {media.length > 0 && (

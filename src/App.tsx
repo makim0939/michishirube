@@ -4,6 +4,7 @@ import { startAutoSync } from './data/sync'
 import { tidyVideos } from './data/tidy'
 import { startAutoUpload } from './data/youtube'
 import { formatBytes } from './ui/common'
+import { CupIcon, LeafIcon, NotebookIcon, SlidersIcon } from './ui/icons'
 import { EditSkillScreen, NewSkillScreen } from './ui/EditSkillScreen'
 import { DebugOverlay } from './ui/DebugOverlay'
 import { FeedbackProvider, useToast } from './ui/feedback'
@@ -29,7 +30,12 @@ function Screen({ route }: { route: Route }) {
       return <NewSkillScreen key={route.domainId} domainId={route.domainId} />
     case 'record':
       return (
-        <RecordScreen key={`${route.skillId}-${route.recordId ?? ''}`} skillId={route.skillId} recordId={route.recordId} />
+        <RecordScreen
+          key={`${route.skillId}-${route.recordId ?? ''}`}
+          skillId={route.skillId}
+          recordId={route.recordId}
+          openCamera={route.camera}
+        />
       )
     case 'records':
       return <RecordsScreen />
@@ -60,15 +66,15 @@ function Background() {
 }
 
 const TABS = [
-  { path: '/', label: '今日', icon: '🔥', match: (r: Route) => r.name === 'today' || r.name === 'record' },
-  { path: '/records', label: '記録', icon: '📒', match: (r: Route) => r.name === 'records' },
+  { path: '/', label: '今日', Icon: CupIcon, match: (r: Route) => r.name === 'today' || r.name === 'record' },
+  { path: '/records', label: 'カップ帳', Icon: NotebookIcon, match: (r: Route) => r.name === 'records' },
   {
     path: '/map',
-    label: 'ロードマップ',
-    icon: '🗺️',
+    label: '型',
+    Icon: LeafIcon,
     match: (r: Route) => ['map', 'skill', 'edit', 'new'].includes(r.name),
   },
-  { path: '/settings', label: '設定', icon: '⚙️', match: (r: Route) => r.name === 'settings' },
+  { path: '/settings', label: '設定', Icon: SlidersIcon, match: (r: Route) => r.name === 'settings' },
 ]
 
 export function App() {
@@ -109,7 +115,7 @@ export function App() {
               className={t.match(route) ? 'selected' : ''}
               aria-current={t.match(route) ? 'page' : undefined}
             >
-              <span aria-hidden="true">{t.icon}</span>
+              <t.Icon size={24} />
               {t.label}
             </a>
           ))}

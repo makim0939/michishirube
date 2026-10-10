@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { inMemory, probeDuration } from '../data/mediaPrep'
 import { traceVideo } from '../debug'
 import { clampRange, startTrim, type TrimJob, type TrimRange } from '../data/trim'
+import { PauseIcon, PlayIcon, ScissorsIcon } from './icons'
 
 function formatTime(sec: number) {
   const s = Math.max(0, sec)
@@ -196,7 +197,7 @@ export function Trimmer({
                   }
                 }}
               >
-                {playing ? '❚❚' : '▶'}
+                {playing ? <PauseIcon size={18} label="一時停止" /> : <PlayIcon size={18} label="再生" />}
               </button>
               <input
                 type="range"
@@ -247,14 +248,16 @@ export function Trimmer({
             </label>
             <div className="trimmer-row">
               <button className="btn small" onClick={previewRange}>
-                ▶ 範囲を再生
+                <PlayIcon size={16} />
+                範囲を再生
               </button>
               <button
                 className="btn primary"
                 disabled={range.start <= 0.05 && range.end >= duration - 0.05}
                 onClick={trim}
               >
-                ✂ 切り取る
+                <ScissorsIcon size={18} />
+                切り取る
               </button>
             </div>
             <p className="trimmer-note">

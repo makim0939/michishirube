@@ -4,13 +4,14 @@ import { db } from '../data/db'
 import { compressPhoto, inMemory, makePoster } from '../data/mediaPrep'
 import { addRecord, deleteRecord, lastNextAction, updateRecord, type NewMedia } from '../data/repo'
 import type { Media, Outcome } from '../domain/types'
-import { ConfirmButton, Empty, formatAgo, formatBytes, isVideo, MediaView, requestPersist } from './common'
+import { ConfirmButton, Empty, formatAgo, formatBytes, isVideo, MediaView, requestPersist, splitName } from './common'
 import { useAction, useToast } from './feedback'
 import { canRecordInApp, Recorder } from './Recorder'
 import { ReferenceList } from './References'
-import { backHandler, go, goBack, href } from './router'
+import { backHandler, go, goBack, href, replace } from './router'
 import { readStorage, removeStorage, writeStorage } from './storage'
 import { Trimmer } from './Trimmer'
+import { BackIcon, CameraIcon, PhotoIcon, ScissorsIcon, VideoIcon } from './icons'
 
 const OUTCOMES: { value: Outcome; label: string }[] = [
   { value: 'good', label: '◎ 成功' },
@@ -61,7 +62,16 @@ const nextKey = () => `item-${++keySeq}`
 /**
  * 記録する画面。recordId があれば、保存した記録を直す
  */
-export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?: string }) {
+export function RecordScreen({
+  skillId,
+  recordId,
+  openCamera,
+}: {
+  skillId: string
+  recordId?: string
+  /** 今日の画面の「撮る」から来たとき、すぐアプリ内のカメラを開く */
+  openCamera?: boolean
+}) {
   const editing = !!recordId
   const run = useAction()
   const toast = useToast()
@@ -84,11 +94,16 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
   const [saving, setSaving] = useState(false)
   /** 保存せずに離れようとしたときの行き先（null なら確認を出していない） */
   const [confirmLeave, setConfirmLeave] = useState<{ back: true } | { to: string } | null>(null)
-  const [recording, setRecording] = useState(false)
+  const [recording, setRecording] = useState(() => !!openCamera && !editing && canRecordInApp())
   const [trimming, setTrimming] = useState<string | null>(null)
   const videoInput = useRef<HTMLInputElement>(null)
   const photoInput = useRef<HTMLInputElement>(null)
   const libraryInput = useRef<HTMLInputElement>(null)
+
+  // カメラを開いたら URL から外す（再読み込みや戻るで、またカメラが開かないように）
+  useEffect(() => {
+    if (openCamera) replace(`/record/${skillId}`)
+  }, [openCamera, skillId])
 
   // 直すときは、保存した内容を一度だけ読み込む（同期で書き換わっても、入力中の内容を上書きしない）
   useEffect(() => {
@@ -115,7 +130,7 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
 
   if (!data || !loaded) return missing ? <Empty>記録が見つかりません。</Empty> : null
   const { skill, next, count } = data
-  if (!skill) return <Empty>スキルが見つかりません。</Empty>
+  if (!skill) return <Empty>型が見つかりません。</Empty>
 
   const fallback = editing ? `/skill/${skillId}` : '/'
   const hasNewMedia = items.some((i) => i.kind === 'new' || (i.kind === 'existing' && i.replaced))
@@ -223,11 +238,11 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
           }}
           aria-label="戻る"
         >
-          ←
+          <BackIcon size={26} />
         </a>
         <div className="title-block">
           {editing && <span className="muted">記録を直す</span>}
-          <h1>{skill.name}</h1>
+          <h1>{splitName(skill.name).main}</h1>
         </div>
       </header>
 
@@ -283,7 +298,7 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
 
       {skill.criteria && (
         <details className="criteria-details">
-          <summary>達成条件</summary>
+          <summary>合格の目安</summary>
           <p>{skill.criteria}</p>
         </details>
       )}
@@ -295,13 +310,16 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
             className="btn capture"
             onClick={() => (canRecordInApp() ? setRecording(true) : videoInput.current?.click())}
           >
-            <span aria-hidden="true">🎥</span>動画を撮る
+            <VideoIcon size={28} />
+            動画を撮る
           </button>
           <button type="button" className="btn capture" onClick={() => photoInput.current?.click()}>
-            <span aria-hidden="true">📷</span>写真を撮る
+            <CameraIcon size={28} />
+            写真を撮る
           </button>
           <button type="button" className="btn capture" onClick={() => libraryInput.current?.click()}>
-            <span aria-hidden="true">🖼️</span>アルバム
+            <PhotoIcon size={28} />
+            アルバム
           </button>
         </div>
         {[
@@ -349,7 +367,8 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
                     {blob && <span className="muted">{formatBytes(blob.size)}</span>}
                     {blob && isVideo({ type }) && (
                       <button type="button" className="btn small" onClick={() => setTrimming(item.key)}>
-                        ✂ 切り取る
+                        <ScissorsIcon size={16} />
+                        切り取る
                       </button>
                     )}
                   </div>
