@@ -80,14 +80,12 @@
       "prereqs": ["tulip2"]
     },
     {
-      "key": "wave",
-      "name": "ウェーブ（スタックドチューリップ）",
-      "description": "チューリップの注ぎを何層も重ねる。\n※出典に合格基準がないので、達成条件は自分で決めて書き換える。",
+      "key": "layer-heart",
+      "name": "レイヤーハート",
+      "description": "ハートを中心から外へ、細い層を何枚も重ねて注ぐ。\n※出典に合格基準がないので、達成条件は自分で決めて書き換える。",
       "criteria": "（出典に基準なし）自分で決めて書き換える",
-      "sources": [
-        { "title": "Coffee Parts: Heart / Tulip / Rosetta / Swan / Wave（チューリップを重ねた発展形）", "url": "https://know.coffeeparts.com.au/glossary/heart-tulip-rosetta-swan-wave-stacked-tulip" }
-      ],
-      "prereqs": ["tulip3"]
+      "sources": [],
+      "prereqs": ["heart"]
     },
     {
       "key": "wing-tulip",

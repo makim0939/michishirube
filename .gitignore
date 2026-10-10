@@ -7,3 +7,6 @@ dev-dist
 
 .dev.vars
 .wrangler
+
+# 形の参考にしている画像（出典が様々なので公開しない）
+references/
