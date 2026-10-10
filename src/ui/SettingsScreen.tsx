@@ -2,11 +2,13 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useRef, useState } from 'react'
 import { estimateBackupSize, exportBackup, importBackup, type BackupPart } from '../data/backup'
 import { db } from '../data/db'
-import { BUNDLED_TEMPLATES, getSettings, importTemplate, setMaxActive } from '../data/repo'
+import { BUNDLED_TEMPLATES, getSettings, importTemplate, setAutoTidy, setMaxActive } from '../data/repo'
+import { TIDY_POLICY } from '../data/tidy'
 import { MAX_ACTIVE_RANGE } from '../domain/types'
 import { ConfirmButton, formatBytes, requestPersist, saveFile } from './common'
 import { useAction, useToast } from './feedback'
 import { go } from './router'
+import { SyncSettings } from './SyncSettings'
 
 function StorageStatus() {
   const [info, setInfo] = useState<{ usage?: number; quota?: number; persisted?: boolean }>()
@@ -47,7 +49,7 @@ function StorageStatus() {
   )
 }
 
-export function SettingsScreen() {
+export function SettingsScreen({ notice }: { notice?: string }) {
   const run = useAction()
   const toast = useToast()
   const restoreInput = useRef<HTMLInputElement>(null)
@@ -84,6 +86,8 @@ export function SettingsScreen() {
         <h1>設定</h1>
       </header>
 
+      <SyncSettings notice={notice} />
+
       <section className="section">
         <h2>同時に挑戦できる数</h2>
         <p className="muted">全分野の合計です。少ないほど、1つあたりの練習が濃くなります。</p>
@@ -110,10 +114,24 @@ export function SettingsScreen() {
       </section>
 
       <section className="section">
-        <h2>データの保存場所</h2>
-        <p>
-          記録・動画・写真は<strong>この端末のこのブラウザの中だけ</strong>に保存され、サーバーには送られません。別の端末とは自動で同期されないので、機種変更や万一に備えてバックアップを書き出してください。
+        <h2>端末の容量</h2>
+        <p className="muted">
+          記録・動画・写真は、まずこの端末に保存します。クラウド同期をつなぐと、記録・ロードマップ・写真はサーバーに、動画は
+          YouTube にも保存されるので、端末から消えても戻せます。
         </p>
+        <label className="toggle">
+          <input
+            type="checkbox"
+            checked={data.settings.autoTidy}
+            onChange={(e) => run(() => setAutoTidy(e.target.checked))}
+          />
+          <span>
+            YouTube に上げ終えた古い動画を、端末から自動で消す
+            <small className="muted">
+              {TIDY_POLICY.minAgeDays}日より前のもの。スキルごとの最初の1本・最新{TIDY_POLICY.keepLatest}本・「残す」印を付けたものは消しません。
+            </small>
+          </span>
+        </label>
         <StorageStatus />
       </section>
 
@@ -243,16 +261,16 @@ export function SettingsScreen() {
       </section>
 
       <section className="section">
-        <h2>すべてのデータを削除</h2>
+        <h2>この端末のデータをすべて削除</h2>
         <ConfirmButton
           className="btn ghost"
           confirmLabel="すべて削除する"
-          message="ロードマップ・記録・動画・写真・設定をすべて削除します。元に戻せません。"
+          message="この端末のロードマップ・記録・動画・写真・設定をすべて削除し、クラウド同期の接続も解除します。サーバーと YouTube のデータは消えないので、つなぎ直せば戻ります。"
           onConfirm={() =>
             run(async () => {
-              await db.transaction('rw', [db.domains, db.skills, db.records, db.media, db.meta], async () => {
+              await db.transaction('rw', [db.domains, db.skills, db.records, db.media, db.meta, db.outbox], async () => {
                 await Promise.all([db.domains.clear(), db.skills.clear(), db.records.clear(), db.media.clear()])
-                await db.meta.clear()
+                await Promise.all([db.meta.clear(), db.outbox.clear()])
                 await db.meta.put({ key: 'seeded', value: true })
               })
               toast.show('すべて削除しました')

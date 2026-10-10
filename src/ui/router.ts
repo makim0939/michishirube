@@ -7,7 +7,7 @@ export type Route =
   | { name: 'edit'; id: string }
   | { name: 'new'; domainId: string }
   | { name: 'record'; skillId: string }
-  | { name: 'settings' }
+  | { name: 'settings'; notice?: string }
 
 function safeDecode(part: string): string {
   try {
@@ -35,7 +35,8 @@ export function parseHash(hash: string): Route {
       if (parts[1]) return { name: 'record', skillId: parts[1] }
       break
     case 'settings':
-      return { name: 'settings' }
+      // YouTube の連携から戻ってきたときは、結果を notice で受け取る
+      return { name: 'settings', notice: parts[1] }
   }
   return { name: 'today' }
 }

@@ -10,10 +10,12 @@ import {
   recordsOf,
   revertAchievement,
 } from '../data/repo'
-import { canActivate, computeStates, indexById } from '../domain/logic'
+import { canActivate, computeStates, indexById, prereqsDone } from '../domain/logic'
 import { isWebUrl } from '../domain/template'
 import type { Media, PracticeRecord } from '../domain/types'
-import { ConfirmButton, Empty, formatDate, isVideo, MediaView, StateBadge, STATE_ICON } from './common'
+import { ConfirmButton, Empty, formatDate, isVideo, StateBadge, STATE_ICON } from './common'
+import { MediaItem } from './MediaItem'
+import { References } from './References'
 import { useAction, useCelebrate, useToast } from './feedback'
 import { backHandler, href } from './router'
 
@@ -50,19 +52,17 @@ function Compare({ media }: { media: Media[] }) {
       </div>
       <div className="compare">
         {[first, latest].map((m, i) => (
-          <figure key={m.id}>
-            <MediaView
-              blob={m.blob}
-              type={m.type}
-              cacheKey={m.id}
+          <div key={m.id}>
+            <MediaItem
+              media={m}
               videoRef={(el) => {
                 videos.current[i] = el
               }}
             />
-            <figcaption>
+            <p className="compare-label">
               {i === 0 ? '最初' : '最新'}・{formatDate(m.createdAt)}
-            </figcaption>
-          </figure>
+            </p>
+          </div>
         ))}
       </div>
       {kind === 'video' && (
@@ -96,7 +96,7 @@ function RecordItem({ record, media }: { record: PracticeRecord; media: Media[] 
       {media.length > 0 && (
         <div className="record-media">
           {media.map((m) => (
-            <MediaView key={m.id} blob={m.blob} type={m.type} cacheKey={m.id} />
+            <MediaItem key={m.id} media={m} />
           ))}
         </div>
       )}
@@ -115,7 +115,11 @@ function RecordItem({ record, media }: { record: PracticeRecord; media: Media[] 
       <ConfirmButton
         className="btn small ghost"
         confirmLabel="削除する"
-        message="この記録と動画・写真を削除します。元に戻せません。"
+        message={
+          media.some((m) => m.youtubeId)
+            ? 'この記録と動画・写真を削除します。元に戻せません。YouTube に上げた動画は残るので、不要なら YouTube アプリで削除してください。'
+            : 'この記録と動画・写真を削除します。元に戻せません。'
+        }
         onConfirm={() => run(() => deleteRecord(record.id))}
       >
         削除
@@ -155,6 +159,8 @@ export function SkillScreen({ id }: { id: string }) {
   const prereqs = skill.prereqIds.map((p) => byId.get(p)).filter((s) => !!s)
   const leadsTo = skills.filter((s) => s.prereqIds.includes(skill.id))
   const check = canActivate(skill, allSkills, settings.maxActive)
+  const achievable = prereqsDone(skill, byId)
+  const pendingPrereqs = prereqs.filter((p) => p.status !== 'done')
   const mediaById = new Map(media.map((m) => [m.id, m]))
 
   return (
@@ -208,7 +214,7 @@ export function SkillScreen({ id }: { id: string }) {
           </button>
         )}
         {(state === 'active' || state === 'available') && !askingAchieve && (
-          <button className="btn achieve" onClick={() => setAskingAchieve(true)}>
+          <button className="btn achieve" disabled={!achievable} onClick={() => setAskingAchieve(true)}>
             🏆 達成した
           </button>
         )}
@@ -230,6 +236,11 @@ export function SkillScreen({ id }: { id: string }) {
       </div>
       {state === 'available' && !check.ok && check.reason === 'limit' && (
         <p className="muted">挑戦中は {settings.maxActive} つまでです。いまのスキルを達成するか、挑戦をやめると選べます。</p>
+      )}
+      {(state === 'active' || state === 'available') && !achievable && (
+        <p className="muted small">
+          並行して練習できます。達成にできるのは、「{pendingPrereqs.map((p) => p.name).join('」「')}」を達成してからです。
+        </p>
       )}
 
       {askingAchieve && (
@@ -258,12 +269,15 @@ export function SkillScreen({ id }: { id: string }) {
         </div>
       )}
 
+      <References skill={skill} />
+
       {state === 'locked' && (
         <section className="section">
-          <h2>先に達成するスキル</h2>
+          <h2>先に挑戦するスキル</h2>
+          <p className="muted small">これらに挑戦し始めると、このスキルも並行して練習できます。</p>
           <ul className="chips">
             {prereqs
-              .filter((p) => p.status !== 'done')
+              .filter((p) => p.status === 'idle')
               .map((p) => (
                 <li key={p.id}>
                   <a href={href(`/skill/${p.id}`)}>{p.name}</a>

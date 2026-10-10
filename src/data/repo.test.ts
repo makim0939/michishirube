@@ -4,6 +4,8 @@ import { db } from './db'
 import {
   achieveSkill,
   activateSkill,
+  addReference,
+  removeReference,
   addRecord,
   createDomain,
   createSkill,
@@ -38,16 +40,21 @@ describe('ensureSeeded', () => {
 })
 
 describe('挑戦と達成', () => {
-  it('達成すると次が解放され、取り消すと前提の崩れた挑戦中スキルが外れる', async () => {
+  it('前提が挑戦中なら並行して挑戦できるが、達成は前提を達成してから', async () => {
     const { a, b, c } = await chain()
     await expect(activateSkill(b)).rejects.toThrow(/前提/)
     await activateSkill(a)
+    await activateSkill(b)
+    await expect(achieveSkill(b)).rejects.toThrow(/前提/)
+
     const { unlocked } = await achieveSkill(a)
     expect(unlocked.map((s) => s.id)).toEqual([b])
+    await achieveSkill(b)
 
-    await activateSkill(b)
-    await revertAchievement(a)
-    expect((await db.skills.get(b))!.status).toBe('idle')
+    // 達成を取り消しても、挑戦中のものは勝手に外さない
+    await activateSkill(c)
+    await revertAchievement(b)
+    expect((await db.skills.get(c))!.status).toBe('active')
     await expect(achieveSkill(c)).rejects.toThrow(/前提/)
   })
 
@@ -118,17 +125,19 @@ describe('バックアップ', () => {
     expect((await db.domains.get(domainId))?.name).toBe('ピアノ')
     const [m] = await db.media.toArray()
     expect(m.type).toBe('video/quicktime')
-    expect(await m.blob.text()).toBe('movie-bytes')
+    expect(await m.blob!.text()).toBe('movie-bytes')
     expect((await db.meta.get('settings'))?.value).toMatchObject({ maxActive: 4 })
   })
 
-  it('メディアを含めない書き出しでは、記録からメディアへの参照を外す', async () => {
+  it('メディアを含めない書き出しでは、中身のないメディアとして戻す（YouTube やサーバーの写真は見られる）', async () => {
     const { a } = await chain()
     await addRecord({ skillId: a, reason: 'x', nextAction: '', files: [new Blob(['v'], { type: 'image/jpeg' })] })
     const parts = await exportBackup({ includeMedia: false })
     const summary = await importBackup(parts.map((p) => p.blob))
-    expect(summary).toMatchObject({ media: 0, missingMedia: 1 })
-    expect((await db.records.toArray())[0].mediaIds).toEqual([])
+    expect(summary).toMatchObject({ media: 0, missingMedia: 0 })
+    const [m] = await db.media.toArray()
+    expect(m.blob).toBeUndefined()
+    expect((await db.records.toArray())[0].mediaIds).toEqual([m.id])
   })
 
   it('上限を超える分は別の ZIP に分け、全部そろえると元に戻る', async () => {
@@ -154,5 +163,22 @@ describe('バックアップ', () => {
     const [first] = await exportBackup({ includeMedia: false })
     const [second] = await exportBackup({ includeMedia: false })
     await expect(importBackup([first.blob, second.blob])).rejects.toThrow(/混ざって/)
+  })
+})
+
+describe('参考資料', () => {
+  it('URL を検査し、タイトルが無ければサービス名にする。追加・削除は同期の対象になる', async () => {
+    const { a } = await chain()
+    await expect(addReference(a, { url: 'javascript:alert(1)' })).rejects.toThrow(/http/)
+    await db.outbox.clear()
+    await addReference(a, { url: 'https://youtu.be/abc', note: '2:30〜' })
+    await addReference(a, { url: 'https://www.example.com/latte', title: '注ぎ方の記事' })
+    const [first, second] = (await db.skills.get(a))!.references
+    expect(first).toMatchObject({ title: 'YouTube の動画', note: '2:30〜' })
+    expect(second.title).toBe('注ぎ方の記事')
+    expect(await db.outbox.get(['skill', a])).toBeDefined()
+
+    await removeReference(a, first.id)
+    expect((await db.skills.get(a))!.references.map((r) => r.id)).toEqual([second.id])
   })
 })

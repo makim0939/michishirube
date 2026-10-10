@@ -1,13 +1,29 @@
 import type { Skill, SkillState } from './types'
 
+/** 前提をすべて達成している。達成にできるのはこのときだけ */
 export function prereqsDone(skill: Skill, byId: Map<string, Skill>): boolean {
   return skill.prereqIds.every((id) => byId.get(id)?.status === 'done')
 }
 
+/**
+ * 前提がすべて「達成」か「挑戦中」。このときは並行して挑戦・記録できる。
+ * 例：スチームを練習しながら、同じミルクでドットやハートも練習する
+ */
+export function prereqsStarted(skill: Skill, byId: Map<string, Skill>): boolean {
+  return skill.prereqIds.every((id) => {
+    const status = byId.get(id)?.status
+    return status === 'done' || status === 'active'
+  })
+}
+
 export function skillState(skill: Skill, byId: Map<string, Skill>): SkillState {
   if (skill.status === 'done') return 'done'
-  if (!prereqsDone(skill, byId)) return 'locked'
-  return skill.status === 'active' ? 'active' : 'available'
+  if (skill.status === 'active') return 'active'
+  return prereqsStarted(skill, byId) ? 'available' : 'locked'
+}
+
+export function canAchieve(skill: Skill, byId: Map<string, Skill>): boolean {
+  return skill.status !== 'done' && prereqsDone(skill, byId)
 }
 
 export function indexById(skills: Skill[]): Map<string, Skill> {
@@ -37,19 +53,13 @@ export function canActivate(skill: Skill, skills: Skill[], maxActive: number): A
   return { ok: true }
 }
 
-/** skillId を達成したときに新しく解放されるスキル */
+/** skillId を達成したことで、達成を目指せるようになったスキル（前提がすべて達成済みになったもの） */
 export function newlyUnlocked(skillId: string, skills: Skill[]): Skill[] {
   const after = skills.map((s) => (s.id === skillId ? { ...s, status: 'done' as const } : s))
   const byId = indexById(after)
   return after.filter(
     (s) => s.status !== 'done' && s.prereqIds.includes(skillId) && prereqsDone(s, byId),
   )
-}
-
-/** 前提が崩れたのに挑戦中のままになっているスキル（達成の取り消し時に外す） */
-export function invalidActives(skills: Skill[]): Skill[] {
-  const byId = indexById(skills)
-  return skills.filter((s) => s.status === 'active' && !prereqsDone(s, byId))
 }
 
 /** skillId の前提を prereqIds にしたとき循環するか */

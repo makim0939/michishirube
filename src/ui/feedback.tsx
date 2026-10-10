@@ -103,7 +103,7 @@ function CelebrationOverlay({
         <h2 id="celebration-title">{celebration.skill.name}</h2>
         {unlocked.length > 0 ? (
           <div className="celebration-unlocked">
-            <p>新しく解放されたスキル</p>
+            <p>達成を目指せるようになったスキル</p>
             <ul>
               {unlocked.map((s) => (
                 <li key={s.id}>🔓 {s.name}</li>
@@ -120,7 +120,8 @@ function CelebrationOverlay({
               autoFocus
               onClick={async () => {
                 try {
-                  await activateSkill(unlocked[0].id)
+                  // 先取りで挑戦中なら、そのまま練習を続ける
+                  if (unlocked[0].status !== 'active') await activateSkill(unlocked[0].id)
                   go('/')
                 } catch (e) {
                   // 上限などで挑戦にできなければ、スキルの画面で選んでもらう
@@ -129,7 +130,7 @@ function CelebrationOverlay({
                 }
               }}
             >
-              「{unlocked[0].name}」に挑戦する
+              {unlocked[0].status === 'active' ? `「${unlocked[0].name}」の練習を続ける` : `「${unlocked[0].name}」に挑戦する`}
             </button>
           )}
           {unlocked.length > 1 && (

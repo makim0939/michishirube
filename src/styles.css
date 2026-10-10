@@ -507,11 +507,7 @@ ul {
   gap: 8px;
 }
 
-.compare figure {
-  margin: 0;
-}
-
-.compare figcaption {
+.compare-label {
   font-size: 0.8rem;
   color: var(--muted);
   text-align: center;
@@ -974,6 +970,7 @@ textarea {
   left: 50%;
   bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px) + 16px);
   transform: translateX(-50%);
+  width: max-content;
   max-width: calc(100% - 32px);
   padding: 10px 18px;
   border-radius: 999px;
@@ -1121,4 +1118,246 @@ textarea {
   .confetti {
     display: none;
   }
+}
+
+/* ---- 動画・写真 ---- */
+
+.media-item {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.media.placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px;
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--muted);
+  background: var(--surface-2);
+  text-decoration: none;
+}
+
+a.media.placeholder {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.media.placeholder span {
+  font-size: 1.4rem;
+}
+
+.media.placeholder small {
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.media-caption {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+}
+
+.upload {
+  color: var(--muted);
+}
+
+.upload-failed {
+  color: var(--danger);
+}
+
+.keep {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font: inherit;
+  font-size: 0.72rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.keep.on {
+  border-color: var(--gold);
+  color: var(--text);
+  background: var(--active-soft);
+}
+
+.preview-size {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: rgb(0 0 0 / 60%);
+  color: #fff;
+  font-size: 0.7rem;
+}
+
+/* ---- 参考資料 ---- */
+
+.references {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.references li {
+  display: flex;
+  flex-direction: column;
+}
+
+.references.editable li {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.references.editable .confirm {
+  padding: 8px;
+}
+
+.reference-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.references a {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.reference-note {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.references.compact {
+  margin-top: 6px;
+  color: var(--text);
+}
+
+.toggle {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.toggle input {
+  width: 22px;
+  height: 22px;
+  margin-top: 2px;
+  flex: none;
+}
+
+.toggle span {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---- 録画 ---- */
+
+.recorder {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: #000;
+  color: #fff;
+}
+
+.recorder-preview {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.recorder-top {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
+  left: 16px;
+  right: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.recorder .btn {
+  background: rgb(0 0 0 / 50%);
+  border-color: rgb(255 255 255 / 40%);
+  color: #fff;
+}
+
+.recorder .btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+.recorder-time {
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: #d92d20;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.recorder-bottom {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 28px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.recorder-native {
+  position: absolute;
+  right: 16px;
+}
+
+.record-button {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  border: 5px solid #fff;
+  background: #d92d20;
+  cursor: pointer;
+  transition: border-radius 0.15s;
+}
+
+.record-button.recording {
+  border-radius: 16px;
+  width: 64px;
+  height: 64px;
+}
+
+.record-button:disabled {
+  opacity: 0.4;
+}
+
+.recorder-error {
+  position: absolute;
+  inset: auto 16px 140px;
+  padding: 16px;
+  border-radius: var(--radius);
+  background: rgb(0 0 0 / 75%);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
