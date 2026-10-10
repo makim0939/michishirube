@@ -68,6 +68,8 @@ export interface Media {
   skillId: string
   /** 中身。この端末にだけある（同期しない）。整理したり別の端末だったりすると無い */
   blob?: Blob
+  /** 動画の一覧に出すサムネイル（JPEG）。この端末にだけある */
+  poster?: Blob
   type: string
   name?: string
   size: number

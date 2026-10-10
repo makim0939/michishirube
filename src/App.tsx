@@ -8,6 +8,7 @@ import { EditSkillScreen, NewSkillScreen } from './ui/EditSkillScreen'
 import { FeedbackProvider, useToast } from './ui/feedback'
 import { MapScreen } from './ui/MapScreen'
 import { RecordScreen } from './ui/RecordScreen'
+import { RecordsScreen } from './ui/RecordsScreen'
 import { href, useRoute, type Route } from './ui/router'
 import { SettingsScreen } from './ui/SettingsScreen'
 import { SkillScreen } from './ui/SkillScreen'
@@ -26,7 +27,11 @@ function Screen({ route }: { route: Route }) {
     case 'new':
       return <NewSkillScreen key={route.domainId} domainId={route.domainId} />
     case 'record':
-      return <RecordScreen key={route.skillId} skillId={route.skillId} />
+      return (
+        <RecordScreen key={`${route.skillId}-${route.recordId ?? ''}`} skillId={route.skillId} recordId={route.recordId} />
+      )
+    case 'records':
+      return <RecordsScreen />
     case 'settings':
       return <SettingsScreen notice={route.notice} />
   }
@@ -55,6 +60,7 @@ function Background() {
 
 const TABS = [
   { path: '/', label: '今日', icon: '🔥', match: (r: Route) => r.name === 'today' || r.name === 'record' },
+  { path: '/records', label: '記録', icon: '📒', match: (r: Route) => r.name === 'records' },
   {
     path: '/map',
     label: 'ロードマップ',

@@ -38,7 +38,16 @@ function useRemotePhoto(media: Media): Blob | undefined {
  * 記録の動画・写真1つ。端末に中身があれば再生し、無ければ YouTube やサーバーから見る。
  * 動画は YouTube へのアップ状況と、自動整理で消さない「残す」印も出す
  */
-export function MediaItem({ media, videoRef }: { media: Media; videoRef?: (el: HTMLVideoElement | null) => void }) {
+export function MediaItem({
+  media,
+  videoRef,
+  autoLoad = false,
+}: {
+  media: Media
+  videoRef?: (el: HTMLVideoElement | null) => void
+  /** 動画をすぐ読み込む（最初と最新を比べるとき） */
+  autoLoad?: boolean
+}) {
   const run = useAction()
   const blob = useRemotePhoto(media)
   const video = isVideo(media)
@@ -46,7 +55,14 @@ export function MediaItem({ media, videoRef }: { media: Media; videoRef?: (el: H
   return (
     <figure className="media-item">
       {blob ? (
-        <MediaView blob={blob} type={media.type} cacheKey={media.id} videoRef={videoRef} />
+        <MediaView
+          blob={blob}
+          type={media.type}
+          poster={media.poster}
+          cacheKey={media.id}
+          autoLoad={autoLoad}
+          videoRef={videoRef}
+        />
       ) : video && media.youtubeId ? (
         <a className="media placeholder" href={youtubeUrl(media.youtubeId)} target="_blank" rel="noopener noreferrer">
           <span aria-hidden="true">▶</span>

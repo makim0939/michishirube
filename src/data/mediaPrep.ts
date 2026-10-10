@@ -3,8 +3,11 @@
  * スマホ標準のカメラ（1080p・高画質）より、1分あたりの大きさが数分の1になる
  */
 
-/** 720p・1.2Mbps。ラテアートの注ぎや手元の動きを確かめるには十分で、1分あたり約9MB */
-export const RECORDER_BITRATE = { video: 1_200_000, audio: 64_000 } as const
+/**
+ * 720p・1.2Mbps。ラテアートの注ぎや手元の動きを確かめるには十分で、1分あたり約9MB。
+ * 音声は 96kbps（64kbps だと Chrome の AAC エンコーダーが Internal Error で止まる）
+ */
+export const RECORDER_BITRATE = { video: 1_200_000, audio: 96_000 } as const
 
 export const CAMERA_CONSTRAINTS: MediaTrackConstraints = {
   facingMode: { ideal: 'environment' },
@@ -49,5 +52,70 @@ export async function compressPhoto(file: File): Promise<File> {
     return new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' })
   } catch {
     return file
+  }
+}
+
+/** メモリに読み込んだ Blob。iPhone の Safari は IndexedDB に置いた動画を直接再生できないことがあるので、再生の前に写す */
+export async function inMemory(blob: Blob): Promise<Blob> {
+  return new Blob([await blob.arrayBuffer()], { type: blob.type })
+}
+
+function once(target: EventTarget, event: string, timeoutMs: number): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      target.removeEventListener(event, done)
+      reject(new Error(`timeout: ${event}`))
+    }, timeoutMs)
+    const done = () => {
+      clearTimeout(timer)
+      target.removeEventListener(event, done)
+      resolve()
+    }
+    target.addEventListener(event, done)
+  })
+}
+
+/**
+ * 動画の長さ（秒）。録画した WebM などは長さが Infinity になることがあるので、末尾まで読ませて求める
+ */
+export async function probeDuration(video: HTMLVideoElement): Promise<number> {
+  if (video.readyState < HTMLMediaElement.HAVE_METADATA) await once(video, 'loadedmetadata', 10_000)
+  if (Number.isFinite(video.duration)) return video.duration
+  const back = video.currentTime
+  video.currentTime = 1e101
+  await once(video, 'durationchange', 10_000).catch(() => {})
+  video.currentTime = back
+  return Number.isFinite(video.duration) ? video.duration : 0
+}
+
+const POSTER_MAX_EDGE = 480
+
+/** 動画の最初のあたりの1コマを、一覧に出すサムネイル（JPEG）にする。作れなければ undefined */
+export async function makePoster(blob: Blob): Promise<Blob | undefined> {
+  const url = URL.createObjectURL(blob)
+  const video = document.createElement('video')
+  try {
+    video.muted = true
+    video.playsInline = true
+    video.preload = 'auto'
+    video.src = url
+    video.load()
+    await once(video, 'loadeddata', 5000)
+    const duration = await probeDuration(video)
+    video.currentTime = Math.min(0.2, duration / 2 || 0)
+    await once(video, 'seeked', 5000)
+    const scale = Math.min(1, POSTER_MAX_EDGE / Math.max(video.videoWidth, video.videoHeight))
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.round(video.videoWidth * scale)
+    canvas.height = Math.round(video.videoHeight * scale)
+    if (!canvas.width || !canvas.height) return undefined
+    canvas.getContext('2d')!.drawImage(video, 0, 0, canvas.width, canvas.height)
+    return (await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.7))) ?? undefined
+  } catch {
+    return undefined
+  } finally {
+    video.removeAttribute('src')
+    video.load()
+    URL.revokeObjectURL(url)
   }
 }

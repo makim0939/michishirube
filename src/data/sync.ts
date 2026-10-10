@@ -84,8 +84,8 @@ async function readLocal(kind: EntityKind, id: string): Promise<{ updatedAt: num
 
 function toWire(kind: EntityKind, row: Record<string, unknown>): Record<string, unknown> {
   if (kind !== 'media') return row
-  // 動画・写真の中身は送らない（動画は YouTube、写真は別の API）
-  const { blob: _blob, ...rest } = row
+  // 動画・写真の中身とサムネイルは送らない（動画は YouTube、写真は別の API）
+  const { blob: _blob, poster: _poster, ...rest } = row
   return rest
 }
 
@@ -96,6 +96,7 @@ function toWire(kind: EntityKind, row: Record<string, unknown>): Record<string, 
 function mergeMedia(remote: Media, local: Media | undefined): { row: Media; repaired: boolean } {
   const row: Media = { ...remote }
   if (local?.blob) row.blob = local.blob
+  if (local?.poster) row.poster = local.poster
   let repaired = false
   if (local?.youtubeId && !remote.youtubeId) {
     row.youtubeId = local.youtubeId

@@ -5,24 +5,25 @@ import {
   achieveSkill,
   activateSkill,
   deactivateSkill,
-  deleteRecord,
   getSettings,
   recordsOf,
   revertAchievement,
 } from '../data/repo'
 import { canActivate, computeStates, indexById, prereqsDone } from '../domain/logic'
 import { isWebUrl } from '../domain/template'
-import type { Media, PracticeRecord } from '../domain/types'
+import type { Media } from '../domain/types'
 import { ConfirmButton, Empty, formatDate, isVideo, StateBadge, STATE_ICON } from './common'
 import { MediaItem } from './MediaItem'
+import { RecordCard } from './RecordCard'
 import { References } from './References'
 import { useAction, useCelebrate, useToast } from './feedback'
 import { backHandler, href } from './router'
 
 /** 動画をまとめて読み込むと重いので、記録は少しずつ出す */
 const RECORDS_PAGE = 10
+/** スキル画面では、まず新しいものを数件だけ出す */
+const RECORDS_FIRST = 3
 
-const OUTCOME_LABEL = { good: '◎ 成功', meh: '△ 惜しい', bad: '✕ 失敗' } as const
 
 /** 最初と最新を並べて、上達を目で見られるようにする */
 function Compare({ media }: { media: Media[] }) {
@@ -55,6 +56,7 @@ function Compare({ media }: { media: Media[] }) {
           <div key={m.id}>
             <MediaItem
               media={m}
+              autoLoad
               videoRef={(el) => {
                 videos.current[i] = el
               }}
@@ -85,55 +87,12 @@ function Compare({ media }: { media: Media[] }) {
   )
 }
 
-function RecordItem({ record, media }: { record: PracticeRecord; media: Media[] }) {
-  const run = useAction()
-  return (
-    <li className="record">
-      <div className="record-head">
-        <span className="muted">{formatDate(record.createdAt)}</span>
-        {record.outcome && <span className={`outcome outcome-${record.outcome}`}>{OUTCOME_LABEL[record.outcome]}</span>}
-      </div>
-      {media.length > 0 && (
-        <div className="record-media">
-          {media.map((m) => (
-            <MediaItem key={m.id} media={m} />
-          ))}
-        </div>
-      )}
-      {record.reason && (
-        <p>
-          <span className="label">理由</span>
-          {record.reason}
-        </p>
-      )}
-      {record.nextAction && (
-        <p>
-          <span className="label">次の一手</span>
-          {record.nextAction}
-        </p>
-      )}
-      <ConfirmButton
-        className="btn small ghost"
-        confirmLabel="削除する"
-        message={
-          media.some((m) => m.youtubeId)
-            ? 'この記録と動画・写真を削除します。元に戻せません。YouTube に上げた動画は残るので、不要なら YouTube アプリで削除してください。'
-            : 'この記録と動画・写真を削除します。元に戻せません。'
-        }
-        onConfirm={() => run(() => deleteRecord(record.id))}
-      >
-        削除
-      </ConfirmButton>
-    </li>
-  )
-}
-
 export function SkillScreen({ id }: { id: string }) {
   const run = useAction()
   const toast = useToast()
   const celebrate = useCelebrate()
   const [askingAchieve, setAskingAchieve] = useState(false)
-  const [shown, setShown] = useState(RECORDS_PAGE)
+  const [shown, setShown] = useState(RECORDS_FIRST)
 
   const data = useLiveQuery(async () => {
     const skill = await db.skills.get(id)
@@ -269,8 +228,6 @@ export function SkillScreen({ id }: { id: string }) {
         </div>
       )}
 
-      <References skill={skill} />
-
       {state === 'locked' && (
         <section className="section">
           <h2>先に挑戦するスキル</h2>
@@ -288,6 +245,38 @@ export function SkillScreen({ id }: { id: string }) {
       )}
 
       <Compare media={media} />
+
+      <section className="section">
+        <div className="section-head">
+          <h2>記録（{records.length}）</h2>
+          {(state === 'active' || state === 'available') && (
+            <a className="btn small" href={href(`/record/${skill.id}`)}>
+              ＋ 記録する
+            </a>
+          )}
+        </div>
+        {records.length === 0 ? (
+          <p className="muted">まだ記録がありません。</p>
+        ) : (
+          <ul className="records">
+            {records.slice(0, shown).map((r) => (
+              <RecordCard
+                key={r.id}
+                record={r}
+                media={r.mediaIds.map((m) => mediaById.get(m)).filter((m) => !!m)}
+              />
+            ))}
+          </ul>
+        )}
+        {records.length > shown && (
+          <button className="btn" onClick={() => setShown((n) => n + RECORDS_PAGE)}>
+            さらに表示（残り {records.length - shown} 件）
+          </button>
+        )}
+      </section>
+
+      <References skill={skill} />
+
 
       {skill.description && (
         <section className="section">
@@ -348,27 +337,6 @@ export function SkillScreen({ id }: { id: string }) {
         </section>
       )}
 
-      <section className="section">
-        <h2>記録（{records.length}）</h2>
-        {records.length === 0 ? (
-          <p className="muted">まだ記録がありません。</p>
-        ) : (
-          <ul className="records">
-            {records.slice(0, shown).map((r) => (
-              <RecordItem
-                key={r.id}
-                record={r}
-                media={r.mediaIds.map((m) => mediaById.get(m)).filter((m) => !!m)}
-              />
-            ))}
-          </ul>
-        )}
-        {records.length > shown && (
-          <button className="btn" onClick={() => setShown((n) => n + RECORDS_PAGE)}>
-            さらに表示（残り {records.length - shown} 件）
-          </button>
-        )}
-      </section>
     </div>
   )
 }

@@ -10,7 +10,7 @@ import { db, markDirty, type Meta } from './db'
 const FORMAT = 'michishirube-backup'
 const VERSION = 1
 
-interface BackupMedia extends Omit<Media, 'blob' | 'updatedAt'> {
+interface BackupMedia extends Omit<Media, 'blob' | 'poster' | 'updatedAt'> {
   updatedAt?: number
   path: string | null
 }
@@ -155,7 +155,7 @@ export async function exportBackup(opts: {
     // 同期の接続先やトークンは、この端末だけの設定なのでバックアップに入れない
     db.meta.filter((m) => !isLocalMeta(m.key)).toArray(),
   ])
-  const rows: BackupMedia[] = media.map(({ blob, ...rest }) => ({
+  const rows: BackupMedia[] = media.map(({ blob, poster: _poster, ...rest }) => ({
     ...rest,
     path: opts.includeMedia && blob ? `media/${rest.id}${extension(rest)}` : null,
   }))

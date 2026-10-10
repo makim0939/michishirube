@@ -16,6 +16,7 @@ import {
   recordsOf,
   revertAchievement,
   setMaxActive,
+  updateRecord,
   updateSkill,
 } from './repo'
 
@@ -180,5 +181,56 @@ describe('参考資料', () => {
 
     await removeReference(a, first.id)
     expect((await db.skills.get(a))!.references.map((r) => r.id)).toEqual([second.id])
+  })
+})
+
+describe('記録を直す', () => {
+  it('結果・理由・次の一手を直し、動画・写真を足す・外す・差し替える', async () => {
+    const { a } = await chain()
+    const id = await addRecord({
+      skillId: a,
+      outcome: 'bad',
+      reason: '泡が粗い',
+      nextAction: '',
+      files: [new Blob(['photo'], { type: 'image/jpeg' }), new Blob(['video'], { type: 'video/mp4' })],
+    })
+    const [photo, video] = (await db.records.get(id))!.mediaIds
+    await db.media.update(video, { upload: 'done', youtubeId: 'yt-old' })
+    await db.outbox.clear()
+
+    await updateRecord({
+      recordId: id,
+      outcome: 'good',
+      reason: '温度が合った',
+      nextAction: '同じ手順で3回',
+      addFiles: [{ blob: new Blob(['new-video'], { type: 'video/mp4' }), poster: new Blob(['p'], { type: 'image/jpeg' }) }],
+      removeMediaIds: [photo],
+      replace: [{ id: video, blob: new Blob(['trimmed'], { type: 'video/mp4' }) }],
+    })
+
+    const record = (await db.records.get(id))!
+    expect(record).toMatchObject({ outcome: 'good', reason: '温度が合った', nextAction: '同じ手順で3回' })
+    expect(record.mediaIds).toHaveLength(2)
+    expect(record.mediaIds).not.toContain(photo)
+    expect(await db.media.get(photo)).toBeUndefined()
+    // 切り取った動画は中身が変わり、YouTube に上げ直す
+    const trimmed = (await db.media.get(video))!
+    expect(await trimmed.blob!.text()).toBe('trimmed')
+    expect(trimmed).toMatchObject({ upload: 'pending' })
+    expect(trimmed.youtubeId).toBeUndefined()
+    const added = (await db.media.get(record.mediaIds[1]))!
+    expect(added).toMatchObject({ upload: 'pending', recordId: id })
+    expect(await added.poster!.text()).toBe('p')
+    // 消したもの・足したもの・差し替えたもの・記録が同期の対象になる
+    expect((await db.outbox.toArray()).map((e) => e.id).sort()).toEqual([photo, video, added.id, id].sort())
+  })
+
+  it('全部消して空にはできない', async () => {
+    const { a } = await chain()
+    const id = await addRecord({ skillId: a, reason: '', nextAction: '', files: [new Blob(['v'], { type: 'video/mp4' })] })
+    const [m] = (await db.records.get(id))!.mediaIds
+    await expect(
+      updateRecord({ recordId: id, reason: ' ', nextAction: '', addFiles: [], removeMediaIds: [m], replace: [] }),
+    ).rejects.toThrow(/1つ以上/)
   })
 })

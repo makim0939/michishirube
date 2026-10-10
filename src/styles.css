@@ -927,7 +927,7 @@ textarea {
   right: 0;
   bottom: 0;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   height: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px));
   padding-bottom: env(safe-area-inset-bottom, 0px);
   background: color-mix(in srgb, var(--surface) 92%, transparent);
@@ -1369,4 +1369,162 @@ a.media.placeholder {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+/* ---- 動画のサムネイル（押すと読み込んで再生） ---- */
+
+.video-thumb {
+  appearance: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  background-color: #111;
+  background-size: cover;
+  background-position: center;
+}
+
+.video-thumb span {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgb(0 0 0 / 55%);
+  color: #fff;
+  font-size: 1.2rem;
+}
+
+.trim-button {
+  position: absolute;
+  left: 4px;
+  top: 4px;
+  border: none;
+  border-radius: 999px;
+  padding: 3px 9px;
+  background: rgb(0 0 0 / 65%);
+  color: #fff;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* ---- 切り取り ---- */
+
+.trimmer-video {
+  height: 55%;
+  object-fit: contain;
+}
+
+.trimmer-panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 14px 16px calc(env(safe-area-inset-bottom, 0px) + 16px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: rgb(20 20 20 / 92%);
+}
+
+.trimmer-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.trimmer-row input[type='range'] {
+  flex: 1;
+  min-width: 0;
+}
+
+.trimmer-slider {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.85rem;
+}
+
+.trimmer-time {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+  min-width: 4em;
+  text-align: right;
+}
+
+.trimmer-note {
+  font-size: 0.78rem;
+  opacity: 0.75;
+}
+
+.trimmer-error {
+  color: #ff9b8f;
+}
+
+.trimmer input[type='range'] {
+  width: 100%;
+  accent-color: var(--gold);
+}
+
+.progress {
+  height: 8px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 20%);
+  overflow: hidden;
+}
+
+.progress span {
+  display: block;
+  height: 100%;
+  background: var(--gold);
+  transition: width 0.25s linear;
+}
+
+/* ---- 記録 ---- */
+
+.link-row {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.record-skill {
+  font-weight: 700;
+  text-decoration: none;
+  color: var(--text);
+}
+
+.record .record-edit {
+  align-self: flex-end;
+}
+
+select {
+  font: inherit;
+  font-size: 16px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.trimmer-length {
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 55%);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
 }
