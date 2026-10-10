@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { inMemory, probeDuration } from '../data/mediaPrep'
+import { traceVideo } from '../debug'
 import { clampRange, startTrim, type TrimJob, type TrimRange } from '../data/trim'
 
 function formatTime(sec: number) {
@@ -57,14 +58,21 @@ export function Trimmer({
   useEffect(() => {
     const v = video.current
     if (!v || !url) return
+    const untrace = traceVideo(v, 'preview')
     probeDuration(v)
-      .then((d) => {
+      .then(async (d) => {
         if (!d) throw new Error('no duration')
         setDuration(d)
         setRange({ start: 0, end: d })
+        // iPhone はタップするまで動画のデータを読み込まず、コマが表示されない（真っ黒になる）。
+        // 音なしの再生はタップなしでも許されるので、一度だけ再生して止め、データを読み込ませる
+        v.muted = true
+        await v.play().catch(() => {})
+        v.pause()
         v.currentTime = 0
       })
       .catch(() => setError('動画の長さを読み取れませんでした'))
+    return untrace
   }, [url])
 
   // 切り取りの途中で別のアプリに切り替えると再生が止まり、録り直しも止まるので、中断して知らせる
@@ -112,6 +120,8 @@ export function Trimmer({
     if (!v) return
     previewEnd.current = range.end
     v.currentTime = range.start
+    // 範囲の確認は音つきで（ボタンを押した中なので許される）
+    v.muted = false
     void v.play()
   }
 
@@ -173,7 +183,19 @@ export function Trimmer({
         {ready && !processing && (
           <>
             <div className="trimmer-row">
-              <button className="btn small" onClick={() => (playing ? video.current?.pause() : void video.current?.play())}>
+              <button
+                className="btn small"
+                onClick={() => {
+                  const v = video.current
+                  if (!v) return
+                  if (playing) {
+                    v.pause()
+                  } else {
+                    v.muted = false
+                    void v.play()
+                  }
+                }}
+              >
                 {playing ? '❚❚' : '▶'}
               </button>
               <input

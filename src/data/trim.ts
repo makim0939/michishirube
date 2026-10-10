@@ -1,3 +1,4 @@
+import { dlog, traceVideo } from '../debug'
 import { extensionFor, pickRecorderMimeType, RECORDER_BITRATE } from './mediaPrep'
 
 /**
@@ -54,6 +55,8 @@ export function startTrim(video: HTMLVideoElement, audio: AudioContext, range: T
   }
 
   // ---- ここまでをタップの処理の中で同期的に行う（iPhone の自動再生の制限のため） ----
+  const untrace = traceVideo(video, 'trim')
+  dlog('trim start', range, mimeType, 'audio', audio.state, 'rs', video.readyState)
   void audio.resume()
   const source = audioSourceFor(video, audio)
   const audioOut = audio.createMediaStreamDestination()
@@ -63,16 +66,17 @@ export function startTrim(video: HTMLVideoElement, audio: AudioContext, range: T
   video.muted = false
   // タップの中で一度だけ再生を始めて止め、この video の音つき再生を許可させる。
   // 実際の再生は、始めの位置へ移動し終えてから行う（移動中に再生を始めると、先頭がずれるため）
-  video.play().catch(() => {
+  video.play().catch((e: unknown) => {
     // すぐ止めるので AbortError になる。許可を得るのが目的なので無視する
+    dlog('unlock play rejected', e instanceof Error ? e.name : String(e))
   })
   video.pause()
   video.currentTime = range.start
   const playing = (async () => {
-    if (video.seeking || Math.abs(video.currentTime - range.start) > 0.05) {
-      await new Promise<void>((resolve) => video.addEventListener('seeked', () => resolve(), { once: true }))
-    }
+    await waitUntilSeekable(video, range.start)
+    dlog('seek done, play', video.currentTime.toFixed(2), 'rs', video.readyState)
     await video.play()
+    dlog('play resolved')
   })()
   // ------------------------------------------------------------------------------
 
@@ -100,6 +104,7 @@ export function startTrim(video: HTMLVideoElement, audio: AudioContext, range: T
   let lastTime = 0
   recorder.onerror = (e: Event) => {
     const err = (e as Event & { error?: DOMException }).error
+    dlog('recorder error', err?.message)
     failed = err?.message || 'エンコードに失敗しました'
     finish()
   }
@@ -137,6 +142,8 @@ export function startTrim(video: HTMLVideoElement, audio: AudioContext, range: T
   })
 
   const cleanup = () => {
+    untrace()
+    dlog('cleanup', 'frames', firstTime, lastTime, 'chunks', chunks.length)
     video.pause()
     video.muted = true
     // 録り終えたら、プレビューの音がまたスピーカーから出るように戻す
@@ -179,12 +186,14 @@ export function startTrim(video: HTMLVideoElement, audio: AudioContext, range: T
       // 再生が実際に進んで最初のコマが出てから録り始める（止まったコマが先頭に入らないように）
       nextFrame((mediaTime) => {
         if (stopped) return
+        dlog('first frame', mediaTime)
         draw.drawImage(video, 0, 0, canvas.width, canvas.height)
         recorder.start(1000)
         frame(mediaTime)
       })
     })
     .catch((e: unknown) => {
+      dlog('playing rejected', e instanceof Error ? `${e.name}: ${e.message}` : String(e))
       stopped = true
       cleanup()
       rejectDone(new Error(e instanceof Error ? `再生できませんでした（${e.message}）` : '再生できませんでした'))
@@ -204,6 +213,32 @@ export function startTrim(video: HTMLVideoElement, audio: AudioContext, range: T
       finish()
     },
   }
+}
+
+/**
+ * 始めの位置へ移動し終え、そのコマを表示できるまで待つ。
+ * iPhone の Safari は、データを読み込む前に今と同じ位置へ移動させると seeking だけ起きて seeked が来ないことがあるので、
+ * イベントだけに頼らず状態を見て判断する（5秒たったら先へ進む）
+ */
+export function waitUntilSeekable(video: HTMLVideoElement, target: number, timeoutMs = 5000): Promise<void> {
+  const ready = () =>
+    !video.seeking && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && Math.abs(video.currentTime - target) < 0.25
+  if (ready()) return Promise.resolve()
+  return new Promise((resolve) => {
+    const events = ['seeked', 'loadeddata', 'canplay', 'timeupdate']
+    const done = () => {
+      clearInterval(timer)
+      clearTimeout(limit)
+      events.forEach((e) => video.removeEventListener(e, check))
+      resolve()
+    }
+    const check = () => {
+      if (ready()) done()
+    }
+    events.forEach((e) => video.addEventListener(e, check))
+    const timer = setInterval(check, 100)
+    const limit = setTimeout(done, timeoutMs)
+  })
 }
 
 /**

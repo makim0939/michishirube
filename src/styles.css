@@ -1520,3 +1520,26 @@ select {
   padding: 4px 8px;
   font-size: 0.8rem;
 }
+
+.debug-overlay {
+  position: fixed;
+  left: 4px;
+  right: 4px;
+  top: calc(env(safe-area-inset-top, 0px) + 4px);
+  z-index: 100;
+  max-height: 40vh;
+  overflow: hidden;
+  margin: 0;
+  padding: 6px;
+  border-radius: 6px;
+  background: rgb(0 0 0 / 80%);
+  color: #7CFC9A;
+  font: 10px/1.3 ui-monospace, Menlo, monospace;
+  white-space: pre-wrap;
+  pointer-events: none;
+}
+
+/* 再生中の動画は切り取らずに全体を見せる（サムネイルは枠いっぱいに） */
+video.media.playing {
+  object-fit: contain;
+}

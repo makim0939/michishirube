@@ -5,6 +5,7 @@ import { tidyVideos } from './data/tidy'
 import { startAutoUpload } from './data/youtube'
 import { formatBytes } from './ui/common'
 import { EditSkillScreen, NewSkillScreen } from './ui/EditSkillScreen'
+import { DebugOverlay } from './ui/DebugOverlay'
 import { FeedbackProvider, useToast } from './ui/feedback'
 import { MapScreen } from './ui/MapScreen'
 import { RecordScreen } from './ui/RecordScreen'
@@ -94,6 +95,7 @@ export function App() {
 
   return (
     <FeedbackProvider>
+      <DebugOverlay />
       <Background />
       <main className="main">
         <Screen route={route} />
