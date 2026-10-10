@@ -235,8 +235,11 @@ export async function connectSync(input: SyncConfig): Promise<{ firstDevice: boo
 
   await db.transaction('rw', [db.domains, db.skills, db.records, db.media, db.meta, db.outbox], async () => {
     if (!firstDevice) {
-      await db.domains.filter((d) => d.updatedAt === 0).delete()
-      await db.skills.filter((s) => s.updatedAt === 0).delete()
+      // 手を付けていない初期データだけを捨てる（記録があるスキルや、使い始めた分野は残す）
+      const recorded = new Set((await db.records.toArray()).map((r) => r.skillId))
+      await db.skills.filter((s) => s.updatedAt === 0 && !recorded.has(s.id)).delete()
+      const used = new Set((await db.skills.toArray()).map((s) => s.domainId))
+      await db.domains.filter((d) => d.updatedAt === 0 && !used.has(d.id)).delete()
     }
     // 接続前にたまった印は、下で全件を積み直すので消す（捨てた初期データの削除を送らないように）
     await db.outbox.clear()

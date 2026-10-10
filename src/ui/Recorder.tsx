@@ -121,6 +121,7 @@ export function Recorder({
   return (
     <div className="recorder" role="dialog" aria-modal="true" aria-label="録画">
       <video ref={preview} className="recorder-preview" autoPlay playsInline muted />
+      {!ready && !error && <p className="recorder-status">カメラを準備しています…</p>}
       {error && (
         <div className="recorder-error">
           <p>{error}</p>

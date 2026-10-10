@@ -46,29 +46,55 @@ interface Row {
   seq: number
 }
 
+/** 1文あたりの行数。D1 は1文の束縛パラメータが100まで（1行6個） */
+const ROWS_PER_STATEMENT = 16
+const IDS_PER_STATEMENT = 100
+
+function chunks<T>(list: T[], size: number): T[][] {
+  const out: T[][] = []
+  for (let i = 0; i < list.length; i += size) out.push(list.slice(i, i + size))
+  return out
+}
+
+/**
+ * 書き込みの文。無料プランは1リクエストで50クエリまでなので、複数行を1文にまとめる。
+ * seq は「今の最大 + 送られてきた順番」。batch は1つのトランザクションで、ほかの端末の書き込みと混ざらないので、
+ * 後から書かれたものほど大きい seq になる（端末は seq を手がかりに差分を取りに来る）
+ */
+export function writeStatements(db: D1Database, changes: EntityChange[]): D1PreparedStatement[] {
+  const statements = chunks(changes, ROWS_PER_STATEMENT).map((rows, n) => {
+    const values = rows.map(() => '(?, ?, ?, ?, ?, (SELECT COALESCE(MAX(seq), 0) FROM entities) + ?)').join(', ')
+    const params = rows.flatMap((c, i) => [
+      c.kind,
+      c.id,
+      c.deleted ? null : JSON.stringify(c.data),
+      c.updatedAt,
+      c.deleted ? 1 : 0,
+      n * ROWS_PER_STATEMENT + i + 1,
+    ])
+    return db
+      .prepare(
+        `INSERT INTO entities (kind, id, data, updated_at, deleted, seq) VALUES ${values}
+         ON CONFLICT (kind, id) DO UPDATE SET
+           data = excluded.data, updated_at = excluded.updated_at, deleted = excluded.deleted, seq = excluded.seq
+         WHERE excluded.updated_at > entities.updated_at`,
+      )
+      .bind(...params)
+  })
+  // メディアを消したら、サーバーに置いた写真も消す
+  const removedMedia = changes.filter((c) => c.kind === 'media' && c.deleted).map((c) => c.id)
+  for (const ids of chunks(removedMedia, IDS_PER_STATEMENT)) {
+    statements.push(db.prepare(`DELETE FROM photos WHERE id IN (${ids.map(() => '?').join(', ')})`).bind(...ids))
+  }
+  return statements
+}
+
 /**
  * 変更を書き込み、since より後の変更を返す。
  * 同じものが両方の端末で変わっていたら、updatedAt が新しいほうを残す（同じ時刻なら先に届いたほう）
  */
 export async function sync(db: D1Database, req: SyncRequest): Promise<SyncResponse> {
-  if (req.changes.length > 0) {
-    const upsert = db.prepare(
-      `INSERT INTO entities (kind, id, data, updated_at, deleted, seq)
-       VALUES (?1, ?2, ?3, ?4, ?5, (SELECT COALESCE(MAX(seq), 0) + 1 FROM entities))
-       ON CONFLICT (kind, id) DO UPDATE SET
-         data = excluded.data, updated_at = excluded.updated_at, deleted = excluded.deleted, seq = excluded.seq
-       WHERE excluded.updated_at > entities.updated_at`,
-    )
-    const removePhoto = db.prepare('DELETE FROM photos WHERE id = ?1')
-    const statements = req.changes.flatMap((c) => {
-      const s = [upsert.bind(c.kind, c.id, c.deleted ? null : JSON.stringify(c.data), c.updatedAt, c.deleted ? 1 : 0)]
-      // メディアを消したら、サーバーに置いた写真も消す
-      if (c.kind === 'media' && c.deleted) s.push(removePhoto.bind(c.id))
-      return s
-    })
-    // batch は1つのトランザクションとして順に実行される
-    await db.batch(statements)
-  }
+  if (req.changes.length > 0) await db.batch(writeStatements(db, req.changes))
 
   const { results } = await db
     .prepare('SELECT kind, id, data, updated_at, deleted, seq FROM entities WHERE seq > ?1 ORDER BY seq LIMIT ?2')

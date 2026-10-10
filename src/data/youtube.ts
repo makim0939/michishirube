@@ -14,7 +14,7 @@ export interface YoutubeStatus {
 }
 
 const PAUSE_KEY = 'youtube:pausedUntil'
-const UPLOAD_URL = 'https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status'
+const UPLOAD_BASE = 'https://www.googleapis.com/upload/youtube/v3/videos?part=snippet,status&uploadType='
 const OUTCOME_LABEL: Record<Outcome, string> = { good: '◎ 成功', meh: '△ 惜しい', bad: '✕ 失敗' }
 
 export async function youtubeStatus(): Promise<YoutubeStatus | undefined> {
@@ -84,7 +84,10 @@ export async function videoMeta(media: Media): Promise<VideoMeta> {
 
 export class QuotaExceeded extends Error {}
 
-/** 1本を上げて、YouTube の動画 ID を返す（再開可能アップロード） */
+/**
+ * 1本を上げて、YouTube の動画 ID を返す。
+ * 再開可能アップロードを使い、アップロード先（Location ヘッダー）を読めない環境では、1回で送る方式にする
+ */
 export async function uploadVideo(
   blob: Blob,
   meta: VideoMeta,
@@ -92,23 +95,40 @@ export async function uploadVideo(
   fetchImpl: typeof fetch = fetch,
 ): Promise<string> {
   const contentType = blob.type || 'video/mp4'
-  const start = await fetchImpl(UPLOAD_URL, {
+  const resource = JSON.stringify({
+    snippet: { title: meta.title, description: meta.description, categoryId: '26' },
+    status: { privacyStatus: 'private', selfDeclaredMadeForKids: false },
+  })
+  const auth = { Authorization: `Bearer ${accessToken}` }
+  const start = await fetchImpl(`${UPLOAD_BASE}resumable`, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${accessToken}`,
+      ...auth,
       'Content-Type': 'application/json; charset=UTF-8',
       'X-Upload-Content-Type': contentType,
       'X-Upload-Content-Length': String(blob.size),
     },
-    body: JSON.stringify({
-      snippet: { title: meta.title, description: meta.description, categoryId: '26' },
-      status: { privacyStatus: 'private', selfDeclaredMadeForKids: false },
-    }),
+    body: resource,
   })
   await throwIfFailed(start)
   const location = start.headers.get('Location')
-  if (!location) throw new Error('YouTube からアップロード先を受け取れませんでした')
-  const done = await fetchImpl(location, { method: 'PUT', headers: { 'Content-Type': contentType }, body: blob })
+  let done: Response
+  if (location) {
+    done = await fetchImpl(location, { method: 'PUT', headers: { 'Content-Type': contentType }, body: blob })
+  } else {
+    const boundary = `michishirube-${Math.random().toString(36).slice(2)}`
+    const body = new Blob([
+      `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${resource}\r\n`,
+      `--${boundary}\r\nContent-Type: ${contentType}\r\n\r\n`,
+      blob,
+      `\r\n--${boundary}--`,
+    ])
+    done = await fetchImpl(`${UPLOAD_BASE}multipart`, {
+      method: 'POST',
+      headers: { ...auth, 'Content-Type': `multipart/related; boundary=${boundary}` },
+      body,
+    })
+  }
   await throwIfFailed(done)
   const video = (await done.json()) as { id?: string }
   if (!video.id) throw new Error('YouTube から動画 ID を受け取れませんでした')
@@ -190,8 +210,8 @@ async function doUploads() {
           await setUpload(m.id, { upload: 'pending', uploadError: e.message })
           return
         }
-        if (e instanceof SyncError) {
-          // 電波が無いなど。上げずに次の機会を待つ
+        if (e instanceof SyncError || e instanceof TypeError) {
+          // 電波が無い・アプリが裏に回って通信が切れたなど。失敗にはせず、次の機会に上げる
           await db.media.update(m.id, { upload: 'pending' })
           return
         }

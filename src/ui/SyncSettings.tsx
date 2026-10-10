@@ -81,11 +81,23 @@ function YoutubeSection({ notice }: { notice?: string }) {
 
   const refresh = useCallback(() => {
     youtubeStatus()
-      .then((s) => setStatus(s ?? null))
+      .then((s) => {
+        setStatus(s ?? null)
+        // 連携できていれば、止めていたアップロードをすぐ再開する
+        if (s?.connected) void resumeUploads()
+      })
       .catch(() => setStatus(null))
   }, [])
 
-  useEffect(refresh, [refresh])
+  // iPhone のホーム画面アプリでは、Google の画面が別のシートで開く。閉じて戻ってきたときに状態を取り直す
+  useEffect(() => {
+    refresh()
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') refresh()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [refresh])
 
   // Google の連携画面から戻ってきたとき
   useEffect(() => {

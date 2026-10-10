@@ -167,3 +167,17 @@ describe('YouTube へのアップロード', () => {
     )
   })
 })
+
+describe('YouTube へのアップロード（アップロード先を読めないとき）', () => {
+  it('1回で送る方式に切り替える', async () => {
+    const urls: string[] = []
+    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+      urls.push(String(url))
+      return urls.length === 1 ? new Response(null, { status: 200 }) : Response.json({ id: 'xyz' })
+    }) as unknown as typeof fetch
+    expect(await uploadVideo(new Blob(['v'], { type: 'video/mp4' }), { title: 't', description: '' }, 'tk', fetchImpl)).toBe(
+      'xyz',
+    )
+    expect(urls[1]).toMatch(/uploadType=multipart/)
+  })
+})
