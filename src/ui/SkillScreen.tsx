@@ -12,12 +12,14 @@ import {
 import { canActivate, computeStates, indexById, prereqsDone } from '../domain/logic'
 import { isWebUrl } from '../domain/template'
 import type { Media } from '../domain/types'
-import { ConfirmButton, Empty, formatDate, isVideo, StateBadge, STATE_ICON } from './common'
+import { ConfirmButton, Empty, formatDate, isVideo, splitName, StateBadge } from './common'
+import { PatternImage } from './MapScreen'
 import { MediaItem } from './MediaItem'
 import { RecordCard } from './RecordCard'
 import { References } from './References'
 import { useAction, useCelebrate, useToast } from './feedback'
 import { backHandler, href } from './router'
+import { BackIcon, PlayIcon } from './icons'
 
 /** 動画をまとめて読み込むと重いので、記録は少しずつ出す */
 const RECORDS_PAGE = 10
@@ -80,7 +82,8 @@ function Compare({ media }: { media: Media[] }) {
             }
           }}
         >
-          ▶ 同時に再生
+          <PlayIcon size={16} />
+          同時に再生
         </button>
       )}
     </section>
@@ -110,7 +113,7 @@ export function SkillScreen({ id }: { id: string }) {
   }, [id])
 
   if (!data) return null
-  if (!data.skill) return <Empty>スキルが見つかりません。</Empty>
+  if (!data.skill) return <Empty>型が見つかりません。</Empty>
   const { skill, skills, domain, records, media, settings, allSkills } = data
   const states = computeStates(skills)
   const state = states.get(skill.id)!
@@ -131,31 +134,35 @@ export function SkillScreen({ id }: { id: string }) {
           onClick={backHandler(`/map/${skill.domainId}`)}
           aria-label="戻る"
         >
-          ←
+          <BackIcon size={26} />
         </a>
-        <div className="title-block">
-          <span className="muted">{domain?.name}</span>
-          <h1>{skill.name}</h1>
-        </div>
+        <span className="title-block muted small">{domain?.name}</span>
         <a className="btn small ghost" href={href(`/skill/${skill.id}/edit`)}>
           編集
         </a>
       </header>
 
-      <div className="row wrap">
-        <StateBadge state={state} />
-        {skill.achievedAt && <span className="muted">{formatDate(skill.achievedAt)} に達成</span>}
+      <div className="skill-hero">
+        <PatternImage name={skill.name} className="large" />
+        <div className="skill-hero-text">
+          <h1>{splitName(skill.name).main}</h1>
+          {splitName(skill.name).sub && <span className="muted small">{splitName(skill.name).sub}</span>}
+          <div className="row wrap">
+            <StateBadge state={state} />
+            {skill.achievedAt && <span className="muted small">{formatDate(skill.achievedAt)} にできた</span>}
+          </div>
+        </div>
       </div>
 
       <section className="criteria-box">
-        <h2>達成条件</h2>
-        <p>{skill.criteria || '（未設定）編集から、判定できる条件を書いてください'}</p>
+        <h2>合格の目安</h2>
+        <p>{skill.criteria || '（未設定）編集から、判定できる目安を書いてください'}</p>
       </section>
 
       <div className="actions">
         {state === 'active' && (
-          <a className="btn primary" href={href(`/record/${skill.id}`)}>
-            記録する
+          <a className="btn primary" href={href(`/record/${skill.id}/camera`)}>
+            撮る
           </a>
         )}
         {state === 'available' && (
@@ -165,49 +172,49 @@ export function SkillScreen({ id }: { id: string }) {
             onClick={() =>
               run(async () => {
                 await activateSkill(skill.id)
-                toast.show(`「${skill.name}」に挑戦します`)
+                toast.show(`「${splitName(skill.name).main}」の練習を始めます`)
               })
             }
           >
-            挑戦する
+            練習を始める
           </button>
         )}
         {(state === 'active' || state === 'available') && !askingAchieve && (
           <button className="btn achieve" disabled={!achievable} onClick={() => setAskingAchieve(true)}>
-            🏆 達成した
+            できた
           </button>
         )}
         {state === 'active' && (
           <button className="btn ghost" onClick={() => run(() => deactivateSkill(skill.id))}>
-            挑戦をやめる
+            練習をやめる
           </button>
         )}
         {state === 'done' && (
           <ConfirmButton
             className="btn ghost"
             confirmLabel="取り消す"
-            message="達成を取り消します。このスキルを前提にしている挑戦中のスキルは、挑戦中から外れます。"
+            message="「できた」を取り消します。この型を前提にしている練習中の型は、練習中から外れます。"
             onConfirm={() => run(() => revertAchievement(skill.id))}
           >
-            達成を取り消す
+            「できた」を取り消す
           </ConfirmButton>
         )}
       </div>
       {state === 'available' && !check.ok && check.reason === 'limit' && (
-        <p className="muted">挑戦中は {settings.maxActive} つまでです。いまのスキルを達成するか、挑戦をやめると選べます。</p>
+        <p className="muted">練習中は {settings.maxActive} つまでです。いまの型を「できた」にするか、練習をやめると選べます。</p>
       )}
       {(state === 'active' || state === 'available') && !achievable && (
         <p className="muted small">
-          並行して練習できます。達成にできるのは、「{pendingPrereqs.map((p) => p.name).join('」「')}」を達成してからです。
+          並行して練習できます。「できた」にできるのは、「{pendingPrereqs.map((p) => splitName(p.name).main).join('」「')}」ができてからです。
         </p>
       )}
 
       {askingAchieve && (
         <div className="confirm achieve-confirm">
           <p>
-            <strong>達成条件を満たしましたか？</strong>
+            <strong>合格の目安を満たしましたか？</strong>
           </p>
-          <p>{skill.criteria || '（達成条件が未設定です）'}</p>
+          <p>{skill.criteria || '（合格の目安が未設定です）'}</p>
           <div className="row">
             <button
               className="btn achieve"
@@ -219,7 +226,7 @@ export function SkillScreen({ id }: { id: string }) {
                 })
               }
             >
-              はい、達成
+              はい、できた
             </button>
             <button className="btn" onClick={() => setAskingAchieve(false)}>
               まだ
@@ -230,8 +237,8 @@ export function SkillScreen({ id }: { id: string }) {
 
       {state === 'locked' && (
         <section className="section">
-          <h2>先に挑戦するスキル</h2>
-          <p className="muted small">これらに挑戦し始めると、このスキルも並行して練習できます。</p>
+          <h2>先に練習する型</h2>
+          <p className="muted small">これらの練習を始めると、この型も並行して練習できます。</p>
           <ul className="chips">
             {prereqs
               .filter((p) => p.status === 'idle')
@@ -250,8 +257,8 @@ export function SkillScreen({ id }: { id: string }) {
         <div className="section-head">
           <h2>記録（{records.length}）</h2>
           {(state === 'active' || state === 'available') && (
-            <a className="btn small" href={href(`/record/${skill.id}`)}>
-              ＋ 記録する
+            <a className="btn small" href={href(`/record/${skill.id}/camera`)}>
+              ＋ 撮る
             </a>
           )}
         </div>
@@ -313,7 +320,7 @@ export function SkillScreen({ id }: { id: string }) {
                 {prereqs.map((p) => (
                   <li key={p.id}>
                     <a href={href(`/skill/${p.id}`)}>
-                      {STATE_ICON[states.get(p.id)!]} {p.name}
+                      {p.name}
                     </a>
                   </li>
                 ))}
@@ -322,12 +329,12 @@ export function SkillScreen({ id }: { id: string }) {
           )}
           {leadsTo.length > 0 && (
             <>
-              <h2>達成すると進める先</h2>
+              <h2>できると進める先</h2>
               <ul className="chips">
                 {leadsTo.map((s) => (
                   <li key={s.id}>
                     <a href={href(`/skill/${s.id}`)}>
-                      {STATE_ICON[states.get(s.id)!]} {s.name}
+                      {s.name}
                     </a>
                   </li>
                 ))}

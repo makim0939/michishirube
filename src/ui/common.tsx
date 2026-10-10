@@ -10,13 +10,6 @@ export const STATE_LABEL: Record<SkillState, string> = {
   done: 'できた',
 }
 
-export const STATE_ICON: Record<SkillState, string> = {
-  locked: '🔒',
-  available: '✨',
-  active: '🔥',
-  done: '🏆',
-}
-
 export const OUTCOME_MARK: Record<Outcome, string> = { good: '◎', meh: '△', bad: '✕' }
 
 /** 「ミルクのスチーム（マイクロフォーム）」→ 大きく出す名前と、小さく添える補足 */
