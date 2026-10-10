@@ -239,7 +239,7 @@ export function SettingsScreen({ notice }: { notice?: string }) {
             <li key={t.domain} className="list-row">
               <span className="list-main">
                 <span>{t.domain}</span>
-                <span className="list-sub">{t.skills.length} の型</span>
+                <span className="list-sub">型 {t.skills.length}</span>
               </span>
               <button
                 className="btn small"

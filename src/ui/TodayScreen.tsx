@@ -11,7 +11,8 @@ import { useAction, useToast } from './feedback'
 import { AlertIcon, CameraIcon } from './icons'
 import { href } from './router'
 import { readStorage, writeStorage } from './storage'
-import { LIGHT_LABEL, lightFor, lightUrl, patternFor, patternUrl } from './world'
+import { PatternImage } from './PatternImage'
+import { LIGHT_LABEL, lightFor, lightUrl } from './world'
 
 const HINT_KEY = 'michishirube:install-hint-dismissed'
 /** メイン写真を探しにいく、新しい記録の数 */
@@ -44,7 +45,8 @@ function isIos() {
 }
 
 /**
- * 気にしてほしいことを1行だけ出す。同期の失敗 → 記録が端末にしかない → ホーム画面に追加、の順に大事
+ * 気にしてほしいことを1行だけ出す。同期の失敗 → ホーム画面に追加（閉じられる）→ 記録が端末にしかない、の順に大事。
+ * ホーム画面に追加しないと Safari が記録を消すことがあるので、同期をつないでいなくても先に出す
  */
 function Notice() {
   const [hintHidden, setHintHidden] = useState(() => readStorage('local', HINT_KEY) === '1')
@@ -65,14 +67,6 @@ function Notice() {
       </a>
     )
   }
-  if (!data.config && data.records > 0) {
-    return (
-      <a className="notice" href={href('/settings')}>
-        <AlertIcon size={18} />
-        <span>記録はまだこの端末だけです。設定からクラウド同期をつなぐと、消えても戻せます</span>
-      </a>
-    )
-  }
   if (!hintHidden && isIos() && !isStandalone()) {
     return (
       <div className="notice">
@@ -89,6 +83,14 @@ function Notice() {
           ×
         </button>
       </div>
+    )
+  }
+  if (!data.config && data.records > 0) {
+    return (
+      <a className="notice" href={href('/settings')}>
+        <AlertIcon size={18} />
+        <span>記録はまだこの端末だけです。設定からクラウド同期をつなぐと、消えても戻せます</span>
+      </a>
     )
   }
   if (data.failed > 0) {
@@ -234,9 +236,7 @@ export function TodayScreen() {
               </span>
             </div>
             <div className="focus-title">
-              {patternFor(current.skill.name) && (
-                <img className="focus-pattern" src={patternUrl(patternFor(current.skill.name)!)} alt="" />
-              )}
+              <PatternImage name={current.skill.name} />
               <div>
                 <h1>{splitName(current.skill.name).main}</h1>
                 {splitName(current.skill.name).sub && (
@@ -275,7 +275,16 @@ export function TodayScreen() {
         ) : data.skillCount > 0 ? (
           <div className="sheet-empty">
             <h2>練習中の型</h2>
-            <p>まだ選んでいません。下から1つ選ぶと、ここから撮れるようになります。</p>
+            {data.available.length > 0 ? (
+              <p>まだ選んでいません。下から1つ選ぶと、ここから撮れるようになります。</p>
+            ) : (
+              <>
+                <p>いま挑戦できる型はありません。型の画面で、次の型を足せます。</p>
+                <a className="btn" href={href('/map')}>
+                  型の画面を開く
+                </a>
+              </>
+            )}
           </div>
         ) : (
           <div className="sheet-empty">
@@ -314,9 +323,7 @@ export function TodayScreen() {
             <ul className="list">
               {data.available.map((s) => (
                 <li key={s.id} className="list-row">
-                  {patternFor(s.name) ? (
-                    <img className="row-pattern" src={patternUrl(patternFor(s.name)!)} alt="" />
-                  ) : null}
+                  <PatternImage name={s.name} className="small" />
                   <a href={href(`/skill/${s.id}`)} className="list-main">
                     <span>{splitName(s.name).main}</span>
                     <span className="list-sub">

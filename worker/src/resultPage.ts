@@ -10,19 +10,19 @@ export type ConnectResult = 'connected' | 'cancelled' | 'failed' | 'invalid'
 const MESSAGES: Record<ConnectResult, { title: string; body: string }> = {
   connected: {
     title: 'YouTube と連携しました',
-    body: 'この画面を閉じて、道しるべに戻ってください。アップ待ちの動画が順に YouTube へ上がります。',
+    body: 'この画面を閉じて、ラテリエに戻ってください。アップ待ちの動画が順に YouTube へ上がります。',
   },
   cancelled: {
     title: '連携をやめました',
-    body: 'この画面を閉じて、道しるべに戻ってください。連携するときは、設定画面からもう一度始めてください。',
+    body: 'この画面を閉じて、ラテリエに戻ってください。連携するときは、設定画面からもう一度始めてください。',
   },
   failed: {
     title: '連携できませんでした',
-    body: 'この画面を閉じて、道しるべの設定画面からもう一度試してください。続けて失敗するときは、Google Cloud のクライアント ID・シークレットとリダイレクト URI を確認してください。',
+    body: 'この画面を閉じて、ラテリエの設定画面からもう一度試してください。続けて失敗するときは、Google Cloud のクライアント ID・シークレットとリダイレクト URI を確認してください。',
   },
   invalid: {
     title: '連携を確認できませんでした',
-    body: '時間が経ちすぎたか、別の画面から開かれました。道しるべの設定画面からもう一度始めてください。',
+    body: '時間が経ちすぎたか、別の画面から開かれました。ラテリエの設定画面からもう一度始めてください。',
   },
 }
 
@@ -33,14 +33,14 @@ function escapeHtml(s: string): string {
 export function resultPage(result: ConnectResult, returnTo?: string): string {
   const { title, body } = MESSAGES[result]
   const back = returnTo
-    ? `<p class="small">PC など、同じ画面で開いている場合は <a href="${escapeHtml(`${returnTo.split('#')[0]}#/settings/youtube-${result}`)}">道しるべに戻る</a></p>`
+    ? `<p class="small">PC など、同じ画面で開いている場合は <a href="${escapeHtml(`${returnTo.split('#')[0]}#/settings/youtube-${result}`)}">ラテリエに戻る</a></p>`
     : ''
   return `<!doctype html>
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>${escapeHtml(title)}｜道しるべ</title>
+<title>${escapeHtml(title)}｜ラテリエ</title>
 <style>
   :root { color-scheme: light dark; font-family: system-ui, -apple-system, 'Hiragino Sans', sans-serif; line-height: 1.7; }
   body { max-width: 480px; margin: 0 auto; padding: 48px 20px; background: Canvas; color: CanvasText; text-align: center; }
@@ -54,7 +54,7 @@ export function resultPage(result: ConnectResult, returnTo?: string): string {
 <div class="icon" aria-hidden="true">${result === 'connected' ? '✅' : '⚠️'}</div>
 <h1>${escapeHtml(title)}</h1>
 <p>${escapeHtml(body)}</p>
-<p class="hint">iPhone のホーム画面から開いた場合は、左上の「完了」（または ×）でこの画面を閉じると、道しるべに戻ります。</p>
+<p class="hint">iPhone のホーム画面から開いた場合は、左上の「完了」（または ×）でこの画面を閉じると、ラテリエに戻ります。</p>
 ${back}
 </body>
 </html>`

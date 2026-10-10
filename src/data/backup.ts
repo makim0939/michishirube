@@ -201,7 +201,7 @@ function parseBackupData(text: string): BackupData {
     throw new BackupError('data.json を読み込めませんでした')
   }
   const d = data as Partial<BackupData>
-  if (d.format !== FORMAT) throw new BackupError('道しるべのバックアップファイルではありません')
+  if (d.format !== FORMAT) throw new BackupError('ラテリエのバックアップファイルではありません')
   if (d.version !== VERSION) throw new BackupError(`未対応のバックアップ形式です（version ${String(d.version)}）`)
   for (const key of ['domains', 'skills', 'records', 'media', 'meta'] as const) {
     if (!Array.isArray(d[key])) throw new BackupError(`バックアップの ${key} が壊れています`)

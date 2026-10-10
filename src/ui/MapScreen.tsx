@@ -8,9 +8,9 @@ import type { Skill } from '../domain/types'
 import { ConfirmButton, saveFile, splitName } from './common'
 import { useAction, useToast } from './feedback'
 import { PlusIcon } from './icons'
+import { PatternImage } from './PatternImage'
 import { go, href } from './router'
 import { readStorage, writeStorage } from './storage'
-import { patternFor, patternUrl } from './world'
 
 const LAST_DOMAIN_KEY = 'michishirube:last-domain'
 
@@ -38,13 +38,6 @@ function NewDomainForm({ onDone }: { onDone: () => void }) {
       </button>
     </form>
   )
-}
-
-/** 型の見本の絵。見本の無い型（自分で作った分野など）は、クレマの丸 */
-export function PatternImage({ name, className, dim }: { name: string; className?: string; dim?: boolean }) {
-  const p = patternFor(name)
-  const cls = `pattern-image ${className ?? ''} ${dim ? 'dim' : ''}`
-  return p ? <img className={cls} src={patternUrl(p)} alt="" /> : <span className={`${cls} none`} aria-hidden="true" />
 }
 
 function names(list: Skill[]) {
@@ -117,7 +110,7 @@ export function MapScreen({ domainId }: { domainId?: string }) {
         <h1>型</h1>
         {skills.length > 0 && (
           <span className="muted small">
-            {skills.length}つのうち {done.length}つ できた
+            できた {done.length} / {skills.length}
           </span>
         )}
       </header>
@@ -226,14 +219,15 @@ export function MapScreen({ domainId }: { domainId?: string }) {
           <h2>その先</h2>
           <ul className="type-rows">
             {locked.map((s) => {
-              const pending = prereqsOf(s).filter((p) => p.status !== 'done')
+              // 前提を練習し始めれば、この型も並行して練習できる（「できた」にできるのは前提ができてから）
+              const pending = prereqsOf(s).filter((p) => p.status === 'idle')
               return (
                 <li key={s.id} className="type-row">
                   <a href={href(`/skill/${s.id}`)} className="type-row-main">
                     <PatternImage name={s.name} dim />
                     <span className="type-row-text">
                       <span className="type-name muted">{splitName(s.name).main}</span>
-                      <span className="muted small">{pending.length > 0 ? `${names(pending)}ができたら` : ''}</span>
+                      <span className="muted small">{pending.length > 0 ? `${names(pending)}を始めたら` : ''}</span>
                     </span>
                   </a>
                 </li>

@@ -281,58 +281,6 @@ ul {
 
 /* ---- 今日の練習 ---- */
 
-.cards {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.practice-card {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 16px;
-  border-radius: var(--radius);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-left: 5px solid var(--active);
-  box-shadow: var(--shadow);
-  color: var(--text);
-  text-decoration: none;
-}
-
-.practice-card:active {
-  transform: scale(0.99);
-}
-
-.card-domain {
-  font-size: 0.8rem;
-  color: var(--muted);
-}
-
-.card-title {
-  font-size: 1.15rem;
-  font-weight: 700;
-  line-height: 1.3;
-}
-
-.card-footer {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.85rem;
-}
-
-.card-cta {
-  color: var(--accent);
-  font-weight: 700;
-}
-
-.card-sub-link {
-  display: inline-block;
-  margin: 6px 0 0 4px;
-  font-size: 0.85rem;
-}
-
 .next-action {
   display: flex;
   flex-direction: column;
@@ -447,7 +395,9 @@ ul {
 }
 
 .chips a {
-  display: inline-block;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
   padding: 4px 12px;
   border-radius: 999px;
   border: 1px solid var(--border);
@@ -464,6 +414,11 @@ ul {
   font-size: 0.9rem;
   padding-left: 1.1em;
   list-style: disc;
+}
+
+.chip-state {
+  font-size: 0.72rem;
+  color: var(--muted);
 }
 
 /* ---- 型の詳細 ---- */
@@ -1613,15 +1568,6 @@ video.media.playing {
   text-wrap: balance;
 }
 
-.focus-pattern {
-  width: 56px;
-  height: 56px;
-  flex: none;
-  border-radius: 50%;
-  object-fit: cover;
-  box-shadow: var(--shadow);
-}
-
 .focus-switch {
   display: flex;
   flex-wrap: wrap;
@@ -1711,8 +1657,10 @@ video.media.playing {
 
 .recent-cup img,
 .recent-empty {
-  width: 62px;
-  height: 62px;
+  /* 幅の狭い端末では列に合わせて縮める */
+  width: 100%;
+  max-width: 62px;
+  aspect-ratio: 1;
   border-radius: 50%;
   object-fit: cover;
   box-shadow: 0 2px 6px rgb(42 30 23 / 18%);
@@ -1726,14 +1674,6 @@ video.media.playing {
 .recent-no {
   font-family: var(--font-latin);
   font-size: 14px;
-}
-
-.row-pattern {
-  width: 44px;
-  height: 44px;
-  flex: none;
-  border-radius: 50%;
-  object-fit: cover;
 }
 
 a.notice {
@@ -1754,8 +1694,10 @@ a.notice {
   background: transparent;
   color: var(--muted);
   font-size: 1.1rem;
-  width: 32px;
-  height: 32px;
+  /* 押しやすい大きさを保ちつつ、お知らせの高さは変えない */
+  width: 44px;
+  height: 44px;
+  margin: -8px -10px -8px 0;
   flex: none;
   cursor: pointer;
 }

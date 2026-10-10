@@ -12,8 +12,8 @@ import {
 import { canActivate, computeStates, indexById, prereqsDone } from '../domain/logic'
 import { isWebUrl } from '../domain/template'
 import type { Media } from '../domain/types'
-import { ConfirmButton, Empty, formatDate, isVideo, splitName, StateBadge } from './common'
-import { PatternImage } from './MapScreen'
+import { ConfirmButton, Empty, formatDate, isVideo, splitName, StateBadge, STATE_LABEL } from './common'
+import { PatternImage } from './PatternImage'
 import { MediaItem } from './MediaItem'
 import { RecordCard } from './RecordCard'
 import { References } from './References'
@@ -244,7 +244,7 @@ export function SkillScreen({ id }: { id: string }) {
               .filter((p) => p.status === 'idle')
               .map((p) => (
                 <li key={p.id}>
-                  <a href={href(`/skill/${p.id}`)}>{p.name}</a>
+                  <a href={href(`/skill/${p.id}`)}>{splitName(p.name).main}</a>
                 </li>
               ))}
           </ul>
@@ -320,7 +320,8 @@ export function SkillScreen({ id }: { id: string }) {
                 {prereqs.map((p) => (
                   <li key={p.id}>
                     <a href={href(`/skill/${p.id}`)}>
-                      {p.name}
+                      {splitName(p.name).main}
+                      <span className="chip-state">{STATE_LABEL[states.get(p.id)!]}</span>
                     </a>
                   </li>
                 ))}
@@ -334,7 +335,8 @@ export function SkillScreen({ id }: { id: string }) {
                 {leadsTo.map((s) => (
                   <li key={s.id}>
                     <a href={href(`/skill/${s.id}`)}>
-                      {s.name}
+                      {splitName(s.name).main}
+                      <span className="chip-state">{STATE_LABEL[states.get(s.id)!]}</span>
                     </a>
                   </li>
                 ))}

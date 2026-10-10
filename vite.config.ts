@@ -34,8 +34,6 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,png,ico,webp,webmanifest}'],
-        // 512px のアイコンは写真なので大きい。既定の上限（2MB）で弾かれないようにする
-        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         // フォントは Google Fonts から読み、一度読んだらオフラインでも使えるよう保存する
         runtimeCaching: [
           {

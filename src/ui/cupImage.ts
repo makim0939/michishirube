@@ -21,22 +21,20 @@ export function hasPhoto(m: Media | undefined): boolean {
  * （サムネイルがまだ無ければ作る）
  */
 export function useCupImage(media: Media | undefined): Blob | undefined {
-  const [fetched, setFetched] = useState<Blob>()
+  // どのメディアのために取った写真かも覚えておく（別のカップに切り替わった直後に、前の写真を出さないように）
+  const [fetched, setFetched] = useState<{ id: string; blob: Blob }>()
   const id = media?.id
   const video = !!media && isVideo(media)
   const needsFetch = !!media && !video && !media.blob && !!media.cloudPhoto
   const needsPoster = !!media && video && !!media.blob && !media.poster
 
   useEffect(() => {
-    setFetched(undefined)
-  }, [id])
-
-  useEffect(() => {
     if (!needsFetch || !media) return
     let cancelled = false
+    const mediaId = media.id
     fetchPhoto(media)
       .then((b) => {
-        if (!cancelled) setFetched(b)
+        if (!cancelled && b) setFetched({ id: mediaId, blob: b })
       })
       .catch(() => {
         // 電波が無いなどで取れなければ、無いまま
@@ -65,5 +63,5 @@ export function useCupImage(media: Media | undefined): Blob | undefined {
 
   if (!media) return undefined
   if (video) return media.poster
-  return media.blob ?? fetched
+  return media.blob ?? (fetched?.id === media.id ? fetched.blob : undefined)
 }
