@@ -8,7 +8,7 @@ import { ConfirmButton, Empty, formatAgo, formatBytes, isVideo, MediaView, reque
 import { useAction, useToast } from './feedback'
 import { canRecordInApp, Recorder } from './Recorder'
 import { ReferenceList } from './References'
-import { backHandler, goBack, href } from './router'
+import { backHandler, go, goBack, href } from './router'
 import { readStorage, removeStorage, writeStorage } from './storage'
 import { Trimmer } from './Trimmer'
 
@@ -82,7 +82,8 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
   const [missing, setMissing] = useState(false)
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [confirmLeave, setConfirmLeave] = useState(false)
+  /** 保存せずに離れようとしたときの行き先（null なら確認を出していない） */
+  const [confirmLeave, setConfirmLeave] = useState<{ back: true } | { to: string } | null>(null)
   const [recording, setRecording] = useState(false)
   const [trimming, setTrimming] = useState<string | null>(null)
   const videoInput = useRef<HTMLInputElement>(null)
@@ -215,7 +216,7 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
             // 撮った動画・写真や直した内容は、ここで保存しないと消えるので、黙って戻らない
             if (unsaved) {
               e.preventDefault()
-              setConfirmLeave(true)
+              setConfirmLeave({ back: true })
             } else {
               backHandler(fallback)(e)
             }
@@ -238,10 +239,13 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
               : `撮った動画・写真が ${items.length} 件あります。保存せずに戻ると消えます。`}
           </p>
           <div className="row">
-            <button className="btn danger" onClick={() => goBack(fallback)}>
-              保存せずに戻る
+            <button
+              className="btn danger"
+              onClick={() => ('to' in confirmLeave ? go(confirmLeave.to) : goBack(fallback))}
+            >
+              {'to' in confirmLeave ? '保存せずに移動' : '保存せずに戻る'}
             </button>
-            <button className="btn" onClick={() => setConfirmLeave(false)}>
+            <button className="btn" onClick={() => setConfirmLeave(null)}>
               {editing ? '直すのを続ける' : '記録を続ける'}
             </button>
           </div>
@@ -255,7 +259,15 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
             <span className="next-text">{next ? next.text : 'まだありません'}</span>
           </div>
           {count > 0 && (
-            <a className="link-row" href={href(`/skill/${skillId}`)}>
+            <a
+              className="link-row"
+              href={href(`/skill/${skillId}`)}
+              onClick={(e) => {
+                if (!unsaved) return
+                e.preventDefault()
+                setConfirmLeave({ to: `/skill/${skillId}` })
+              }}
+            >
               過去の記録を見る（{count}件）→
             </a>
           )}
