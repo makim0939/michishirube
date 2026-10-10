@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { db } from '../data/db'
 import { activateSkill, getSettings, recordsOf } from '../data/repo'
 import { getSyncConfig, getSyncStatus } from '../data/sync'
-import { computeStates, sortByDepth } from '../domain/logic'
+import { computeStates, indexById, prereqsDone, sortByDepth } from '../domain/logic'
 import { formatAgo } from './common'
 import { useAction, useToast } from './feedback'
 import { href } from './router'
@@ -114,7 +114,11 @@ export function TodayScreen() {
         }
       }),
     )
+    // 前提を達成済みの「次の一歩」を先に、前提を練習中で並行して挑戦できるものを後に並べる
+    const byId = indexById(skills)
     const available = sortByDepth(skills.filter((s) => states.get(s.id) === 'available'))
+      .map((s) => ({ ...s, parallel: !prereqsDone(s, byId) }))
+      .sort((a, b) => Number(a.parallel) - Number(b.parallel))
     return { domains, settings, cards, available, total: skills.length }
   })
 
@@ -186,7 +190,10 @@ export function TodayScreen() {
             {data.available.map((s) => (
               <li key={s.id} className="list-row">
                 <a href={href(`/skill/${s.id}`)} className="list-main">
-                  <span className="list-sub">{domainName.get(s.domainId)}</span>
+                  <span className="list-sub">
+                    {domainName.get(s.domainId)}
+                    {s.parallel && '・前提と並行して練習'}
+                  </span>
                   <span>{s.name}</span>
                 </a>
                 <button
