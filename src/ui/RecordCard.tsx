@@ -4,8 +4,7 @@ import { formatDate, splitName } from './common'
 import { MediaItem } from './MediaItem'
 import { href } from './router'
 
-
-/** 記録1件。スキル画面と「記録」タブで使う。直す・消すは編集画面から */
+/** 記録1件。型の詳細とカップ帳で使う。直す・消すは編集画面から */
 export function RecordCard({
   record,
   media,
