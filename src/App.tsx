@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react'
 import { ensureSeeded } from './data/repo'
+import { startAutoSync } from './data/sync'
+import { tidyVideos } from './data/tidy'
+import { startAutoUpload } from './data/youtube'
+import { formatBytes } from './ui/common'
 import { EditSkillScreen, NewSkillScreen } from './ui/EditSkillScreen'
-import { FeedbackProvider } from './ui/feedback'
+import { FeedbackProvider, useToast } from './ui/feedback'
 import { MapScreen } from './ui/MapScreen'
 import { RecordScreen } from './ui/RecordScreen'
 import { href, useRoute, type Route } from './ui/router'
@@ -24,8 +28,29 @@ function Screen({ route }: { route: Route }) {
     case 'record':
       return <RecordScreen key={route.skillId} skillId={route.skillId} />
     case 'settings':
-      return <SettingsScreen />
+      return <SettingsScreen notice={route.notice} />
   }
+}
+
+/** 同期・YouTube へのアップ・古い動画の整理を、画面の裏で動かす */
+function Background() {
+  const toast = useToast()
+  useEffect(() => {
+    const stopSync = startAutoSync()
+    const stopUpload = startAutoUpload()
+    tidyVideos()
+      .then(({ count, bytes }) => {
+        if (count > 0) toast.show(`YouTube に上げ終えた古い動画 ${count} 本を端末から整理しました（${formatBytes(bytes)}）`)
+      })
+      .catch(() => {
+        // 整理できなくても、次に開いたときにまた試す
+      })
+    return () => {
+      stopSync()
+      stopUpload()
+    }
+  }, [toast])
+  return null
 }
 
 const TABS = [
@@ -63,6 +88,7 @@ export function App() {
 
   return (
     <FeedbackProvider>
+      <Background />
       <main className="main">
         <Screen route={route} />
       </main>

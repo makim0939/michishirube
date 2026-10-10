@@ -2,31 +2,22 @@
   "compilerOptions": {
     "target": "ES2022",
     "lib": [
-      "ES2023",
-      "DOM",
-      "DOM.Iterable"
+      "ES2023"
     ],
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "jsx": "react-jsx",
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true,
-    "resolveJsonModule": true,
     "isolatedModules": true,
     "skipLibCheck": true,
     "noEmit": true,
     "types": [
-      "vite/client",
-      "vite-plugin-pwa/client",
-      "node"
+      "@cloudflare/workers-types"
     ]
   },
   "include": [
     "src",
-    "shared",
-    "vite.config.ts",
-    "pwa-assets.config.ts"
+    "../shared"
   ]
 }

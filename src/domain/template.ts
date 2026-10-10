@@ -1,4 +1,4 @@
-import type { Domain, Skill, Source } from './types'
+import type { Domain, Reference, Skill, Source } from './types'
 
 /**
  * ロードマップの配布形式。key でスキル同士の前提を表し、取り込むときに id へ置き換える。
@@ -16,6 +16,8 @@ export interface TemplateSkill {
   description?: string
   criteria: string
   sources?: Source[]
+  /** 練習中に見返す動画や記事 */
+  references?: Omit<Reference, 'id'>[]
   prereqs?: string[]
 }
 
@@ -56,6 +58,8 @@ export function parseTemplate(input: unknown): RoadmapTemplate {
     if (!isRecord(raw)) throw new TemplateError(`skills[${i}] がオブジェクトではありません`)
     const sources = raw.sources === undefined ? [] : raw.sources
     if (!Array.isArray(sources)) throw new TemplateError(`skills[${i}].sources は配列にしてください`)
+    const references = raw.references === undefined ? [] : raw.references
+    if (!Array.isArray(references)) throw new TemplateError(`skills[${i}].references は配列にしてください`)
     const prereqs = raw.prereqs === undefined ? [] : raw.prereqs
     if (!Array.isArray(prereqs) || prereqs.some((p) => typeof p !== 'string')) {
       throw new TemplateError(`skills[${i}].prereqs は文字列の配列にしてください`)
@@ -70,6 +74,15 @@ export function parseTemplate(input: unknown): RoadmapTemplate {
         return {
           title: str(s.title, `skills[${i}].sources[${j}].title`),
           ...(typeof s.url === 'string' && s.url ? { url: webUrl(s.url, `skills[${i}].sources[${j}].url`) } : {}),
+        }
+      }),
+      references: references.map((r, j) => {
+        if (!isRecord(r)) throw new TemplateError(`skills[${i}].references[${j}] がオブジェクトではありません`)
+        const field = `skills[${i}].references[${j}]`
+        return {
+          title: str(r.title, `${field}.title`),
+          url: webUrl(str(r.url, `${field}.url`), `${field}.url`),
+          ...(typeof r.note === 'string' && r.note ? { note: r.note } : {}),
         }
       }),
       prereqs: prereqs as string[],
@@ -105,9 +118,10 @@ function assertAcyclic(skills: TemplateSkill[]) {
 
 export function templateToEntities(
   t: RoadmapTemplate,
-  opts: { now: number; order: number; newId: () => string },
+  opts: { now: number; order: number; newId: () => string; updatedAt?: number },
 ): { domain: Domain; skills: Skill[] } {
-  const domain: Domain = { id: opts.newId(), name: t.domain, order: opts.order, createdAt: opts.now }
+  const updatedAt = opts.updatedAt ?? opts.now
+  const domain: Domain = { id: opts.newId(), name: t.domain, order: opts.order, createdAt: opts.now, updatedAt }
   const idByKey = new Map(t.skills.map((s) => [s.key, opts.newId()]))
   const skills: Skill[] = t.skills.map((s, i) => ({
     id: idByKey.get(s.key)!,
@@ -116,10 +130,12 @@ export function templateToEntities(
     description: s.description ?? '',
     criteria: s.criteria,
     sources: s.sources ?? [],
+    references: (s.references ?? []).map((r) => ({ ...r, id: opts.newId() })),
     prereqIds: (s.prereqs ?? []).map((k) => idByKey.get(k)!),
     status: 'idle',
     // 同時刻だと並び順が不定になるので、テンプレートの順序を保つ
     createdAt: opts.now + i,
+    updatedAt,
   }))
   return { domain, skills }
 }
@@ -136,6 +152,7 @@ export function entitiesToTemplate(domain: Domain, skills: Skill[]): RoadmapTemp
       description: s.description,
       criteria: s.criteria,
       sources: s.sources,
+      references: s.references.map(({ id: _id, ...r }) => r),
       prereqs: s.prereqIds.map((p) => keyById.get(p)).filter((k): k is string => !!k),
     })),
   }

@@ -1,0 +1,4 @@
+# ローカル開発用。.dev.vars にコピーして値を入れる（.dev.vars はコミットしない）
+APP_TOKEN=
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=

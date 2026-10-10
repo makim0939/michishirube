@@ -2,7 +2,8 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useState } from 'react'
 import { db } from '../data/db'
 import { activateSkill, getSettings, recordsOf } from '../data/repo'
-import { computeStates, sortByDepth } from '../domain/logic'
+import { getSyncConfig, getSyncStatus } from '../data/sync'
+import { computeStates, indexById, prereqsDone, sortByDepth } from '../domain/logic'
 import { formatAgo } from './common'
 import { useAction, useToast } from './feedback'
 import { href } from './router'
@@ -39,6 +40,54 @@ function InstallHint() {
   )
 }
 
+/** 記録が端末にしか無いときや、同期・アップロードが止まっているときに知らせる */
+function SyncBanner() {
+  const data = useLiveQuery(async () => ({
+    config: await getSyncConfig(),
+    status: await getSyncStatus(),
+    uploads: await db.media.where('upload').anyOf('pending', 'uploading').count(),
+    failed: await db.media.where('upload').equals('failed').count(),
+    records: await db.records.count(),
+  }))
+  if (!data) return null
+  if (!data.config) {
+    if (data.records === 0) return null
+    return (
+      <div className="notice">
+        <p>
+          <strong>記録はまだこの端末にしかありません。</strong>
+          スマホの空きが少ないと消えることがあるので、クラウド同期をつないでください。
+        </p>
+        <a className="btn small" href={href('/settings')}>
+          設定
+        </a>
+      </div>
+    )
+  }
+  if (data.status.error) {
+    return (
+      <div className="notice">
+        <p>
+          <strong>同期できていません。</strong>
+          {data.status.error}
+        </p>
+        <a className="btn small" href={href('/settings')}>
+          設定
+        </a>
+      </div>
+    )
+  }
+  if (data.uploads > 0 || data.failed > 0) {
+    return (
+      <p className="muted small">
+        {data.uploads > 0 && `YouTube へのアップ待ちの動画が ${data.uploads} 本あります（アプリを開いている間に上げます）。`}
+        {data.failed > 0 && `アップに失敗した動画が ${data.failed} 本あります。次に開いたときに上げ直します。`}
+      </p>
+    )
+  }
+  return null
+}
+
 export function TodayScreen() {
   const run = useAction()
   const toast = useToast()
@@ -65,7 +114,11 @@ export function TodayScreen() {
         }
       }),
     )
+    // 前提を達成済みの「次の一歩」を先に、前提を練習中で並行して挑戦できるものを後に並べる
+    const byId = indexById(skills)
     const available = sortByDepth(skills.filter((s) => states.get(s.id) === 'available'))
+      .map((s) => ({ ...s, parallel: !prereqsDone(s, byId) }))
+      .sort((a, b) => Number(a.parallel) - Number(b.parallel))
     return { domains, settings, cards, available, total: skills.length }
   })
 
@@ -83,6 +136,7 @@ export function TodayScreen() {
       </header>
 
       <InstallHint />
+      <SyncBanner />
 
       {data.cards.length === 0 && data.total > 0 ? (
         <div className="empty">
@@ -136,7 +190,10 @@ export function TodayScreen() {
             {data.available.map((s) => (
               <li key={s.id} className="list-row">
                 <a href={href(`/skill/${s.id}`)} className="list-main">
-                  <span className="list-sub">{domainName.get(s.domainId)}</span>
+                  <span className="list-sub">
+                    {domainName.get(s.domainId)}
+                    {s.parallel && '・前提と並行して練習'}
+                  </span>
                   <span>{s.name}</span>
                 </a>
                 <button

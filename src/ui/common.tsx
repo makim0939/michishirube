@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { formatDateTime } from '../domain/format'
 import type { Media, SkillState } from '../domain/types'
 
 export const STATE_LABEL: Record<SkillState, string> = {
@@ -25,10 +26,7 @@ export function StateBadge({ state }: { state: SkillState }) {
 
 const DAY = 24 * 60 * 60 * 1000
 
-export function formatDate(ts: number): string {
-  const d = new Date(ts)
-  return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`
-}
+export const formatDate = formatDateTime
 
 export function formatAgo(ts: number, now = Date.now()): string {
   const startOfToday = new Date(now).setHours(0, 0, 0, 0)

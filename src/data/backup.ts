@@ -1,6 +1,6 @@
 import { Unzip, UnzipInflate, Zip, ZipPassThrough, strFromU8, strToU8 } from 'fflate'
 import type { Domain, Media, PracticeRecord, Skill } from '../domain/types'
-import { db, type Meta } from './db'
+import { db, markDirty, type Meta } from './db'
 
 /**
  * バックアップは ZIP 1つ：data.json と media/ 以下の動画・写真。
@@ -10,17 +10,21 @@ import { db, type Meta } from './db'
 const FORMAT = 'michishirube-backup'
 const VERSION = 1
 
-interface BackupMedia extends Omit<Media, 'blob'> {
+interface BackupMedia extends Omit<Media, 'blob' | 'updatedAt'> {
+  updatedAt?: number
   path: string | null
 }
+
+/** 古いバックアップには updatedAt や references が無い */
+type Legacy<T> = Omit<T, 'updatedAt'> & { updatedAt?: number }
 
 interface BackupData {
   format: typeof FORMAT
   version: typeof VERSION
   exportedAt: number
-  domains: Domain[]
-  skills: Skill[]
-  records: PracticeRecord[]
+  domains: Legacy<Domain>[]
+  skills: (Legacy<Skill> & { references?: Skill['references'] })[]
+  records: Legacy<PracticeRecord>[]
   media: BackupMedia[]
   meta: Meta[]
 }
@@ -87,7 +91,7 @@ export async function estimateBackupSize(includeMedia: boolean): Promise<number>
   if (!includeMedia) return 0
   let total = 0
   await db.media.each((m) => {
-    total += m.size
+    total += m.blob?.size ?? 0
   })
   return total
 }
@@ -148,11 +152,12 @@ export async function exportBackup(opts: {
     db.skills.toArray(),
     db.records.toArray(),
     db.media.toArray(),
-    db.meta.toArray(),
+    // 同期の接続先やトークンは、この端末だけの設定なのでバックアップに入れない
+    db.meta.filter((m) => !isLocalMeta(m.key)).toArray(),
   ])
-  const rows: BackupMedia[] = media.map(({ blob: _blob, ...rest }) => ({
+  const rows: BackupMedia[] = media.map(({ blob, ...rest }) => ({
     ...rest,
-    path: opts.includeMedia ? `media/${rest.id}${extension(rest)}` : null,
+    path: opts.includeMedia && blob ? `media/${rest.id}${extension(rest)}` : null,
   }))
   const data: BackupData = {
     format: FORMAT,
@@ -171,12 +176,13 @@ export async function exportBackup(opts: {
   writer.addText('data.json', JSON.stringify(data, null, 2))
   for (let i = 0; i < media.length; i++) {
     const path = rows[i].path
-    if (!path) continue
+    const blob = media[i].blob
+    if (!path || !blob) continue
     if (writer.mediaCount > 0 && writer.size + media[i].size > partLimit) {
       blobs.push(writer.finish())
       writer = new ZipWriter()
     }
-    await writer.addMedia(path, media[i].blob)
+    await writer.addMedia(path, blob)
   }
   blobs.push(writer.finish())
 
@@ -256,33 +262,57 @@ export async function importBackup(zips: Blob[]): Promise<ImportSummary> {
   if (!dataFile) throw new BackupError('バックアップに data.json がありません（分割されている場合は、1つ目の ZIP も選んでください）')
   const data = parseBackupData(strFromU8(new Uint8Array(await dataFile.arrayBuffer())))
 
-  const media: Media[] = []
-  const mediaIds = new Set<string>()
-  for (const { path, ...m } of data.media) {
+  // 古い形式（同期・参考資料の前）のバックアップも読めるよう、足りない項目を補う
+  const stamp = <T extends { createdAt: number; updatedAt?: number }>(row: T) => ({
+    ...row,
+    updatedAt: row.updatedAt ?? row.createdAt,
+  })
+  const domains = data.domains.map(stamp)
+  const skills = data.skills.map((s) => ({ ...stamp(s), references: s.references ?? [] }))
+  const records = data.records.map(stamp)
+  let missingMedia = 0
+  const media: Media[] = data.media.map(({ path, ...m }) => {
     const content = path ? files.get(path) : undefined
-    if (!content) continue
-    media.push({ ...m, blob: new Blob([content], { type: m.type }) })
-    mediaIds.add(m.id)
-  }
-  // 写真・動画を含めずに書き出したバックアップでは、記録からメディアへの参照を外しておく
-  const records = data.records.map((r) => ({ ...r, mediaIds: r.mediaIds.filter((id) => mediaIds.has(id)) }))
+    if (path && !content) missingMedia += 1
+    const row: Media = { ...stamp(m) }
+    if (content) {
+      row.blob = new Blob([content], { type: m.type })
+      if (m.type.startsWith('video/') && !m.upload) row.upload = 'pending'
+    }
+    return row
+  })
 
-  await db.transaction('rw', [db.domains, db.skills, db.records, db.media, db.meta], async () => {
-    await Promise.all([db.domains.clear(), db.skills.clear(), db.records.clear(), db.media.clear(), db.meta.clear()])
-    await db.domains.bulkAdd(data.domains)
-    await db.skills.bulkAdd(data.skills)
+  await db.transaction('rw', [db.domains, db.skills, db.records, db.media, db.meta, db.outbox], async () => {
+    await Promise.all([db.domains.clear(), db.skills.clear(), db.records.clear(), db.media.clear()])
+    // この端末の同期設定は残す
+    await db.meta.filter((m) => !isLocalMeta(m.key)).delete()
+    await db.domains.bulkAdd(domains)
+    await db.skills.bulkAdd(skills)
     await db.records.bulkAdd(records)
     await db.media.bulkAdd(media)
-    await db.meta.bulkPut([...data.meta, { key: 'seeded', value: true }])
+    await db.meta.bulkPut([...data.meta.filter((m) => !isLocalMeta(m.key)), { key: 'seeded', value: true }])
+    // 同期していれば、復元した内容をサーバーへも送る（サーバーのほうが新しいものは上書きされない）
+    await markDirty('domain', domains.map((d) => d.id))
+    await markDirty('skill', skills.map((s) => s.id))
+    await markDirty('record', records.map((r) => r.id))
+    await markDirty('media', media.map((m) => m.id))
+    await markDirty('settings', ['settings'])
+    // 同期していれば、次の同期でサーバーの内容を最初から受け取り直す（サーバーのほうが新しいものに揃える）
+    if (await db.meta.get('sync:cursor')) await db.meta.put({ key: 'sync:cursor', value: 0 })
   })
 
   return {
-    domains: data.domains.length,
-    skills: data.skills.length,
+    domains: domains.length,
+    skills: skills.length,
     records: records.length,
-    media: media.length,
-    missingMedia: data.media.length - media.length,
+    media: media.filter((m) => m.blob).length,
+    missingMedia,
   }
+}
+
+/** この端末だけの meta（同期の接続先など） */
+export function isLocalMeta(key: string): boolean {
+  return key.startsWith('sync:') || key.startsWith('youtube:')
 }
 
 function backupFileName(includeMedia: boolean, now = new Date()): string {

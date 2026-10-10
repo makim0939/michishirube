@@ -1,9 +1,12 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useRef, useState } from 'react'
 import { db } from '../data/db'
+import { compressPhoto } from '../data/mediaPrep'
 import { addRecord, lastNextAction } from '../data/repo'
 import type { Outcome } from '../domain/types'
-import { Empty, formatAgo, MediaView, requestPersist } from './common'
+import { Empty, formatAgo, formatBytes, MediaView, requestPersist } from './common'
+import { canRecordInApp, Recorder } from './Recorder'
+import { ReferenceList } from './References'
 import { useAction, useToast } from './feedback'
 import { backHandler, goBack, href } from './router'
 import { readStorage, removeStorage, writeStorage } from './storage'
@@ -42,6 +45,7 @@ export function RecordScreen({ skillId }: { skillId: string }) {
   const [draft, setDraft, clearDraft] = useDraft(`michishirube:draft:${skillId}`)
   const [saving, setSaving] = useState(false)
   const [confirmLeave, setConfirmLeave] = useState(false)
+  const [recording, setRecording] = useState(false)
   const videoInput = useRef<HTMLInputElement>(null)
   const photoInput = useRef<HTMLInputElement>(null)
   const libraryInput = useRef<HTMLInputElement>(null)
@@ -50,10 +54,15 @@ export function RecordScreen({ skillId }: { skillId: string }) {
   const { skill, next } = data
   if (!skill) return <Empty>スキルが見つかりません。</Empty>
 
-  const addFiles = (list: FileList | null) => {
+  const addFiles = async (list: FileList | File[] | null) => {
     // FileList は input の value を空にすると中身も消えるので、先に配列へ写す
     const picked = list ? Array.from(list) : []
-    if (picked.length > 0) setFiles((prev) => [...prev, ...picked])
+    if (picked.length === 0) return
+    // 写真は縮小してから持つ（端末の容量と同期の量を抑える）
+    const prepared = await Promise.all(
+      picked.map((f) => (f.type.startsWith('image/') ? compressPhoto(f) : f)),
+    )
+    setFiles((prev) => [...prev, ...prepared])
   }
 
   const save = () =>
@@ -117,6 +126,13 @@ export function RecordScreen({ skillId }: { skillId: string }) {
         <span className="next-text">{next ? next.text : 'まだありません'}</span>
       </div>
 
+      {skill.references.length > 0 && (
+        <details className="criteria-details" open>
+          <summary>参考資料</summary>
+          <ReferenceList skill={skill} compact />
+        </details>
+      )}
+
       {skill.criteria && (
         <details className="criteria-details">
           <summary>達成条件</summary>
@@ -126,7 +142,11 @@ export function RecordScreen({ skillId }: { skillId: string }) {
 
       <section className="section">
         <div className="capture-buttons">
-          <button type="button" className="btn capture" onClick={() => videoInput.current?.click()}>
+          <button
+            type="button"
+            className="btn capture"
+            onClick={() => (canRecordInApp() ? setRecording(true) : videoInput.current?.click())}
+          >
             <span aria-hidden="true">🎥</span>動画を撮る
           </button>
           <button type="button" className="btn capture" onClick={() => photoInput.current?.click()}>
@@ -143,7 +163,7 @@ export function RecordScreen({ skillId }: { skillId: string }) {
           accept="video/*"
           capture="environment"
           onChange={(e) => {
-            addFiles(e.target.files)
+            void addFiles(e.target.files)
             e.target.value = ''
           }}
         />
@@ -154,7 +174,7 @@ export function RecordScreen({ skillId }: { skillId: string }) {
           accept="image/*"
           capture="environment"
           onChange={(e) => {
-            addFiles(e.target.files)
+            void addFiles(e.target.files)
             e.target.value = ''
           }}
         />
@@ -165,7 +185,7 @@ export function RecordScreen({ skillId }: { skillId: string }) {
           accept="image/*,video/*"
           multiple
           onChange={(e) => {
-            addFiles(e.target.files)
+            void addFiles(e.target.files)
             e.target.value = ''
           }}
         />
@@ -174,6 +194,7 @@ export function RecordScreen({ skillId }: { skillId: string }) {
             {files.map((f, i) => (
               <li key={`${f.name}-${i}`}>
                 <MediaView blob={f} type={f.type} />
+                <span className="preview-size">{formatBytes(f.size)}</span>
                 <button
                   type="button"
                   className="remove"
@@ -223,6 +244,20 @@ export function RecordScreen({ skillId }: { skillId: string }) {
           />
         </label>
       </section>
+
+      {recording && (
+        <Recorder
+          onDone={(file) => {
+            setRecording(false)
+            void addFiles([file])
+          }}
+          onClose={() => setRecording(false)}
+          onFallback={() => {
+            setRecording(false)
+            videoInput.current?.click()
+          }}
+        />
+      )}
 
       <div className="sticky-actions">
         <button className="btn primary block" disabled={saving} onClick={save}>
