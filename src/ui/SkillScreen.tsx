@@ -11,10 +11,12 @@ import {
   revertAchievement,
 } from '../data/repo'
 import { canActivate, computeStates, indexById } from '../domain/logic'
+import { recentForm } from '../domain/form'
 import { isWebUrl } from '../domain/template'
 import type { Media } from '../domain/types'
 import { ConfirmButton, Empty, formatDate, isVideo, splitName, StateBadge, STATE_LABEL } from './common'
 import { PatternImage } from './PatternImage'
+import { FormDots, formSummary } from './FormDots'
 import { MediaItem } from './MediaItem'
 import { CupGrid } from './CupGrid'
 import { pickCupMedia } from './cupImage'
@@ -133,6 +135,7 @@ export function SkillScreen({ id }: { id: string }) {
   // 前提はおすすめの順。まだの型でも自由に始められ、「できた」にもできる
   const notStarted = state === 'available' || state === 'locked'
   const pendingPrereqs = prereqs.filter((p) => p.status !== 'done')
+  const form = recentForm(records)
   const mediaById = new Map(media.map((m) => [m.id, m]))
 
   return (
@@ -164,9 +167,11 @@ export function SkillScreen({ id }: { id: string }) {
         </div>
       </div>
 
-      <section className="criteria-box">
-        <h2>合格の目安</h2>
-        <p>{skill.criteria || '（未設定）編集から、判定できる目安を書いてください'}</p>
+      {/* 決められた合格基準ではなく、最近の調子を見て「できた」を自分で決める */}
+      <section className="form-box">
+        <h2>最近の調子</h2>
+        <FormDots form={form} />
+        <p className="muted small">{formSummary(form)}</p>
       </section>
 
       <div className="actions">
@@ -225,9 +230,9 @@ export function SkillScreen({ id }: { id: string }) {
       {askingAchieve && (
         <div className="confirm achieve-confirm">
           <p>
-            <strong>合格の目安を満たしましたか？</strong>
+            <strong>この型を「できた」にしますか？</strong>
           </p>
-          <p>{skill.criteria || '（合格の目安が未設定です）'}</p>
+          <p className="muted small">最近の調子：{formSummary(form)}。自分で納得できたら「できた」にしてください。</p>
           <div className="row">
             <button
               className="btn achieve"
@@ -296,6 +301,13 @@ export function SkillScreen({ id }: { id: string }) {
           <h2>説明・やり方</h2>
           <p className="prewrap">{skill.description}</p>
         </section>
+      )}
+
+      {skill.criteria && (
+        <details className="section criteria-details">
+          <summary>参考の目安</summary>
+          <p className="prewrap">{skill.criteria}</p>
+        </details>
       )}
 
       {skill.sources.length > 0 && (

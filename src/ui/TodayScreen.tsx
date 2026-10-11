@@ -5,11 +5,13 @@ import { activateSkill, cupNumbers, getSettings, recordsOf, setFocusOrder } from
 import { getSyncConfig, getSyncStatus } from '../data/sync'
 import { computeStates, indexById, moveItem, orderBy, practiceOrder, prereqsDone, sortByDepth } from '../domain/logic'
 import type { Media, PracticeRecord, Skill } from '../domain/types'
+import { recentForm, type RecentForm } from '../domain/form'
 import { OUTCOME_MARK } from '../domain/format'
 import { formatAgo, splitName, useObjectUrl } from './common'
 import { pickCupMedia, useCupImage } from './cupImage'
 import { hasCupImage } from '../data/poster'
 import { useAction, useToast } from './feedback'
+import { FormDots } from './FormDots'
 import { useLongPressReorder } from './useLongPressReorder'
 import { AlertIcon, CameraIcon } from './icons'
 import { href } from './router'
@@ -248,6 +250,8 @@ function RecentCup({
 type Practice = {
   skill: Skill
   count: number
+  /** 最近の調子（直近10杯の結果） */
+  form: RecentForm
   next?: string
   /** その型の新しい杯（通し番号つき） */
   recent: { record: PracticeRecord; media?: Media; number: number }[]
@@ -268,7 +272,7 @@ function PracticeBlock({
   /** 読み上げで使う人のための並べ替え（-1 で上へ、1 で下へ）。動かせないときは undefined */
   onMove?: { up?: () => void; down?: () => void }
 }) {
-  const { skill, count, next, recent } = practice
+  const { skill, count, next, recent, form } = practice
   const { main, sub } = splitName(skill.name)
   return (
     <section
@@ -281,6 +285,8 @@ function PracticeBlock({
         <span className="practice-title">
           <span className="practice-name">{main}</span>
           {sub && <span className="muted small">{sub}</span>}
+          {/* 最近の調子（直近10杯）。文字を増やさず、点だけで */}
+          {!compact && <FormDots form={form} />}
         </span>
         <span className="practice-count">
           <strong>{count}</strong>杯
@@ -365,6 +371,7 @@ export function TodayScreen() {
     const unordered = perSkill.map(({ skill, records }, i) => ({
       skill,
       count: records.length,
+      form: recentForm(records),
       next: records.find((r) => r.nextAction)?.nextAction,
       recent: recentOf[i].map((record) => ({ record, media: cupOf(record), number: numbers.get(record.id) ?? 0 })),
       last: records[0]?.createdAt ?? skill.activatedAt ?? 0,
