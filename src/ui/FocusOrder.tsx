@@ -17,6 +17,8 @@ export function FocusOrder({ skills, onDone }: { skills: Skill[]; onDone: () => 
   const [dragging, setDragging] = useState<string | null>(null)
   const latest = useRef(ids)
   latest.current = ids
+  /** ドラッグを始めたときの並び（動かさずに離したら保存しない） */
+  const dragStart = useRef('')
   const rows = useRef(new Map<string, HTMLLIElement>())
   const byId = new Map(skills.map((s) => [s.id, s]))
   // 並べ替えの途中で練習をやめた型は外し、始めた型は後ろに足す
@@ -43,7 +45,7 @@ export function FocusOrder({ skills, onDone }: { skills: Skill[]; onDone: () => 
   const endDrag = () => {
     if (!dragging) return
     setDragging(null)
-    save(latest.current)
+    if (latest.current.join() !== dragStart.current) save(latest.current)
   }
 
   return (
@@ -72,6 +74,7 @@ export function FocusOrder({ skills, onDone }: { skills: Skill[]; onDone: () => 
                   } catch {
                     // 取れなくても、行の上で動かす分には並べ替えられる
                   }
+                  dragStart.current = latest.current.join()
                   setDragging(id)
                 }}
                 onPointerMove={onMove}

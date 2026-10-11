@@ -300,6 +300,8 @@ export function TodayScreen() {
   })
 
   if (!data) return null
+  // 練習中が1つになったら並べ替えを終える（次に2つになったとき、勝手に並べ替えの画面にならないように）
+  if (reordering && data.practices.length <= 1) setReordering(false)
   const room = data.settings.maxActive - data.practices.length
 
   return (
