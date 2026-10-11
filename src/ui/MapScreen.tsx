@@ -2,7 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { db } from '../data/db'
 import { activateSkill, createDomain, deleteDomain, getSettings, importTemplate, renameDomain } from '../data/repo'
-import { canActivate, computeStates, indexById, prereqsDone, sortByDepth } from '../domain/logic'
+import { canActivate, computeStates, indexById, practiceOrder, prereqsDone, sortByDepth } from '../domain/logic'
 import { entitiesToTemplate } from '../domain/template'
 import type { Skill } from '../domain/types'
 import { ConfirmButton, saveFile, splitName } from './common'
@@ -79,11 +79,13 @@ export function MapScreen({ domainId }: { domainId?: string }) {
     const wanted = domainId ?? readStorage('local', LAST_DOMAIN_KEY)
     const current = domains.find((d) => d.id === wanted) ?? domains[0]
     const skills = current ? allSkills.filter((s) => s.domainId === current.id) : []
-    // 練習中の型だけ、杯数と◎の数を出す
-    const stats = new Map<string, { count: number; good: number }>()
+    // 練習中の型だけ、杯数と◎の数、最後に練習した日時（並びに使う）を出す
+    const stats = new Map<string, { count: number; good: number; last: number }>()
     for (const s of skills.filter((s) => s.status === 'active')) {
       const records = await db.records.where('skillId').equals(s.id).toArray()
-      stats.set(s.id, { count: records.length, good: records.filter((r) => r.outcome === 'good').length })
+      // 今日の画面と同じく、最後の記録の日時（記録が無ければ練習を始めた日時）
+      const last = records.reduce((max, r) => Math.max(max, r.createdAt), records.length > 0 ? 0 : (s.activatedAt ?? 0))
+      stats.set(s.id, { count: records.length, good: records.filter((r) => r.outcome === 'good').length, last })
     }
     return { domains, current, skills, settings, allSkills, stats }
   }, [domainId])
@@ -98,7 +100,13 @@ export function MapScreen({ domainId }: { domainId?: string }) {
   const states = computeStates(skills)
   const byId = indexById(skills)
   const ordered = sortByDepth(skills)
-  const active = ordered.filter((s) => states.get(s.id) === 'active')
+  // 練習中は、今日の画面と同じ並び（並べ替えた順・最近練習した順）
+  const active = practiceOrder(
+    ordered.filter((s) => states.get(s.id) === 'active'),
+    settings.focusOrder,
+    (s) => s.id,
+    (s) => stats.get(s.id)?.last ?? 0,
+  )
   const available = ordered.filter((s) => states.get(s.id) === 'available')
   const locked = ordered.filter((s) => states.get(s.id) === 'locked')
   const done = ordered.filter((s) => states.get(s.id) === 'done')

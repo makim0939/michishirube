@@ -1,4 +1,4 @@
-import Dexie, { type EntityTable, type Transaction } from 'dexie'
+import Dexie, { type Collection, type EntityTable, type Transaction } from 'dexie'
 import type { EntityKind } from '../../shared/protocol'
 import type { Domain, Media, PracticeRecord, Skill } from '../domain/types'
 
@@ -82,4 +82,13 @@ export async function markDirty(kind: EntityKind, ids: string[]) {
   if (ids.length === 0) return
   const at = Date.now()
   await db.outbox.bulkPut(ids.map((id) => ({ kind, id, at })))
+}
+
+/**
+ * 索引で絞り込んだ動画・写真を、中身ごと読む。
+ * iPhone の Safari は、索引から読んだ Blob を表示・送信できないことがあるので、索引からは id だけを取り、中身は id で読み直す
+ */
+export async function mediaByIndex(collection: Collection<Media, string, unknown>): Promise<Media[]> {
+  const ids = (await collection.primaryKeys()) as string[]
+  return (await db.media.bulkGet(ids)).filter((m): m is Media => !!m)
 }

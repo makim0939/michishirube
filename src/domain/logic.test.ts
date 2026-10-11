@@ -8,6 +8,7 @@ import {
   moveItem,
   newlyUnlocked,
   orderBy,
+  practiceOrder,
   sortByDepth,
   wouldCreateCycle,
 } from './logic'
@@ -118,5 +119,18 @@ describe('moveItem', () => {
     expect(moveItem(['a', 'b', 'c'], 2, 0)).toEqual(['c', 'a', 'b'])
     expect(moveItem(['a', 'b', 'c'], 0, 2)).toEqual(['b', 'c', 'a'])
     expect(moveItem(['a', 'b', 'c'], 0, 9)).toEqual(['b', 'c', 'a'])
+  })
+})
+
+describe('practiceOrder', () => {
+  it('並べ替えた順を優先し、決めていないものは最近練習した順で後ろに付ける', () => {
+    const items = [
+      { id: 'a', last: 1 },
+      { id: 'b', last: 3 },
+      { id: 'c', last: 2 },
+    ]
+    const ids = (list: { id: string }[]) => list.map((x) => x.id)
+    expect(ids(practiceOrder(items, undefined, (x) => x.id, (x) => x.last))).toEqual(['b', 'c', 'a'])
+    expect(ids(practiceOrder(items, ['a'], (x) => x.id, (x) => x.last))).toEqual(['a', 'b', 'c'])
   })
 })

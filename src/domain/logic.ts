@@ -134,6 +134,20 @@ export function orderBy<T>(items: T[], order: string[] | undefined, idOf: (item:
     .map((x) => x.item)
 }
 
+/**
+ * 練習中の型の並び。利用者が並べ替えた順（focusOrder）を優先し、決めていない型は最近練習した順。
+ * 今日の画面と型の画面で同じ並びにする
+ */
+export function practiceOrder<T>(
+  items: T[],
+  focusOrder: string[] | undefined,
+  idOf: (item: T) => string,
+  lastOf: (item: T) => number,
+): T[] {
+  const byLast = items.slice().sort((a, b) => lastOf(b) - lastOf(a))
+  return orderBy(byLast, focusOrder, idOf)
+}
+
 /** 配列の from 番目を to 番目へ動かした新しい配列 */
 export function moveItem<T>(items: T[], from: number, to: number): T[] {
   const next = items.slice()

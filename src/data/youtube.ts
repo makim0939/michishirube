@@ -1,7 +1,7 @@
 import { liveQuery } from 'dexie'
 import { formatDateTime, OUTCOME_LABEL } from '../domain/format'
 import type { Media } from '../domain/types'
-import { db, markDirty } from './db'
+import { db, markDirty, mediaByIndex } from './db'
 import { api, getSyncConfig, SyncError, type SyncConfig } from './sync'
 
 /**
@@ -182,13 +182,10 @@ async function doUploads() {
   const tried = new Set<string>()
   // 上げている間に撮った動画も、続けて上げる。失敗したものは、次に動いたときに上げ直す
   for (;;) {
-    const targets = (
-      await db.media
-        .where('upload')
-        .anyOf('pending', 'uploading', 'failed')
-        .filter((m) => !!m.blob && (m.upload !== 'failed' || (m.uploadAttempts ?? 0) < MAX_UPLOAD_ATTEMPTS))
-        .sortBy('createdAt')
-    ).filter((m) => !tried.has(m.id))
+    const targets = (await mediaByIndex(db.media.where('upload').anyOf('pending', 'uploading', 'failed')))
+      .filter((m) => !!m.blob && (m.upload !== 'failed' || (m.uploadAttempts ?? 0) < MAX_UPLOAD_ATTEMPTS))
+      .filter((m) => !tried.has(m.id))
+      .sort((a, b) => a.createdAt - b.createdAt)
     if (targets.length === 0) return
     for (const m of targets) {
       tried.add(m.id)

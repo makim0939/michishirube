@@ -1,6 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useRef, useState } from 'react'
-import { db } from '../data/db'
+import { db, mediaByIndex } from '../data/db'
 import {
   achieveSkill,
   activateSkill,
@@ -111,7 +111,7 @@ export function SkillScreen({ id }: { id: string }) {
       db.skills.where('domainId').equals(skill.domainId).toArray(),
       db.domains.get(skill.domainId),
       recordsOf(id),
-      db.media.where('skillId').equals(id).sortBy('createdAt'),
+      mediaByIndex(db.media.where('skillId').equals(id)).then((list) => list.sort((a, b) => a.createdAt - b.createdAt)),
       getSettings(),
     ])
     // 上限は全分野の合計なので、挑戦できるかは全スキルで判定する
