@@ -136,8 +136,8 @@ export async function makePoster(blob: Blob): Promise<Poster | undefined> {
     if (!canvas.width || !canvas.height) return undefined
     canvas.getContext('2d')!.drawImage(video, 0, 0, canvas.width, canvas.height)
     const jpeg = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.75))
-    // 短すぎる動画は、真ん中のコマでも、できあがりとして扱う
-    return jpeg ? { blob: jpeg, end: end || duration <= 0.6 } : undefined
+    // 短すぎる動画は、真ん中のコマでも、できあがりとして扱う（長さが分からないときは、できあがりとは言えない）
+    return jpeg ? { blob: jpeg, end: end || (duration > 0 && duration <= 0.6) } : undefined
   } catch {
     return undefined
   } finally {
