@@ -7,7 +7,8 @@ import { computeStates, indexById, moveItem, orderBy, practiceOrder, prereqsDone
 import type { Media, PracticeRecord, Skill } from '../domain/types'
 import { OUTCOME_MARK } from '../domain/format'
 import { formatAgo, splitName, useObjectUrl } from './common'
-import { hasPhoto, pickCupMedia, useCupImage } from './cupImage'
+import { pickCupMedia, useCupImage } from './cupImage'
+import { hasCupImage } from '../data/poster'
 import { useAction, useToast } from './feedback'
 import { useLongPressReorder } from './useLongPressReorder'
 import { AlertIcon, CameraIcon } from './icons'
@@ -292,7 +293,8 @@ export function TodayScreen() {
     const media = await db.media.bulkGet([...new Set(mediaIds)])
     const mediaById = new Map(media.filter((m) => !!m).map((m) => [m.id, m]))
     const cupOf = (r: PracticeRecord) => pickCupMedia((r.mediaIds ?? []).map((id) => mediaById.get(id)))
-    const heroRecord = latest.find((r) => hasPhoto(cupOf(r)))
+    // 写真、または動画のできあがりのコマがある、いちばん新しい杯
+    const heroRecord = latest.find((r) => hasCupImage(cupOf(r)))
     // 練習中ではない型（できた・並行して記録した型）の新しい杯も、ホームで見返せるようにする
     const activeIds = new Set(active.map((s) => s.id))
     const others = latest

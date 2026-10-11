@@ -893,6 +893,26 @@ select:focus {
   border-radius: 14px;
 }
 
+.toast.with-action {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 6px 6px 6px 18px;
+}
+
+.toast-action {
+  appearance: none;
+  border: none;
+  border-radius: 999px;
+  padding: 8px 16px;
+  min-height: 36px;
+  background: var(--gold);
+  color: var(--text);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 @keyframes toast-in {
   from {
     opacity: 0;
@@ -2071,4 +2091,46 @@ a.notice {
   font-size: 1.05rem;
   color: var(--text);
   margin-right: 8px;
+}
+
+/* ---- 記録：よくある原因 ---- */
+
+.cause-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cause-chips button {
+  appearance: none;
+  min-height: 36px;
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+
+.cause-chips button[aria-pressed='true'] {
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--bg);
+}
+
+.cause-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.cause-tags li {
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--active-soft);
+  color: var(--active);
+  font-size: 0.82rem;
 }

@@ -84,32 +84,67 @@ async function readLocal(kind: EntityKind, id: string): Promise<{ updatedAt: num
 
 function toWire(kind: EntityKind, row: Record<string, unknown>): Record<string, unknown> {
   if (kind !== 'media') return row
-  // 動画・写真の中身とサムネイルは送らない（動画は YouTube、写真は別の API）
-  const { blob: _blob, poster: _poster, ...rest } = row
+  // 動画・写真の中身とサムネイルは送らない（動画は YouTube、写真とサムネイルは別の API）
+  const { blob: _blob, poster: _poster, posterEnd: _posterEnd, ...rest } = row
   return rest
 }
 
+/** 中身（動画・写真）とそれに付いた結果。中身を差し替えた端末の値を、まとめて残す */
+const CONTENT_KEYS = [
+  'type',
+  'name',
+  'size',
+  'upload',
+  'uploadError',
+  'uploadAttempts',
+  'youtubeId',
+  'cloudPhoto',
+  'cloudPoster',
+  'cloudPosterEnd',
+  'contentAt',
+] as const
+
 /**
- * 動画・写真を上げた結果は、上げた端末だけが書く。別の端末の古い行（まだ結果を知らない）で上書きされたら、
- * 端末の結果を残し、直した行をもう一度送る（同じ動画を二重に上げないため）
+ * サーバーから来た動画・写真の行を、端末の行と合わせる。
+ * - 端末のほうが新しい中身（切り取ったなど）を持っていれば、中身まわりは端末の値を残して送り直す
+ * - サーバーのほうが新しい中身なら、端末の古い中身・サムネイルは捨てる（取り直す）
+ * - 同じ中身なら、上げた結果（YouTube・写真・サムネイル）は上げた端末だけが書くので、
+ *   別の端末の古い行（まだ結果を知らない）で消されたら、端末の結果を残して送り直す（同じ動画を二重に上げないため）
  */
 function mergeMedia(remote: Media, local: Media | undefined): { row: Media; repaired: boolean } {
   const row: Media = { ...remote }
-  if (local?.blob) row.blob = local.blob
-  if (local?.poster) row.poster = local.poster
+  if (!local) return { row, repaired: false }
+  const remoteAt = remote.contentAt ?? 0
+  const localAt = local.contentAt ?? 0
+  if (remoteAt > localAt) return { row, repaired: false }
+  if (local.blob) row.blob = local.blob
+  if (local.poster) {
+    row.poster = local.poster
+    row.posterEnd = local.posterEnd
+  }
+  if (localAt > remoteAt) {
+    const fields = row as unknown as Record<string, unknown>
+    for (const key of CONTENT_KEYS) fields[key] = local[key]
+    row.updatedAt = Date.now()
+    return { row, repaired: true }
+  }
   let repaired = false
-  if (local?.youtubeId && !remote.youtubeId) {
+  if (local.youtubeId && !remote.youtubeId) {
     row.youtubeId = local.youtubeId
     row.upload = 'done'
     delete row.uploadError
     repaired = true
   }
-  if (local?.cloudPhoto && !remote.cloudPhoto) {
+  if (local.cloudPhoto && !remote.cloudPhoto) {
     row.cloudPhoto = true
     repaired = true
   }
-  if (local?.cloudPoster && !remote.cloudPoster) {
+  if (local.cloudPoster && !remote.cloudPoster) {
     row.cloudPoster = true
+    repaired = true
+  }
+  if (local.cloudPosterEnd && !remote.cloudPosterEnd) {
+    row.cloudPosterEnd = true
     repaired = true
   }
   if (repaired) row.updatedAt = Date.now()
@@ -237,8 +272,15 @@ async function uploadPhotos(config: SyncConfig) {
  * 端末から動画を消したあとや、入れ直した端末・別の端末でも、サムネイルを出せるようにする
  */
 async function uploadPosters(config: SyncConfig) {
+  // まだ置いていないもの、置いたのが前の作り方（最初のコマ）で、できあがりのコマを作り直したもの
   const targets = await db.media
-    .filter((m) => m.type.startsWith('video/') && !!m.poster && !m.cloudPoster && m.poster.size <= PHOTO_MAX_BYTES)
+    .filter(
+      (m) =>
+        m.type.startsWith('video/') &&
+        !!m.poster &&
+        m.poster.size <= PHOTO_MAX_BYTES &&
+        (!m.cloudPoster || (!!m.posterEnd && !m.cloudPosterEnd)),
+    )
     .toArray()
   for (const m of targets) {
     try {
@@ -252,7 +294,7 @@ async function uploadPosters(config: SyncConfig) {
       throw e
     }
     await db.transaction('rw', db.media, db.outbox, async () => {
-      await db.media.update(m.id, { cloudPoster: true, updatedAt: Date.now() })
+      await db.media.update(m.id, { cloudPoster: true, cloudPosterEnd: !!m.posterEnd, updatedAt: Date.now() })
       await db.outbox.put({ kind: 'media', id: m.id, at: Date.now() })
     })
   }
@@ -264,7 +306,7 @@ export async function fetchPoster(media: Media): Promise<Blob | undefined> {
   if (!config || !media.cloudPoster) return undefined
   const poster = await (await api(config, `/api/photos/${encodeURIComponent(posterPhotoId(media.id))}`)).blob()
   // サムネイルは小さいので、次からは端末から出す（同期の対象にはしない）
-  await db.media.update(media.id, { poster })
+  await db.media.update(media.id, { poster, posterEnd: !!media.cloudPosterEnd })
   return poster
 }
 

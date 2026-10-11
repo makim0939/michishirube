@@ -111,6 +111,14 @@ describe('動画のサムネイル', () => {
     expect(puts.map(([url]) => new URL(String(url)).pathname)).toContain(`/api/photos/${m.id}.poster`)
     expect((await db.media.get(m.id))?.cloudPoster).toBe(true)
     expect((server.rows.get(`media:${m.id}`)?.data as { cloudPoster?: boolean }).cloudPoster).toBe(true)
+    // 前の作り方（最初のコマ）なので、できあがりのコマとは扱わない。サムネイルは同期の中身に含めない
+    expect((await db.media.get(m.id))?.cloudPosterEnd).toBe(false)
+    expect((server.rows.get(`media:${m.id}`)?.data as { poster?: unknown; posterEnd?: unknown }).posterEnd).toBeUndefined()
+
+    // できあがりのコマで作り直したら、置き直して cloudPosterEnd を立てる
+    await db.media.update(m.id, { poster: new Blob(['end'], { type: 'image/jpeg' }), posterEnd: true })
+    await runSync()
+    expect((await db.media.get(m.id))?.cloudPosterEnd).toBe(true)
   })
 })
 
@@ -244,5 +252,66 @@ describe('レビュー2回目の修正', () => {
     const supported = (t: string) => t.startsWith('video/mp4')
     expect(pickRecorderMimeType(supported, false)).toBe('video/mp4;codecs=avc1.42E01E')
     expect(pickRecorderMimeType(supported, true)).toContain('mp4a')
+  })
+})
+
+describe('中身を差し替えたときの同期', () => {
+  it('ほかの端末で中身を差し替えたら、古い結果で上書きせず、端末の古い中身も捨てる', async () => {
+    const domainId = await createDomain('ピアノ')
+    const recordId = await addRecord({
+      skillId: await createSkill(domainId, input('A')),
+      reason: 'x',
+      nextAction: '',
+      files: [new Blob(['old'], { type: 'video/mp4' })],
+    })
+    const [m] = await db.media.where('recordId').equals(recordId).toArray()
+    await db.media.update(m.id, { youtubeId: 'old', upload: 'done', cloudPoster: true, cloudPosterEnd: true })
+    await db.outbox.clear()
+    // ほかの端末で切り取った行（新しい中身、まだ上げていない）
+    const replaced = {
+      ...m,
+      blob: undefined,
+      contentAt: (m.contentAt ?? 0) + 10,
+      size: 2,
+      upload: 'pending',
+      youtubeId: undefined,
+      cloudPoster: false,
+      cloudPosterEnd: false,
+    }
+    await applyRemote([{ kind: 'media', id: m.id, updatedAt: m.updatedAt + 10, deleted: false, data: replaced }])
+    const after = await db.media.get(m.id)
+    expect(after?.youtubeId).toBeUndefined()
+    expect(after?.cloudPoster).toBe(false)
+    expect(after?.blob).toBeUndefined()
+    expect(await db.outbox.get(['media', m.id])).toBeUndefined()
+  })
+
+  it('端末で差し替えた中身は、差し替えを知らない端末の行で戻さない', async () => {
+    const domainId = await createDomain('ピアノ')
+    const recordId = await addRecord({
+      skillId: await createSkill(domainId, input('A')),
+      reason: 'x',
+      nextAction: '',
+      files: [new Blob(['new'], { type: 'video/mp4' })],
+    })
+    const [m] = await db.media.where('recordId').equals(recordId).toArray()
+    await db.outbox.clear()
+    // 差し替えを知らない端末が、残す印だけ変えた古い中身の行
+    const stale = {
+      ...m,
+      blob: undefined,
+      contentAt: (m.contentAt ?? 0) - 10,
+      size: 99,
+      youtubeId: 'old',
+      upload: 'done',
+      keep: true,
+    }
+    await applyRemote([{ kind: 'media', id: m.id, updatedAt: m.updatedAt + 10, deleted: false, data: stale }])
+    const after = await db.media.get(m.id)
+    expect(after?.keep).toBe(true)
+    expect(after?.size).toBe(m.size)
+    expect(after?.youtubeId).toBeUndefined()
+    expect(await after?.blob?.text()).toBe('new')
+    expect(await db.outbox.get(['media', m.id])).toBeDefined()
   })
 })

@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
-import { db } from '../data/db'
-import { inMemory, makePoster } from '../data/mediaPrep'
-import { fetchPhoto, fetchPoster } from '../data/sync'
+import { ensurePoster, needsLocalPoster, needsRemotePoster } from '../data/poster'
+import { fetchPhoto } from '../data/sync'
 import type { Media } from '../domain/types'
 import { isVideo } from './common'
 
@@ -11,14 +10,9 @@ export function pickCupMedia(list: (Media | undefined)[]): Media | undefined {
   return media.find((m) => !isVideo(m)) ?? media.find((m) => isVideo(m))
 }
 
-/** 写真として見せられるものがあるか（この端末にある、またはサーバーから取れる） */
-export function hasPhoto(m: Media | undefined): boolean {
-  return !!m && !isVideo(m) && (!!m.blob || !!m.cloudPhoto)
-}
-
 /**
- * カップの絵の中身。写真はこの端末に無ければサーバーから取り、動画はサムネイルを使う
- * （サムネイルがまだ無ければ作る）
+ * カップの絵の中身。写真はこの端末に無ければサーバーから取り、動画はサムネイル（できあがりのコマ）を使う
+ * （無ければ作るか、サーバーから取る）
  */
 export function useCupImage(media: Media | undefined): Blob | undefined {
   // どのメディアのために取った写真かも覚えておく（別のカップに切り替わった直後に、前の写真を出さないように）
@@ -26,9 +20,6 @@ export function useCupImage(media: Media | undefined): Blob | undefined {
   const id = media?.id
   const video = !!media && isVideo(media)
   const needsFetch = !!media && !video && !media.blob && !!media.cloudPhoto
-  const needsPoster = !!media && video && !!media.blob && !media.poster
-  // 端末に動画が無くても、サーバーにサムネイルがあれば取ってくる（入れ直した端末・別の端末）
-  const needsRemotePoster = !!media && video && !media.blob && !media.poster && !!media.cloudPoster
 
   useEffect(() => {
     if (!needsFetch || !media) return
@@ -47,30 +38,18 @@ export function useCupImage(media: Media | undefined): Blob | undefined {
     // 同期のたびに media は別のオブジェクトになるので、id が変わったときだけ取り直す
   }, [id, needsFetch])
 
-  useEffect(() => {
-    if (!needsPoster || !media?.blob) return
-    const blob = media.blob
-    const mediaId = media.id
-    void (async () => {
-      try {
-        // iPhone では IndexedDB の動画を直接読めないことがあるので、メモリに写してから作る
-        const poster = await makePoster(await inMemory(blob))
-        // サムネイルはこの端末だけのものなので、同期の対象にしない
-        if (poster) await db.media.update(mediaId, { poster })
-      } catch {
-        // 作れなければ、次に開いたときにまた試す
-      }
-    })()
-  }, [id, needsPoster])
-
-  useEffect(() => {
-    if (!needsRemotePoster || !media) return
-    fetchPoster(media).catch(() => {
-      // 電波が無いなどで取れなければ、無いまま
-    })
-  }, [id, needsRemotePoster])
+  usePoster(media)
 
   if (!media) return undefined
   if (video) return media.poster
   return media.blob ?? (fetched?.id === media.id ? fetched.blob : undefined)
+}
+
+/** 動画のサムネイルが無い・前の作り方（最初のコマ）なら、作るかサーバーから取る */
+export function usePoster(media: Media | undefined) {
+  const needs = !!media && (needsLocalPoster(media) || needsRemotePoster(media))
+  useEffect(() => {
+    if (needs && media) ensurePoster(media)
+    // 同期のたびに media は別のオブジェクトになるので、id と要否が変わったときだけ
+  }, [media?.id, needs])
 }

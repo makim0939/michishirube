@@ -55,6 +55,8 @@ export interface PracticeRecord {
   outcome?: Outcome
   /** うまくいった／いかなかった理由 */
   reason: string
+  /** うまくいかなかった原因（ワンタップで選んだもの） */
+  causes?: string[]
   /** 次に試すこと。次回の記録画面の一番上に出る */
   nextAction: string
   mediaIds: string[]
@@ -68,8 +70,10 @@ export interface Media {
   skillId: string
   /** 中身。この端末にだけある（同期しない）。整理したり別の端末だったりすると無い */
   blob?: Blob
-  /** 動画の一覧に出すサムネイル（JPEG）。この端末にだけある */
+  /** 動画のサムネイル（JPEG）。この端末にだけある */
   poster?: Blob
+  /** poster が動画の最後のコマ（できあがりのカップ）か。この端末にだけある（同期しない） */
+  posterEnd?: boolean
   type: string
   name?: string
   size: number
@@ -87,6 +91,10 @@ export interface Media {
   cloudPhoto?: boolean
   /** 動画のサムネイルをサーバーに置いた（端末から動画が消えても、別の端末でもサムネイルを出せる） */
   cloudPoster?: boolean
+  /** サーバーに置いたサムネイルが、動画の最後のコマか */
+  cloudPosterEnd?: boolean
+  /** 中身（動画・写真）を入れた・差し替えた日時。端末ごとに中身が食い違ったとき、新しいほうを残すのに使う */
+  contentAt?: number
 }
 
 export interface Settings {

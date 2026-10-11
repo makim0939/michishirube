@@ -68,7 +68,16 @@ export function CupScreen({ recordId }: { recordId: string }) {
       <section className="cup-notes">
         <div>
           <h2>なぜそうなった？</h2>
-          <p className={record.reason ? '' : 'muted'}>{record.reason || 'まだ書いていません'}</p>
+          {(record.causes?.length ?? 0) > 0 && (
+            <ul className="cause-tags">
+              {record.causes!.map((c) => (
+                <li key={c}>{c}</li>
+              ))}
+            </ul>
+          )}
+          {(record.reason || !record.causes?.length) && (
+            <p className={record.reason ? '' : 'muted'}>{record.reason || 'まだ書いていません'}</p>
+          )}
         </div>
         <div>
           <h2>次の一手</h2>

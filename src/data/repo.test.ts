@@ -261,3 +261,21 @@ describe('杯の通し番号', () => {
     expect(new Set(ids.map((id) => numbers.get(id)))).toEqual(new Set([1, 2]))
   })
 })
+
+describe('原因', () => {
+  it('選んだ原因を記録に残し、原因だけでも記録できる', async () => {
+    const { a } = await chain()
+    const id = await addRecord({ skillId: a, reason: '', nextAction: '', causes: ['熱すぎた'], files: [] })
+    expect((await db.records.get(id))?.causes).toEqual(['熱すぎた'])
+    await updateRecord({
+      recordId: id,
+      reason: '',
+      causes: ['熱すぎた', '切り'],
+      nextAction: '',
+      addFiles: [],
+      removeMediaIds: [],
+      replace: [],
+    })
+    expect((await db.records.get(id))?.causes).toEqual(['熱すぎた', '切り'])
+  })
+})
