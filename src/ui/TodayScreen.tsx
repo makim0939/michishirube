@@ -1,15 +1,15 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useState } from 'react'
 import { db } from '../data/db'
-import { activateSkill, getSettings, recordsOf } from '../data/repo'
+import { activateSkill, getSettings, recordsOf, setFocusOrder } from '../data/repo'
 import { getSyncConfig, getSyncStatus } from '../data/sync'
-import { computeStates, indexById, orderBy, prereqsDone, sortByDepth } from '../domain/logic'
+import { computeStates, indexById, moveItem, orderBy, prereqsDone, sortByDepth } from '../domain/logic'
 import type { Media, PracticeRecord, Skill } from '../domain/types'
 import { OUTCOME_MARK } from '../domain/format'
 import { formatAgo, splitName, useObjectUrl } from './common'
 import { hasPhoto, pickCupMedia, useCupImage } from './cupImage'
 import { useAction, useToast } from './feedback'
-import { FocusOrder } from './FocusOrder'
+import { useLongPressReorder } from './useLongPressReorder'
 import { AlertIcon, CameraIcon } from './icons'
 import { href } from './router'
 import { readStorage, writeStorage } from './storage'
@@ -197,11 +197,28 @@ type Practice = {
 }
 
 /** 練習中の型1つ分。次の一手・記録する・その型の最近の杯を、この型の中にまとめる */
-function PracticeBlock({ practice }: { practice: Practice }) {
+function PracticeBlock({
+  practice,
+  compact,
+  lifted,
+  onMove,
+}: {
+  practice: Practice
+  /** 並べ替えている間は、見出しだけにたたむ */
+  compact: boolean
+  /** この型を持ち上げて動かしている */
+  lifted: boolean
+  /** 読み上げで使う人のための並べ替え（-1 で上へ、1 で下へ）。動かせないときは undefined */
+  onMove?: { up?: () => void; down?: () => void }
+}) {
   const { skill, count, next, recent } = practice
   const { main, sub } = splitName(skill.name)
   return (
-    <section className="practice-block" aria-label={main}>
+    <section
+      className={`practice-block${compact ? ' compact' : ''}${lifted ? ' lifted' : ''}`}
+      aria-label={main}
+      data-reorder-id={skill.id}
+    >
       <a className="practice-head" href={href(`/skill/${skill.id}`)}>
         <PatternImage name={skill.name} />
         <span className="practice-title">
@@ -212,22 +229,36 @@ function PracticeBlock({ practice }: { practice: Practice }) {
           <strong>{count}</strong>杯
         </span>
       </a>
-      <p className="next-line">
-        <span className="next-label">次の一手</span>
-        <span className={next ? 'next-text' : 'next-text none'}>
-          {next ?? 'まだありません。記録のときに書いておくと、ここに出ます'}
-        </span>
-      </p>
-      <a className="btn primary shoot" href={href(`/record/${skill.id}`)}>
-        <CameraIcon size={20} />
-        {count + 1}杯目を記録する
-      </a>
-      {recent.length > 0 && (
-        <ul className="recent-cups" aria-label={`${main}の最近の杯`}>
-          {recent.map((r) => (
-            <RecentCup key={r.record.id} record={r.record} media={r.media} label={`${r.number}杯目`} />
-          ))}
-        </ul>
+      {!compact && (
+        <>
+          <p className="next-line">
+            <span className="next-label">次の一手</span>
+            <span className={next ? 'next-text' : 'next-text none'}>
+              {next ?? 'まだありません。記録のときに書いておくと、ここに出ます'}
+            </span>
+          </p>
+          <a className="btn primary shoot" href={href(`/record/${skill.id}`)}>
+            <CameraIcon size={20} />
+            {count + 1}杯目を記録する
+          </a>
+          {recent.length > 0 && (
+            <ul className="recent-cups" aria-label={`${main}の最近の杯`}>
+              {recent.map((r) => (
+                <RecentCup key={r.record.id} record={r.record} media={r.media} label={`${r.number}杯目`} />
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+      {onMove?.up && (
+        <button type="button" className="sr-only" onClick={onMove.up}>
+          「{main}」を上へ
+        </button>
+      )}
+      {onMove?.down && (
+        <button type="button" className="sr-only" onClick={onMove.down}>
+          「{main}」を下へ
+        </button>
       )}
     </section>
   )
@@ -236,7 +267,6 @@ function PracticeBlock({ practice }: { practice: Practice }) {
 export function TodayScreen() {
   const run = useAction()
   const toast = useToast()
-  const [reordering, setReordering] = useState(false)
 
   const data = useLiveQuery(async () => {
     const [skills, settings] = await Promise.all([db.skills.toArray(), getSettings()])
@@ -299,9 +329,18 @@ export function TodayScreen() {
     }
   })
 
+  // 型のカードを長押しして動かすと並べ替えられる（いま集中している型を上に）
+  const saveOrder = async (next: string[]) =>
+    (await run(async () => {
+      await setFocusOrder(next)
+      return true
+    })) === true
+  const { containerRef, order, dragging } = useLongPressReorder(data?.practices.map((p) => p.skill.id) ?? [], saveOrder)
+
   if (!data) return null
-  // 練習中が1つになったら並べ替えを終える（次に2つになったとき、勝手に並べ替えの画面にならないように）
-  if (reordering && data.practices.length <= 1) setReordering(false)
+  // 動かしている間の並び（読み込み直後でまだ並びが無い型は、元の並びのまま）
+  const shown = orderBy(data.practices, order, (p) => p.skill.id)
+  const shownIds = shown.map((p) => p.skill.id)
   const room = data.settings.maxActive - data.practices.length
 
   return (
@@ -323,21 +362,23 @@ export function TodayScreen() {
               <span className="muted small">
                 今週 {data.thisWeek}杯 ·{' '}
                 <a href={href('/records')}>カップ帳</a>
-                {data.practices.length > 1 && !reordering && (
-                  <>
-                    {' · '}
-                    <button type="button" className="link-button" onClick={() => setReordering(true)}>
-                      並べ替え
-                    </button>
-                  </>
-                )}
+                {data.practices.length > 1 && ' · 長押しで並べ替え'}
               </span>
             </div>
-            {reordering && data.practices.length > 1 ? (
-              <FocusOrder skills={data.practices.map((p) => p.skill)} onDone={() => setReordering(false)} />
-            ) : (
-              data.practices.map((p) => <PracticeBlock key={p.skill.id} practice={p} />)
-            )}
+            <div className="practice-list" ref={containerRef}>
+              {shown.map((p, i) => (
+                <PracticeBlock
+                  key={p.skill.id}
+                  practice={p}
+                  compact={dragging !== null}
+                  lifted={dragging === p.skill.id}
+                  onMove={{
+                    up: i > 0 ? () => void saveOrder(moveItem(shownIds, i, i - 1)) : undefined,
+                    down: i < shown.length - 1 ? () => void saveOrder(moveItem(shownIds, i, i + 1)) : undefined,
+                  }}
+                />
+              ))}
+            </div>
           </>
         ) : data.skillCount > 0 ? (
           <div className="sheet-empty">
