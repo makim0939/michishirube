@@ -78,7 +78,7 @@ export async function videoMeta(media: Media): Promise<VideoMeta> {
   if (record?.causes?.length) lines.push(`原因：${record.causes.join('・')}`)
   if (record?.reason) lines.push(`なぜ：${record.reason}`)
   if (record?.nextAction) lines.push(`次の一手：${record.nextAction}`)
-  lines.push('', 'ラテリエで記録')
+  lines.push('', 'ラテ帳で記録')
   // YouTube のタイトルは100文字まで
   return { title: title.slice(0, 100), description: lines.join('\n').slice(0, 4900) }
 }
