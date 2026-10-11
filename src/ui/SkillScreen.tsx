@@ -277,6 +277,7 @@ export function SkillScreen({ id }: { id: string }) {
               media: pickCupMedia(r.mediaIds.map((m) => mediaById.get(m))),
               number: data.numbers?.get(r.id) ?? 0,
               skillName: skill.name,
+              failed: r.mediaIds.some((m) => mediaById.get(m)?.upload === 'failed'),
             }))}
           />
         )}

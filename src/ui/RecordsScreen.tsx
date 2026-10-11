@@ -53,6 +53,7 @@ export function RecordsScreen() {
       media: pickCupMedia((r.mediaIds ?? []).map((id) => mediaById.get(id))),
       number: data.numbers.get(r.id) ?? 0,
       skillName: skillById.get(r.skillId)?.name,
+      failed: (r.mediaIds ?? []).some((id) => mediaById.get(id)?.upload === 'failed'),
     }
     if (groups.at(-1)?.label === label) groups.at(-1)!.cups.push(cup)
     else groups.push({ label, cups: [cup] })

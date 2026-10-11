@@ -24,8 +24,6 @@ const HERO_LOOKBACK = 20
 const HERO_SLIDES = 6
 /** 型ごとの最近の杯（横にスクロールして見る） */
 const RECENT = 12
-/** いちばん最初の写真のある杯を探す、古い記録の数 */
-const FIRST_LOOKAHEAD = 30
 
 const WEEKDAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
 
@@ -139,8 +137,11 @@ type Slide = {
   first?: boolean
 }
 
-/** 大きな写真の1枚。写真がまだ読めないあいだは、いまの時刻の光の絵 */
-function HeroSlide({ slide, light }: { slide: Slide; light: Light }) {
+/**
+ * 大きな写真の1枚と、その説明。写真がまだ読めないあいだは、いまの時刻の光の絵を出し、説明は付けない
+ * （自分の1杯ではない絵に、No. を付けないように）
+ */
+function HeroSlide({ slide, light, now }: { slide: Slide; light: Light; now: Date }) {
   const blob = useCupImage(slide.media)
   const url = useObjectUrl(blob, slide.media ? `${slide.media.id}-hero-${blob?.size ?? 0}` : undefined)
   return (
@@ -150,6 +151,17 @@ function HeroSlide({ slide, light }: { slide: Slide; light: Light }) {
         src={url ?? lightUrl(light)}
         alt={url ? `No.${slide.number} ${slide.skillName ? splitName(slide.skillName).main : ''}` : ''}
       />
+      {url && (
+        <div className="hero-caption">
+          {slide.first && <span className="hero-first">はじまりの1杯</span>}
+          <span className="hero-no">No.{slide.number}</span>
+          <span>
+            {formatAgo(slide.record.createdAt, now.getTime())}
+            {slide.skillName && `　${splitName(slide.skillName).main}`}
+            {slide.record.outcome && `　${OUTCOME_MARK[slide.record.outcome]}`}
+          </span>
+        </div>
+      )}
     </div>
   )
 }
@@ -170,7 +182,6 @@ function Hero({ slides }: { slides: Slide[] }) {
     track.current?.scrollTo({ left: 0 })
     setIndex(0)
   }, [newest])
-  const current = slides[Math.min(index, slides.length - 1)]
 
   return (
     <section className="today-hero" aria-label={slides.length > 0 ? '最近の杯（左右にめくれます）' : undefined}>
@@ -186,7 +197,7 @@ function Hero({ slides }: { slides: Slide[] }) {
           }}
         >
           {slides.map((s) => (
-            <HeroSlide key={s.record.id} slide={s} light={light} />
+            <HeroSlide key={s.record.id} slide={s} light={light} now={now} />
           ))}
         </div>
       )}
@@ -195,17 +206,6 @@ function Hero({ slides }: { slides: Slide[] }) {
         <span className="wordmark">Latelier</span>
         <span className="hero-date">{date}</span>
       </div>
-      {current && (
-        <div className="hero-caption">
-          {current.first && <span className="hero-first">はじまりの1杯</span>}
-          <span className="hero-no">No.{current.number}</span>
-          <span>
-            {formatAgo(current.record.createdAt, now.getTime())}
-            {current.skillName && `　${splitName(current.skillName).main}`}
-            {current.record.outcome && `　${OUTCOME_MARK[current.record.outcome]}`}
-          </span>
-        </div>
-      )}
       {slides.length > 1 && (
         <div className="hero-dots" aria-hidden="true">
           {slides.map((s, i) => (
@@ -334,19 +334,23 @@ export function TodayScreen() {
     const active = skills.filter((s) => s.status === 'active')
     const perSkill = await Promise.all(active.map(async (skill) => ({ skill, records: await recordsOf(skill.id) })))
     // 新しい記録から、大きな写真でめくる杯を選ぶ。最後に「はじまりの1杯」（いちばん古い、写真のある杯）を置く
-    const [latest, oldest] = await Promise.all([
+    const [latest, firstMedia] = await Promise.all([
       db.records.orderBy('createdAt').reverse().limit(HERO_LOOKBACK).toArray(),
-      db.records.orderBy('createdAt').limit(FIRST_LOOKAHEAD).toArray(),
+      // いちばん古い、写真（または動画のできあがりのコマ）。古い順にたどって最初に見つかったもの
+      db.media.orderBy('createdAt').filter((m) => hasCupImage(m)).first(),
     ])
+    const firstCandidate = firstMedia && (await db.records.get(firstMedia.recordId))
     // 動画・写真は、大きな写真の候補と各型の最近の杯の分をまとめて1回で読む
     const recentOf = perSkill.map(({ records }) => records.slice(0, RECENT))
-    const mediaIds = [...latest, ...oldest, ...recentOf.flat()].flatMap((r) => r.mediaIds ?? [])
+    const mediaIds = [...latest, ...(firstCandidate ? [firstCandidate] : []), ...recentOf.flat()].flatMap(
+      (r) => r.mediaIds ?? [],
+    )
     const media = await db.media.bulkGet([...new Set(mediaIds)])
     const mediaById = new Map(media.filter((m) => !!m).map((m) => [m.id, m]))
     const cupOf = (r: PracticeRecord) => pickCupMedia((r.mediaIds ?? []).map((id) => mediaById.get(id)))
     // 写真、または動画のできあがりのコマがある杯
     const heroRecords = latest.filter((r) => hasCupImage(cupOf(r))).slice(0, HERO_SLIDES)
-    const firstRecord = oldest.find((r) => hasCupImage(cupOf(r)))
+    const firstRecord = firstCandidate && hasCupImage(cupOf(firstCandidate)) ? firstCandidate : undefined
     const withFirst = firstRecord && !heroRecords.some((r) => r.id === firstRecord.id)
     // 練習中ではない型（できた・並行して記録した型）の新しい杯も、ホームで見返せるようにする
     const activeIds = new Set(active.map((s) => s.id))

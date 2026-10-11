@@ -1,7 +1,8 @@
 import { OUTCOME_MARK } from '../domain/format'
 import type { Media, PracticeRecord } from '../domain/types'
-import { useObjectUrl } from './common'
+import { splitName, useObjectUrl } from './common'
 import { useCupImage } from './cupImage'
+import { AlertIcon } from './icons'
 import { PatternImage } from './PatternImage'
 import { href } from './router'
 
@@ -13,11 +14,14 @@ export interface Cup {
   number: number
   /** 型の名前（絵が無いときの見本の絵と、読み上げに使う） */
   skillName?: string
+  /** YouTube へのアップに失敗した動画がある（1杯の詳細で上げ直せる） */
+  failed?: boolean
 }
 
 /** 1杯。押すと、その1杯の詳細（動画・写真と理由）を開く */
 export function CupTile({ cup }: { cup: Cup }) {
-  const blob = useCupImage(cup.media)
+  // 一覧では、前の作り方のサムネイルは作り直さない（見ただけで、たくさんの動画を読み込まないように）
+  const blob = useCupImage(cup.media, { upgrade: false })
   const url = useObjectUrl(blob, cup.media ? `${cup.media.id}-tile-${blob?.size ?? 0}` : undefined)
   const mark = cup.record.outcome ? ` ${OUTCOME_MARK[cup.record.outcome]}` : ''
   return (
@@ -25,13 +29,18 @@ export function CupTile({ cup }: { cup: Cup }) {
       <a
         className="cup-tile"
         href={href(`/cup/${cup.record.id}`)}
-        aria-label={`No.${cup.number}${cup.skillName ? ` ${cup.skillName}` : ''}の詳細`}
+        aria-label={`No.${cup.number}${cup.skillName ? ` ${splitName(cup.skillName).main}` : ''}${cup.failed ? '（アップに失敗）' : ''}の詳細`}
       >
         {url ? (
           <img src={url} alt="" />
         ) : (
           <span className="cup-tile-empty" aria-hidden="true">
             {cup.skillName && <PatternImage name={cup.skillName} dim />}
+          </span>
+        )}
+        {cup.failed && (
+          <span className="cup-tile-alert" aria-hidden="true">
+            <AlertIcon size={14} />
           </span>
         )}
         <span className="cup-tile-no">
