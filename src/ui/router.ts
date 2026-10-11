@@ -6,7 +6,8 @@ export type Route =
   | { name: 'skill'; id: string }
   | { name: 'edit'; id: string }
   | { name: 'new'; domainId: string }
-  | { name: 'record'; skillId: string; recordId?: string; camera?: boolean }
+  | { name: 'record'; skillId: string; recordId?: string }
+  | { name: 'cup'; recordId: string }
   | { name: 'records' }
   | { name: 'settings'; notice?: string }
 
@@ -35,12 +36,14 @@ export function parseHash(hash: string): Route {
     case 'record':
       // 保存した記録を直す：#/record/<skillId>/edit/<recordId>
       if (parts[1] && parts[2] === 'edit' && parts[3]) return { name: 'record', skillId: parts[1], recordId: parts[3] }
-      // 今日の画面の「撮る」から来たとき：すぐにカメラを開く
-      if (parts[1] && parts[2] === 'camera') return { name: 'record', skillId: parts[1], camera: true }
       if (parts[1]) return { name: 'record', skillId: parts[1] }
       break
     case 'records':
       return { name: 'records' }
+    case 'cup':
+      // 1杯（記録1件）の詳細：#/cup/<recordId>
+      if (parts[1]) return { name: 'cup', recordId: parts[1] }
+      break
     case 'settings':
       // YouTube の連携から戻ってきたときは、結果を notice で受け取る
       return { name: 'settings', notice: parts[1] }

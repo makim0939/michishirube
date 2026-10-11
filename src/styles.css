@@ -1570,43 +1570,6 @@ video.media.playing {
   align-items: flex-start;
 }
 
-.focus-title {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-top: -4px;
-}
-
-.focus-title h1 {
-  font-size: 1.9rem;
-  text-wrap: balance;
-}
-
-.focus-switch {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.focus-switch button {
-  appearance: none;
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--muted);
-  border-radius: 999px;
-  padding: 4px 12px;
-  min-height: 34px;
-  font: inherit;
-  font-size: 0.82rem;
-  cursor: pointer;
-}
-
-.focus-switch button[aria-pressed='true'] {
-  background: var(--text);
-  border-color: var(--text);
-  color: var(--bg);
-}
-
 .next-line {
   display: flex;
   gap: 14px;
@@ -1645,13 +1608,6 @@ video.media.playing {
   align-self: center;
   font-size: 0.82rem;
   color: var(--muted);
-}
-
-.recent {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 6px;
 }
 
 .recent-cups {
@@ -1855,4 +1811,196 @@ a.notice {
 .manage .stack .btn {
   width: 100%;
   justify-content: flex-start;
+}
+
+/* ---- 型：ロードマップ（つながりの図） ---- */
+
+.graph {
+  height: min(64vh, 560px);
+  margin: 0 -16px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.graph-node {
+  width: 196px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px 6px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgb(42 30 23 / 8%);
+  cursor: pointer;
+}
+
+.graph-node .react-flow__handle {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.graph-node .graph-node-image {
+  width: 46px;
+  height: 46px;
+  box-shadow: none;
+}
+
+.graph-node-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.graph-node-label {
+  font-family: var(--font-mincho);
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 1.3;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.graph-node-state {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.graph-node.state-locked {
+  background: transparent;
+  border-style: dashed;
+  box-shadow: none;
+}
+
+.graph-node.state-locked .graph-node-label {
+  color: var(--muted);
+}
+
+.graph-node.state-active {
+  border: 2px solid var(--active);
+}
+
+.graph-node.state-active .graph-node-state {
+  color: var(--active);
+  font-weight: 700;
+}
+
+.graph-node.state-done .graph-node-state {
+  color: var(--done);
+  font-weight: 700;
+}
+
+.react-flow__edge.edge-done path {
+  stroke: var(--gold);
+  stroke-width: 2;
+}
+
+.react-flow__edge.edge-todo path {
+  stroke: var(--border);
+  stroke-width: 2;
+  stroke-dasharray: 4 4;
+}
+
+.react-flow__controls button {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.react-flow__attribution {
+  background: transparent;
+  font-size: 9px;
+}
+
+.view-switch {
+  align-self: flex-start;
+}
+
+/* ---- 今日：練習中の型ごとのまとまり ---- */
+
+.practice-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.practice-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.practice-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.practice-name {
+  font-family: var(--font-mincho);
+  font-weight: 600;
+  font-size: 1.35rem;
+  letter-spacing: 0.05em;
+  line-height: 1.3;
+}
+
+.practice-count {
+  flex: none;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.practice-count strong {
+  font-family: var(--font-latin);
+  font-weight: 400;
+  font-size: 1.6rem;
+  color: var(--text);
+  margin-right: 2px;
+}
+
+.practice-block .next-line {
+  padding-top: 10px;
+}
+
+/* ---- 1杯の詳細 ---- */
+
+.cup-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.cup-media {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cup-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.cup-notes p {
+  white-space: pre-wrap;
+  line-height: 1.7;
 }

@@ -27,44 +27,46 @@ const RECORDS_PAGE = 10
 const RECORDS_FIRST = 3
 
 
-/** 最初と最新を並べて、上達を目で見られるようにする */
+/** 最新と最初を並べて、上達を目で見られるようにする（今日の画面と同じく、新しいほうを左に） */
 function Compare({ media }: { media: Media[] }) {
-  const hasVideo = media.some(isVideo)
-  const hasImage = media.some((m) => !isVideo(m))
-  const [kind, setKind] = useState<'video' | 'image'>(hasVideo ? 'video' : 'image')
-  const videos = useRef<(HTMLVideoElement | null)[]>([])
-  const list = media.filter((m) => (kind === 'video' ? isVideo(m) : !isVideo(m)))
-  if (list.length < 2) return null
-  const first = list[0]
-  const latest = list[list.length - 1]
+  const videos = media.filter(isVideo)
+  const images = media.filter((m) => !isVideo(m))
+  // 2つ以上あって比べられる種類だけを選べるようにする（1つしかない種類を選ぶと、比べる欄ごと消えていた）
+  const kinds = [...(videos.length >= 2 ? (['video'] as const) : []), ...(images.length >= 2 ? (['image'] as const) : [])]
+  const [picked, setPicked] = useState<'video' | 'image'>()
+  const players = useRef<(HTMLVideoElement | null)[]>([])
+  const kind = picked && kinds.includes(picked) ? picked : kinds[0]
+  if (!kind) return null
+  const list = kind === 'video' ? videos : images
+  const pair = [list[list.length - 1], list[0]]
 
   return (
     <section className="section">
       <div className="section-head">
-        <h2>最初と最新</h2>
-        {hasVideo && hasImage && (
+        <h2>最新と最初</h2>
+        {kinds.length > 1 && (
           <div className="segmented small">
-            <button className={kind === 'video' ? 'selected' : ''} onClick={() => setKind('video')}>
+            <button className={kind === 'video' ? 'selected' : ''} onClick={() => setPicked('video')}>
               動画
             </button>
-            <button className={kind === 'image' ? 'selected' : ''} onClick={() => setKind('image')}>
+            <button className={kind === 'image' ? 'selected' : ''} onClick={() => setPicked('image')}>
               写真
             </button>
           </div>
         )}
       </div>
       <div className="compare">
-        {[first, latest].map((m, i) => (
+        {pair.map((m, i) => (
           <div key={m.id}>
             <MediaItem
               media={m}
               autoLoad
               videoRef={(el) => {
-                videos.current[i] = el
+                players.current[i] = el
               }}
             />
             <p className="compare-label">
-              {i === 0 ? '最初' : '最新'}・{formatDate(m.createdAt)}
+              {i === 0 ? '最新' : '最初'}・{formatDate(m.createdAt)}
             </p>
           </div>
         ))}
@@ -73,8 +75,10 @@ function Compare({ media }: { media: Media[] }) {
         <button
           className="btn small"
           onClick={() => {
-            for (const v of videos.current) {
+            for (const v of players.current) {
               if (!v) continue
+              // iPhone は音の出る動画を1本しか同時に再生できず、後から再生した方だけが動くので、音を消して並べて再生する
+              v.muted = true
               v.currentTime = 0
               v.play().catch(() => {
                 // 自動再生が止められた場合は、各動画の再生ボタンで再生してもらう
@@ -83,7 +87,7 @@ function Compare({ media }: { media: Media[] }) {
           }}
         >
           <PlayIcon size={16} />
-          同時に再生
+          同時に再生（音なし）
         </button>
       )}
     </section>
@@ -161,8 +165,8 @@ export function SkillScreen({ id }: { id: string }) {
 
       <div className="actions">
         {state === 'active' && (
-          <a className="btn primary" href={href(`/record/${skill.id}/camera`)}>
-            撮る
+          <a className="btn primary" href={href(`/record/${skill.id}`)}>
+            記録する
           </a>
         )}
         {state === 'available' && (
@@ -257,8 +261,8 @@ export function SkillScreen({ id }: { id: string }) {
         <div className="section-head">
           <h2>記録（{records.length}）</h2>
           {(state === 'active' || state === 'available') && (
-            <a className="btn small" href={href(`/record/${skill.id}/camera`)}>
-              ＋ 撮る
+            <a className="btn small" href={href(`/record/${skill.id}`)}>
+              ＋ 記録する
             </a>
           )}
         </div>

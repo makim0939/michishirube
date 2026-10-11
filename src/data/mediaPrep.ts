@@ -32,23 +32,27 @@ export function extensionFor(mimeType: string): string {
   return mimeType.startsWith('video/mp4') ? 'mp4' : 'webm'
 }
 
-/** 写真の長い辺 */
+/** 写真の一辺（正方形にそろえる） */
 const PHOTO_MAX_EDGE = 1600
 const PHOTO_QUALITY = 0.82
 
-/** 写真を縮小した JPEG にする。縮めても小さくならない・読めないときは元のまま返す */
+/** 写真を中央の正方形に切り取り、縮小した JPEG にする。読めないときは元のまま返す */
 export async function compressPhoto(file: File): Promise<File> {
   if (!file.type.startsWith('image/') || file.type === 'image/gif') return file
   try {
     const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' })
-    const scale = Math.min(1, PHOTO_MAX_EDGE / Math.max(bitmap.width, bitmap.height))
+    // ラテアートは真上から撮ったカップが主役なので、中央を正方形に切り取ってそろえる
+    const side = Math.min(bitmap.width, bitmap.height)
+    const sx = (bitmap.width - side) / 2
+    const sy = (bitmap.height - side) / 2
+    const size = Math.round(Math.min(side, PHOTO_MAX_EDGE))
     const canvas = document.createElement('canvas')
-    canvas.width = Math.round(bitmap.width * scale)
-    canvas.height = Math.round(bitmap.height * scale)
-    canvas.getContext('2d')!.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+    canvas.width = size
+    canvas.height = size
+    canvas.getContext('2d')!.drawImage(bitmap, sx, sy, side, side, 0, 0, size, size)
     bitmap.close()
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', PHOTO_QUALITY))
-    if (!blob || blob.size >= file.size) return file
+    if (!blob) return file
     return new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' })
   } catch {
     return file
