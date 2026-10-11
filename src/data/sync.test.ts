@@ -111,6 +111,14 @@ describe('動画のサムネイル', () => {
     expect(puts.map(([url]) => new URL(String(url)).pathname)).toContain(`/api/photos/${m.id}.poster`)
     expect((await db.media.get(m.id))?.cloudPoster).toBe(true)
     expect((server.rows.get(`media:${m.id}`)?.data as { cloudPoster?: boolean }).cloudPoster).toBe(true)
+    // 前の作り方（最初のコマ）なので、できあがりのコマとは扱わない。サムネイルは同期の中身に含めない
+    expect((await db.media.get(m.id))?.cloudPosterEnd).toBe(false)
+    expect((server.rows.get(`media:${m.id}`)?.data as { poster?: unknown; posterEnd?: unknown }).posterEnd).toBeUndefined()
+
+    // できあがりのコマで作り直したら、置き直して cloudPosterEnd を立てる
+    await db.media.update(m.id, { poster: new Blob(['end'], { type: 'image/jpeg' }), posterEnd: true })
+    await runSync()
+    expect((await db.media.get(m.id))?.cloudPosterEnd).toBe(true)
   })
 })
 

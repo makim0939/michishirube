@@ -75,6 +75,7 @@ export async function videoMeta(media: Media): Promise<VideoMeta> {
   const title = [domain?.name, skill?.name, formatDateTime(media.createdAt)].filter(Boolean).join('｜')
   const lines: string[] = []
   if (record?.outcome) lines.push(OUTCOME_LABEL[record.outcome])
+  if (record?.causes?.length) lines.push(`原因：${record.causes.join('・')}`)
   if (record?.reason) lines.push(`なぜ：${record.reason}`)
   if (record?.nextAction) lines.push(`次の一手：${record.nextAction}`)
   lines.push('', 'ラテリエで記録')

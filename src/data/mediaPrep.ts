@@ -92,9 +92,12 @@ export async function probeDuration(video: HTMLVideoElement): Promise<number> {
   return Number.isFinite(video.duration) ? video.duration : 0
 }
 
-const POSTER_MAX_EDGE = 480
+/** 今日の画面の大きな写真にも使うので、ある程度大きく作る */
+const POSTER_MAX_EDGE = 960
 
-/** 動画の最初のあたりの1コマを、一覧に出すサムネイル（JPEG）にする。作れなければ undefined */
+/**
+ * 動画の最後のあたりの1コマ（注ぎ終えた、できあがりのカップ）を、サムネイル（JPEG）にする。作れなければ undefined
+ */
 export async function makePoster(blob: Blob): Promise<Blob | undefined> {
   const url = URL.createObjectURL(blob)
   const video = document.createElement('video')
@@ -106,7 +109,8 @@ export async function makePoster(blob: Blob): Promise<Blob | undefined> {
     video.load()
     await once(video, 'loadeddata', 5000)
     const duration = await probeDuration(video)
-    video.currentTime = Math.min(0.2, duration / 2 || 0)
+    // 最後のコマは端末によって真っ黒なことがあるので、少し手前にする
+    video.currentTime = duration > 0.6 ? duration - 0.3 : duration / 2 || 0
     await once(video, 'seeked', 5000)
     const scale = Math.min(1, POSTER_MAX_EDGE / Math.max(video.videoWidth, video.videoHeight))
     const canvas = document.createElement('canvas')
@@ -114,7 +118,7 @@ export async function makePoster(blob: Blob): Promise<Blob | undefined> {
     canvas.height = Math.round(video.videoHeight * scale)
     if (!canvas.width || !canvas.height) return undefined
     canvas.getContext('2d')!.drawImage(video, 0, 0, canvas.width, canvas.height)
-    return (await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.7))) ?? undefined
+    return (await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.75))) ?? undefined
   } catch {
     return undefined
   } finally {

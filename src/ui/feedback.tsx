@@ -7,8 +7,14 @@ import { patternFor, patternUrl } from './world'
 
 // ---- トースト ----
 
+interface ToastAction {
+  label: string
+  onClick: () => void
+}
+
 interface ToastApi {
-  show: (message: string, tone?: 'ok' | 'error') => void
+  /** action を渡すと、トーストにボタンを1つ出す（少し長く出す） */
+  show: (message: string, tone?: 'ok' | 'error', action?: ToastAction) => void
 }
 
 const ToastContext = createContext<ToastApi>({ show: () => {} })
@@ -155,18 +161,23 @@ function CelebrationOverlay({
 }
 
 export function FeedbackProvider({ children }: { children: ReactNode }) {
-  const [toast, setToast] = useState<{ message: string; tone: 'ok' | 'error'; key: number } | null>(null)
+  const [toast, setToast] = useState<{
+    message: string
+    tone: 'ok' | 'error'
+    action?: ToastAction
+    key: number
+  } | null>(null)
   const [celebration, setCelebration] = useState<Celebration | null>(null)
 
   useEffect(() => {
     if (!toast) return
-    const timer = setTimeout(() => setToast(null), toast.tone === 'error' ? 4000 : 2500)
+    const timer = setTimeout(() => setToast(null), toast.tone === 'error' || toast.action ? 5000 : 2500)
     return () => clearTimeout(timer)
   }, [toast])
 
   const closeCelebration = useCallback(() => setCelebration(null), [])
   const toastApi = useMemo<ToastApi>(
-    () => ({ show: (message, tone = 'ok') => setToast({ message, tone, key: Date.now() }) }),
+    () => ({ show: (message, tone = 'ok', action) => setToast({ message, tone, action, key: Date.now() }) }),
     [],
   )
 
@@ -175,8 +186,20 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
       <CelebrationContext.Provider value={setCelebration}>
         {children}
         {toast && (
-          <div key={toast.key} className={`toast ${toast.tone}`} role="status">
-            {toast.message}
+          <div key={toast.key} className={`toast ${toast.tone}${toast.action ? ' with-action' : ''}`} role="status">
+            <span>{toast.message}</span>
+            {toast.action && (
+              <button
+                type="button"
+                className="toast-action"
+                onClick={() => {
+                  setToast(null)
+                  toast.action?.onClick()
+                }}
+              >
+                {toast.action.label}
+              </button>
+            )}
           </div>
         )}
         {celebration && (

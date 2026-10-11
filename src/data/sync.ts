@@ -84,8 +84,8 @@ async function readLocal(kind: EntityKind, id: string): Promise<{ updatedAt: num
 
 function toWire(kind: EntityKind, row: Record<string, unknown>): Record<string, unknown> {
   if (kind !== 'media') return row
-  // 動画・写真の中身とサムネイルは送らない（動画は YouTube、写真は別の API）
-  const { blob: _blob, poster: _poster, ...rest } = row
+  // 動画・写真の中身とサムネイルは送らない（動画は YouTube、写真とサムネイルは別の API）
+  const { blob: _blob, poster: _poster, posterEnd: _posterEnd, ...rest } = row
   return rest
 }
 
@@ -96,7 +96,10 @@ function toWire(kind: EntityKind, row: Record<string, unknown>): Record<string, 
 function mergeMedia(remote: Media, local: Media | undefined): { row: Media; repaired: boolean } {
   const row: Media = { ...remote }
   if (local?.blob) row.blob = local.blob
-  if (local?.poster) row.poster = local.poster
+  if (local?.poster) {
+    row.poster = local.poster
+    row.posterEnd = local.posterEnd
+  }
   let repaired = false
   if (local?.youtubeId && !remote.youtubeId) {
     row.youtubeId = local.youtubeId
@@ -110,6 +113,10 @@ function mergeMedia(remote: Media, local: Media | undefined): { row: Media; repa
   }
   if (local?.cloudPoster && !remote.cloudPoster) {
     row.cloudPoster = true
+    repaired = true
+  }
+  if (local?.cloudPosterEnd && !remote.cloudPosterEnd) {
+    row.cloudPosterEnd = true
     repaired = true
   }
   if (repaired) row.updatedAt = Date.now()
@@ -237,8 +244,15 @@ async function uploadPhotos(config: SyncConfig) {
  * 端末から動画を消したあとや、入れ直した端末・別の端末でも、サムネイルを出せるようにする
  */
 async function uploadPosters(config: SyncConfig) {
+  // まだ置いていないもの、置いたのが前の作り方（最初のコマ）で、できあがりのコマを作り直したもの
   const targets = await db.media
-    .filter((m) => m.type.startsWith('video/') && !!m.poster && !m.cloudPoster && m.poster.size <= PHOTO_MAX_BYTES)
+    .filter(
+      (m) =>
+        m.type.startsWith('video/') &&
+        !!m.poster &&
+        m.poster.size <= PHOTO_MAX_BYTES &&
+        (!m.cloudPoster || (!!m.posterEnd && !m.cloudPosterEnd)),
+    )
     .toArray()
   for (const m of targets) {
     try {
@@ -252,7 +266,7 @@ async function uploadPosters(config: SyncConfig) {
       throw e
     }
     await db.transaction('rw', db.media, db.outbox, async () => {
-      await db.media.update(m.id, { cloudPoster: true, updatedAt: Date.now() })
+      await db.media.update(m.id, { cloudPoster: true, cloudPosterEnd: !!m.posterEnd, updatedAt: Date.now() })
       await db.outbox.put({ kind: 'media', id: m.id, at: Date.now() })
     })
   }
@@ -264,7 +278,7 @@ export async function fetchPoster(media: Media): Promise<Blob | undefined> {
   if (!config || !media.cloudPoster) return undefined
   const poster = await (await api(config, `/api/photos/${encodeURIComponent(posterPhotoId(media.id))}`)).blob()
   // サムネイルは小さいので、次からは端末から出す（同期の対象にはしない）
-  await db.media.update(media.id, { poster })
+  await db.media.update(media.id, { poster, posterEnd: !!media.cloudPosterEnd })
   return poster
 }
 

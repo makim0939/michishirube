@@ -42,10 +42,10 @@ export function RecordCard({
           ))}
         </div>
       )}
-      {record.reason && (
+      {(record.reason || (record.causes?.length ?? 0) > 0) && (
         <p>
           <span className="label">理由</span>
-          {record.reason}
+          {[record.causes?.join('・'), record.reason].filter(Boolean).join('　')}
         </p>
       )}
       {record.nextAction && (

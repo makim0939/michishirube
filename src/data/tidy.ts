@@ -1,6 +1,7 @@
 import type { Media } from '../domain/types'
 import { db } from './db'
 import { inMemory, makePoster } from './mediaPrep'
+import { needsLocalPoster } from './poster'
 import { getSettings } from './repo'
 
 /**
@@ -45,10 +46,10 @@ export async function tidyVideos(now = Date.now()): Promise<{ count: number; byt
   // サムネイルは同期でサーバーにも置かれ、入れ直した端末でも出せる
   for (const id of ids) {
     const m = await db.media.get(id)
-    if (!m?.blob || m.poster) continue
+    if (!m || !needsLocalPoster(m)) continue
     try {
-      const poster = await makePoster(await inMemory(m.blob))
-      if (poster) await db.media.update(id, { poster })
+      const poster = await makePoster(await inMemory(m.blob!))
+      if (poster) await db.media.update(id, { poster, posterEnd: true })
     } catch {
       // 作れなくても、整理は続ける
     }

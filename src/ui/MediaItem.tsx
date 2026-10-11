@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react'
-import { db } from '../data/db'
-import { inMemory, makePoster } from '../data/mediaPrep'
 import { setMediaKeep } from '../data/repo'
-import { fetchPhoto, fetchPoster } from '../data/sync'
+import { fetchPhoto } from '../data/sync'
 import { MAX_UPLOAD_ATTEMPTS, retryUpload, youtubeUrl } from '../data/youtube'
 import type { Media } from '../domain/types'
 import { isVideo, MediaView, useObjectUrl } from './common'
+import { usePoster } from './cupImage'
 import { useAction } from './feedback'
 import { PhotoIcon, PlayIcon, StarIcon, VideoIcon } from './icons'
 
@@ -37,35 +36,6 @@ function useRemotePhoto(media: Media): Blob | undefined {
   return media.blob ?? blob
 }
 
-/** サムネイル作りは1本ずつ順に（一覧で一度に動画を読み込まないように） */
-let posterQueue: Promise<unknown> = Promise.resolve()
-
-function usePosterBackfill(media: Media) {
-  const needs = isVideo(media) && !!media.blob && !media.poster
-  // 端末に動画が無ければ、サーバーに置いたサムネイルを取ってくる（入れ直した端末・別の端末）
-  const needsRemote = isVideo(media) && !media.blob && !media.poster && !!media.cloudPoster
-  useEffect(() => {
-    if (!needsRemote) return
-    fetchPoster(media).catch(() => {
-      // 電波が無いなどで取れなければ、無いまま
-    })
-  }, [media.id, needsRemote])
-  useEffect(() => {
-    if (!needs || !media.blob) return
-    const blob = media.blob
-    posterQueue = posterQueue
-      .then(async () => {
-        // iPhone では IndexedDB の動画を直接読めないことがあるので、メモリに写してから作る
-        const poster = await makePoster(await inMemory(blob))
-        // 中身とサムネイルはこの端末だけのものなので、同期の対象にしない（updatedAt も変えない）
-        if (poster) await db.media.update(media.id, { poster })
-      })
-      .catch(() => {
-        // 作れなくても、ほかの動画のサムネイル作りは続ける
-      })
-  }, [media.id, needs])
-}
-
 /**
  * 記録の動画・写真1つ。端末に中身があれば再生し、無ければ YouTube やサーバーから見る。
  * 動画は YouTube へのアップ状況と、自動整理で消さない「残す」印も出す
@@ -82,7 +52,7 @@ export function MediaItem({
 }) {
   const run = useAction()
   const blob = useRemotePhoto(media)
-  usePosterBackfill(media)
+  usePoster(media)
   const video = isVideo(media)
   // 端末に動画が無いときも、サムネイルがあれば YouTube へのリンクの背景に出す
   const posterUrl = useObjectUrl(!blob && video ? media.poster : undefined, `${media.id}-yt-poster-${media.poster?.size ?? 0}`)

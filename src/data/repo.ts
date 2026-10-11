@@ -293,6 +293,7 @@ export interface RecordInput {
   skillId: string
   outcome?: Outcome
   reason: string
+  causes?: string[]
   nextAction: string
   files: (Blob | NewMedia)[]
 }
@@ -312,7 +313,16 @@ function contentFields(m: NewMedia): Partial<Media> {
     size: m.blob.size,
     // 動画は YouTube へ、写真はサーバーへ。どちらも連携していれば自動で送る
     ...(type.startsWith('video/')
-      ? { upload: 'pending' as const, youtubeId: undefined, uploadError: undefined, uploadAttempts: undefined }
+      ? {
+          upload: 'pending' as const,
+          youtubeId: undefined,
+          uploadError: undefined,
+          uploadAttempts: undefined,
+          // 撮ったときに作ったサムネイルは、できあがりのコマ。中身が変わったらサーバーにも置き直す
+          posterEnd: !!m.poster,
+          cloudPoster: false,
+          cloudPosterEnd: false,
+        }
       : { cloudPhoto: false }),
   }
 }
@@ -331,7 +341,8 @@ function newMediaRows(recordId: string, skillId: string, files: NewMedia[], now:
 export async function addRecord(input: RecordInput): Promise<string> {
   const reason = input.reason.trim()
   const nextAction = input.nextAction.trim()
-  if (!reason && !nextAction && input.files.length === 0 && !input.outcome) {
+  const causes = input.causes ?? []
+  if (!reason && !nextAction && causes.length === 0 && input.files.length === 0 && !input.outcome) {
     throw new RepoError('動画・写真か、メモを1つ以上入れてください')
   }
   const now = Date.now()
@@ -344,6 +355,7 @@ export async function addRecord(input: RecordInput): Promise<string> {
     updatedAt: now,
     ...(input.outcome ? { outcome: input.outcome } : {}),
     reason,
+    ...(causes.length > 0 ? { causes } : {}),
     nextAction,
     mediaIds: media.map((m) => m.id),
   }
@@ -363,6 +375,7 @@ export interface RecordUpdate {
   recordId: string
   outcome?: Outcome
   reason: string
+  causes?: string[]
   nextAction: string
   /** 足す動画・写真 */
   addFiles: NewMedia[]
@@ -383,7 +396,8 @@ export async function updateRecord(input: RecordUpdate) {
     const removed = new Set(input.removeMediaIds)
     const kept = record.mediaIds.filter((id) => !removed.has(id))
     const added = newMediaRows(record.id, record.skillId, input.addFiles, now)
-    if (!reason && !nextAction && !input.outcome && kept.length + added.length === 0) {
+    const causes = input.causes ?? []
+    if (!reason && !nextAction && causes.length === 0 && !input.outcome && kept.length + added.length === 0) {
       throw new RepoError('動画・写真か、メモを1つ以上入れてください')
     }
     await db.media.bulkDelete([...removed])
@@ -395,6 +409,7 @@ export async function updateRecord(input: RecordUpdate) {
     await db.records.update(record.id, {
       outcome: input.outcome,
       reason,
+      causes: causes.length > 0 ? causes : undefined,
       nextAction,
       mediaIds: [...kept, ...added.map((m) => m.id)],
       updatedAt: now,
