@@ -1,6 +1,6 @@
 import { liveQuery } from 'dexie'
 import type { EntityChange, EntityKind, SyncResponse } from '../../shared/protocol'
-import { PHOTO_MAX_BYTES, SYNC_LIMITS } from '../../shared/protocol'
+import { PHOTO_MAX_BYTES, posterPhotoId, SYNC_LIMITS } from '../../shared/protocol'
 import { DEFAULT_SETTINGS, type Media, type Settings } from '../domain/types'
 import { db } from './db'
 
@@ -108,6 +108,10 @@ function mergeMedia(remote: Media, local: Media | undefined): { row: Media; repa
     row.cloudPhoto = true
     repaired = true
   }
+  if (local?.cloudPoster && !remote.cloudPoster) {
+    row.cloudPoster = true
+    repaired = true
+  }
   if (repaired) row.updatedAt = Date.now()
   return { row, repaired }
 }
@@ -156,6 +160,7 @@ async function doSync() {
   if (!config) return
   try {
     await uploadPhotos(config)
+    await uploadPosters(config)
     // 送りきるまで、または受け取りきるまで繰り返す（上限つき）
     for (let round = 0; round < 50; round++) {
       const since = ((await db.meta.get(CURSOR_KEY))?.value as number | undefined) ?? 0
@@ -225,6 +230,42 @@ async function uploadPhotos(config: SyncConfig) {
       await db.outbox.put({ kind: 'media', id: m.id, at: Date.now() })
     })
   }
+}
+
+/**
+ * 動画のサムネイルをサーバーに置く。動画は YouTube（非公開なのでサムネイルも外から見られない）にしか残らないので、
+ * 端末から動画を消したあとや、入れ直した端末・別の端末でも、サムネイルを出せるようにする
+ */
+async function uploadPosters(config: SyncConfig) {
+  const targets = await db.media
+    .filter((m) => m.type.startsWith('video/') && !!m.poster && !m.cloudPoster && m.poster.size <= PHOTO_MAX_BYTES)
+    .toArray()
+  for (const m of targets) {
+    try {
+      await api(config, `/api/photos/${encodeURIComponent(posterPhotoId(m.id))}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': m.poster!.type || 'image/jpeg' },
+        body: m.poster,
+      })
+    } catch (e) {
+      if (e instanceof SyncError && e.status === 400) continue
+      throw e
+    }
+    await db.transaction('rw', db.media, db.outbox, async () => {
+      await db.media.update(m.id, { cloudPoster: true, updatedAt: Date.now() })
+      await db.outbox.put({ kind: 'media', id: m.id, at: Date.now() })
+    })
+  }
+}
+
+/** この端末にサムネイルが無い動画の、サーバーに置いたサムネイルを取ってきて保存する */
+export async function fetchPoster(media: Media): Promise<Blob | undefined> {
+  const config = await getSyncConfig()
+  if (!config || !media.cloudPoster) return undefined
+  const poster = await (await api(config, `/api/photos/${encodeURIComponent(posterPhotoId(media.id))}`)).blob()
+  // サムネイルは小さいので、次からは端末から出す（同期の対象にはしない）
+  await db.media.update(media.id, { poster })
+  return poster
 }
 
 /** この端末に中身が無い写真を、サーバーから取ってきて保存する */

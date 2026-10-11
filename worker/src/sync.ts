@@ -1,5 +1,6 @@
 import {
   isEntityKind,
+  posterPhotoId,
   SYNC_LIMITS,
   type EntityChange,
   type SyncRequest,
@@ -81,8 +82,10 @@ export function writeStatements(db: D1Database, changes: EntityChange[]): D1Prep
       )
       .bind(...params)
   })
-  // メディアを消したら、サーバーに置いた写真も消す
-  const removedMedia = changes.filter((c) => c.kind === 'media' && c.deleted).map((c) => c.id)
+  // メディアを消したら、サーバーに置いた写真・動画のサムネイルも消す
+  const removedMedia = changes
+    .filter((c) => c.kind === 'media' && c.deleted)
+    .flatMap((c) => [c.id, posterPhotoId(c.id)])
   for (const ids of chunks(removedMedia, IDS_PER_STATEMENT)) {
     statements.push(db.prepare(`DELETE FROM photos WHERE id IN (${ids.map(() => '?').join(', ')})`).bind(...ids))
   }

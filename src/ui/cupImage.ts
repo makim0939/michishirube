@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { db } from '../data/db'
 import { inMemory, makePoster } from '../data/mediaPrep'
-import { fetchPhoto } from '../data/sync'
+import { fetchPhoto, fetchPoster } from '../data/sync'
 import type { Media } from '../domain/types'
 import { isVideo } from './common'
 
@@ -27,6 +27,8 @@ export function useCupImage(media: Media | undefined): Blob | undefined {
   const video = !!media && isVideo(media)
   const needsFetch = !!media && !video && !media.blob && !!media.cloudPhoto
   const needsPoster = !!media && video && !!media.blob && !media.poster
+  // 端末に動画が無くても、サーバーにサムネイルがあれば取ってくる（入れ直した端末・別の端末）
+  const needsRemotePoster = !!media && video && !media.blob && !media.poster && !!media.cloudPoster
 
   useEffect(() => {
     if (!needsFetch || !media) return
@@ -60,6 +62,13 @@ export function useCupImage(media: Media | undefined): Blob | undefined {
       }
     })()
   }, [id, needsPoster])
+
+  useEffect(() => {
+    if (!needsRemotePoster || !media) return
+    fetchPoster(media).catch(() => {
+      // 電波が無いなどで取れなければ、無いまま
+    })
+  }, [id, needsRemotePoster])
 
   if (!media) return undefined
   if (video) return media.poster

@@ -1,5 +1,6 @@
 import type { Media } from '../domain/types'
 import { db } from './db'
+import { inMemory, makePoster } from './mediaPrep'
 import { getSettings } from './repo'
 
 /**
@@ -40,6 +41,18 @@ export async function tidyVideos(now = Date.now()): Promise<{ count: number; byt
     media.map((m) => ({ ...m, hasBlob: !!m.blob })),
     now,
   )
+  // 消したあとは YouTube（非公開でサムネイルも見られない）にしか残らないので、先にサムネイルを作っておく。
+  // サムネイルは同期でサーバーにも置かれ、入れ直した端末でも出せる
+  for (const id of ids) {
+    const m = await db.media.get(id)
+    if (!m?.blob || m.poster) continue
+    try {
+      const poster = await makePoster(await inMemory(m.blob))
+      if (poster) await db.media.update(id, { poster })
+    } catch {
+      // 作れなくても、整理は続ける
+    }
+  }
   let bytes = 0
   await db.transaction('rw', db.media, async () => {
     for (const id of ids) {

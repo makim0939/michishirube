@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react'
 import { db } from '../data/db'
 import { inMemory, makePoster } from '../data/mediaPrep'
 import { setMediaKeep } from '../data/repo'
-import { fetchPhoto } from '../data/sync'
+import { fetchPhoto, fetchPoster } from '../data/sync'
 import { MAX_UPLOAD_ATTEMPTS, retryUpload, youtubeUrl } from '../data/youtube'
 import type { Media } from '../domain/types'
-import { isVideo, MediaView } from './common'
+import { isVideo, MediaView, useObjectUrl } from './common'
 import { useAction } from './feedback'
 import { PhotoIcon, PlayIcon, StarIcon, VideoIcon } from './icons'
 
@@ -42,6 +42,14 @@ let posterQueue: Promise<unknown> = Promise.resolve()
 
 function usePosterBackfill(media: Media) {
   const needs = isVideo(media) && !!media.blob && !media.poster
+  // 端末に動画が無ければ、サーバーに置いたサムネイルを取ってくる（入れ直した端末・別の端末）
+  const needsRemote = isVideo(media) && !media.blob && !media.poster && !!media.cloudPoster
+  useEffect(() => {
+    if (!needsRemote) return
+    fetchPoster(media).catch(() => {
+      // 電波が無いなどで取れなければ、無いまま
+    })
+  }, [media.id, needsRemote])
   useEffect(() => {
     if (!needs || !media.blob) return
     const blob = media.blob
@@ -76,6 +84,8 @@ export function MediaItem({
   const blob = useRemotePhoto(media)
   usePosterBackfill(media)
   const video = isVideo(media)
+  // 端末に動画が無いときも、サムネイルがあれば YouTube へのリンクの背景に出す
+  const posterUrl = useObjectUrl(!blob && video ? media.poster : undefined, `${media.id}-yt-poster-${media.poster?.size ?? 0}`)
 
   return (
     <figure className="media-item">
@@ -89,7 +99,13 @@ export function MediaItem({
           videoRef={videoRef}
         />
       ) : video && media.youtubeId ? (
-        <a className="media placeholder" href={youtubeUrl(media.youtubeId)} target="_blank" rel="noopener noreferrer">
+        <a
+          className={`media placeholder${posterUrl ? ' with-poster' : ''}`}
+          style={posterUrl ? { backgroundImage: `url(${posterUrl})` } : undefined}
+          href={youtubeUrl(media.youtubeId)}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
           <PlayIcon size={22} />
           YouTube で見る
           <small>（非公開・YouTube アプリで再生）</small>
