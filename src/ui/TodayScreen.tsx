@@ -146,7 +146,7 @@ function Hero({
       <img
         className="hero-image"
         src={own ? url : lightUrl(light)}
-        alt={own ? `No.${number} ${skillName ?? ''}` : ''}
+        alt={own ? `${skillName ?? ''} ${number}杯目` : ''}
       />
       <div className="hero-shade" aria-hidden="true" />
       <div className="hero-top">
@@ -155,7 +155,10 @@ function Hero({
       </div>
       {own && record && (
         <div className="hero-caption">
-          <span className="hero-no">No.{number}</span>
+          <span className="hero-no">
+            {number}
+            <small>杯目</small>
+          </span>
           <span>
             {formatAgo(record.createdAt, now.getTime())}
             {skillName && `　${splitName(skillName).main}`}
@@ -167,15 +170,16 @@ function Hero({
   )
 }
 
-function RecentCup({ record, media, number, skillId }: { record: PracticeRecord; media?: Media; number: number; skillId: string }) {
+function RecentCup({ record, media, label }: { record: PracticeRecord; media?: Media; label: string }) {
   const blob = useCupImage(media)
   const url = useObjectUrl(blob, media ? `${media.id}-thumb-${blob?.size ?? 0}` : undefined)
   return (
     <li>
-      <a className="recent-cup" href={href(`/skill/${skillId}`)}>
+      {/* 押すと、その1杯の動画・写真と理由を見返せる */}
+      <a className="recent-cup" href={href(`/cup/${record.id}`)} aria-label={`${label}の詳細`}>
         {url ? <img src={url} alt="" /> : <span className="recent-empty" aria-hidden="true" />}
         <span className="recent-no">
-          No.{number}
+          {label}
           {record.outcome && ` ${OUTCOME_MARK[record.outcome]}`}
         </span>
       </a>
@@ -183,38 +187,93 @@ function RecentCup({ record, media, number, skillId }: { record: PracticeRecord;
   )
 }
 
-type Focus = {
+type Practice = {
   skill: Skill
   count: number
-  next?: { text: string; at: number }
+  next?: string
+  /** その型の新しい杯（その型の何杯目か付き） */
+  recent: { record: PracticeRecord; media?: Media; number: number }[]
+}
+
+/** 練習中の型1つ分。次の一手・記録する・その型の最近の杯を、この型の中にまとめる */
+function PracticeBlock({ practice }: { practice: Practice }) {
+  const { skill, count, next, recent } = practice
+  const { main, sub } = splitName(skill.name)
+  return (
+    <section className="practice-block" aria-label={main}>
+      <a className="practice-head" href={href(`/skill/${skill.id}`)}>
+        <PatternImage name={skill.name} />
+        <span className="practice-title">
+          <span className="practice-name">{main}</span>
+          {sub && <span className="muted small">{sub}</span>}
+        </span>
+        <span className="practice-count">
+          <strong>{count}</strong>杯
+        </span>
+      </a>
+      <p className="next-line">
+        <span className="next-label">次の一手</span>
+        <span className={next ? 'next-text' : 'next-text none'}>
+          {next ?? 'まだありません。記録のときに書いておくと、ここに出ます'}
+        </span>
+      </p>
+      <a className="btn primary shoot" href={href(`/record/${skill.id}`)}>
+        <CameraIcon size={20} />
+        {count + 1}杯目を記録する
+      </a>
+      {recent.length > 0 && (
+        <ul className="recent-cups" aria-label={`${main}の最近の杯`}>
+          {recent.map((r) => (
+            <RecentCup key={r.record.id} record={r.record} media={r.media} label={`${r.number}杯目`} />
+          ))}
+        </ul>
+      )}
+    </section>
+  )
 }
 
 export function TodayScreen() {
   const run = useAction()
   const toast = useToast()
-  const [focusId, setFocusId] = useState<string>()
 
   const data = useLiveQuery(async () => {
-    const [skills, settings, total] = await Promise.all([db.skills.toArray(), getSettings(), db.records.count()])
+    const [skills, settings] = await Promise.all([db.skills.toArray(), getSettings()])
     const byId = indexById(skills)
     const states = computeStates(skills)
-    const active = skills
-      .filter((s) => s.status === 'active')
-      .sort((a, b) => (a.activatedAt ?? 0) - (b.activatedAt ?? 0))
-    const focus: Focus[] = await Promise.all(
-      active.map(async (skill) => {
-        const records = await recordsOf(skill.id)
-        const next = records.find((r) => r.nextAction)
-        return { skill, count: records.length, next: next && { text: next.nextAction, at: next.createdAt } }
-      }),
-    )
-    // 新しい記録から、メイン写真にする1杯と、最近の杯を選ぶ
+    const active = skills.filter((s) => s.status === 'active')
+    const perSkill = await Promise.all(active.map(async (skill) => ({ skill, records: await recordsOf(skill.id) })))
+    // 新しい記録から、メイン写真にする1杯を選ぶ
     const latest = await db.records.orderBy('createdAt').reverse().limit(HERO_LOOKBACK).toArray()
-    const media = await db.media.bulkGet(latest.flatMap((r) => r.mediaIds ?? []))
+    // 動画・写真は、メイン写真の候補と各型の最近の杯の分をまとめて1回で読む
+    const recentOf = perSkill.map(({ records }) => records.slice(0, RECENT))
+    const mediaIds = [...latest, ...recentOf.flat()].flatMap((r) => r.mediaIds ?? [])
+    const media = await db.media.bulkGet([...new Set(mediaIds)])
     const mediaById = new Map(media.filter((m) => !!m).map((m) => [m.id, m]))
-    const mediaOf = latest.map((r) => pickCupMedia((r.mediaIds ?? []).map((id) => mediaById.get(id))))
-    const numbered = latest.map((record, i) => ({ record, media: mediaOf[i], number: total - i }))
-    const hero = numbered.find((n) => hasPhoto(n.media))
+    const cupOf = (r: PracticeRecord) => pickCupMedia((r.mediaIds ?? []).map((id) => mediaById.get(id)))
+    const heroRecord = latest.find((r) => hasPhoto(cupOf(r)))
+    // メイン写真の杯も、型ごとのまとまりと同じく「その型の何杯目か」で数える
+    const heroNumber =
+      heroRecord &&
+      (await db.records
+        .where('[skillId+createdAt]')
+        .between([heroRecord.skillId, -Infinity], [heroRecord.skillId, heroRecord.createdAt], true, true)
+        .count())
+    // 練習中ではない型（できた・並行して記録した型）の新しい杯も、ホームで見返せるようにする
+    const activeIds = new Set(active.map((s) => s.id))
+    const others = latest
+      .filter((r) => !activeIds.has(r.skillId))
+      .slice(0, RECENT)
+      .map((record) => ({ record, media: cupOf(record), name: splitName(byId.get(record.skillId)?.name ?? '').main }))
+    const practices: Practice[] = perSkill
+      .map(({ skill, records }, i) => ({
+        skill,
+        count: records.length,
+        next: records.find((r) => r.nextAction)?.nextAction,
+        recent: recentOf[i].map((record, j) => ({ record, media: cupOf(record), number: records.length - j })),
+        last: records[0]?.createdAt ?? skill.activatedAt ?? 0,
+      }))
+      // 最近練習した型を上に
+      .sort((a, b) => b.last - a.last)
     const thisWeek = await db.records.where('createdAt').aboveOrEqual(startOfWeek(Date.now())).count()
     // 前提を達成済みの「次の一歩」を先に、前提を練習中で並行して挑戦できるものを後に並べる
     const available = sortByDepth(skills.filter((s) => states.get(s.id) === 'available'))
@@ -222,19 +281,22 @@ export function TodayScreen() {
       .sort((a, b) => Number(a.parallel) - Number(b.parallel))
     return {
       settings,
-      total,
       thisWeek,
-      focus,
-      hero: hero && { ...hero, skillName: byId.get(hero.record.skillId)?.name },
-      recent: numbered.slice(0, RECENT),
+      practices,
+      others,
+      hero: heroRecord && {
+        record: heroRecord,
+        media: cupOf(heroRecord),
+        number: heroNumber ?? 0,
+        skillName: byId.get(heroRecord.skillId)?.name,
+      },
       available,
       skillCount: skills.length,
     }
   })
 
   if (!data) return null
-  const current = data.focus.find((f) => f.skill.id === focusId) ?? data.focus[data.focus.length - 1]
-  const room = data.settings.maxActive - data.focus.length
+  const room = data.settings.maxActive - data.practices.length
 
   return (
     <div className="screen today">
@@ -248,56 +310,24 @@ export function TodayScreen() {
       <div className="today-sheet">
         <Notice />
 
-        {current ? (
+        {data.practices.length > 0 ? (
           <>
             <div className="sheet-head">
               <h2>練習中の型</h2>
               <span className="muted small">
-                この型 {current.count}杯 · 今週ぜんぶで {data.thisWeek}杯
+                今週 {data.thisWeek}杯 ·{' '}
+                <a href={href('/records')}>カップ帳</a>
               </span>
             </div>
-            <div className="focus-title">
-              <PatternImage name={current.skill.name} />
-              <div>
-                <h1>{splitName(current.skill.name).main}</h1>
-                {splitName(current.skill.name).sub && (
-                  <p className="muted small">{splitName(current.skill.name).sub}</p>
-                )}
-              </div>
-            </div>
-            {data.focus.length > 1 && (
-              <div className="focus-switch" role="group" aria-label="練習中の型を切り替える">
-                {data.focus.map((f) => (
-                  <button
-                    key={f.skill.id}
-                    type="button"
-                    aria-pressed={f.skill.id === current.skill.id}
-                    onClick={() => setFocusId(f.skill.id)}
-                  >
-                    {splitName(f.skill.name).main}
-                  </button>
-                ))}
-              </div>
-            )}
-            <p className="next-line">
-              <span className="next-label">次の一手</span>
-              <span className={current.next ? 'next-text' : 'next-text none'}>
-                {current.next ? current.next.text : 'まだありません。撮ったあとに書いておくと、ここに出ます'}
-              </span>
-            </p>
-            <a className="btn primary shoot" href={href(`/record/${current.skill.id}/camera`)}>
-              <CameraIcon size={22} />
-              {data.total + 1}杯目を撮る
-            </a>
-            <a className="sub-link" href={href(`/skill/${current.skill.id}`)}>
-              合格の目安・やり方を見る
-            </a>
+            {data.practices.map((p) => (
+              <PracticeBlock key={p.skill.id} practice={p} />
+            ))}
           </>
         ) : data.skillCount > 0 ? (
           <div className="sheet-empty">
             <h2>練習中の型</h2>
             {data.available.length > 0 ? (
-              <p>まだ選んでいません。下から1つ選ぶと、ここから撮れるようになります。</p>
+              <p>まだ選んでいません。下から1つ選ぶと、ここから記録できるようになります。</p>
             ) : (
               <>
                 <p>いま挑戦できる型はありません。型の画面で、次の型を足せます。</p>
@@ -316,23 +346,12 @@ export function TodayScreen() {
           </div>
         )}
 
-        {data.recent.length > 0 && (
-          <section className="recent">
-            <div className="sheet-head">
-              <h2>最近の杯</h2>
-              <a className="small" href={href('/records')}>
-                カップ帳を見る
-              </a>
-            </div>
+        {data.others.length > 0 && (
+          <section className="section">
+            <h2>ほかの型の最近の杯</h2>
             <ul className="recent-cups">
-              {data.recent.map((n) => (
-                <RecentCup
-                  key={n.record.id}
-                  record={n.record}
-                  media={n.media}
-                  number={n.number}
-                  skillId={n.record.skillId}
-                />
+              {data.others.map((o) => (
+                <RecentCup key={o.record.id} record={o.record} media={o.media} label={o.name} />
               ))}
             </ul>
           </section>
@@ -358,7 +377,6 @@ export function TodayScreen() {
                     onClick={() =>
                       run(async () => {
                         await activateSkill(s.id)
-                        setFocusId(s.id)
                         toast.show(`「${splitName(s.name).main}」の練習を始めます`)
                       })
                     }

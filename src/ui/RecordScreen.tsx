@@ -9,7 +9,7 @@ import { ConfirmButton, Empty, formatAgo, formatBytes, isVideo, MediaView, reque
 import { useAction, useToast } from './feedback'
 import { canRecordInApp, Recorder } from './Recorder'
 import { ReferenceList } from './References'
-import { backHandler, go, goBack, href, replace } from './router'
+import { backHandler, go, goBack, href } from './router'
 import { readStorage, removeStorage, writeStorage } from './storage'
 import { Trimmer } from './Trimmer'
 import { BackIcon, CameraIcon, PhotoIcon, ScissorsIcon, VideoIcon } from './icons'
@@ -62,16 +62,7 @@ const nextKey = () => `item-${++keySeq}`
 /**
  * 記録する画面。recordId があれば、保存した記録を直す
  */
-export function RecordScreen({
-  skillId,
-  recordId,
-  openCamera,
-}: {
-  skillId: string
-  recordId?: string
-  /** 今日の画面の「撮る」から来たとき、すぐアプリ内のカメラを開く */
-  openCamera?: boolean
-}) {
+export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?: string }) {
   const editing = !!recordId
   const run = useAction()
   const toast = useToast()
@@ -94,16 +85,11 @@ export function RecordScreen({
   const [saving, setSaving] = useState(false)
   /** 保存せずに離れようとしたときの行き先（null なら確認を出していない） */
   const [confirmLeave, setConfirmLeave] = useState<{ back: true } | { to: string } | null>(null)
-  const [recording, setRecording] = useState(() => !!openCamera && !editing && canRecordInApp())
+  const [recording, setRecording] = useState(false)
   const [trimming, setTrimming] = useState<string | null>(null)
   const videoInput = useRef<HTMLInputElement>(null)
   const photoInput = useRef<HTMLInputElement>(null)
   const libraryInput = useRef<HTMLInputElement>(null)
-
-  // カメラを開いたら URL から外す（再読み込みや戻るで、またカメラが開かないように）
-  useEffect(() => {
-    if (openCamera) replace(`/record/${skillId}`)
-  }, [openCamera, skillId])
 
   // 直すときは、保存した内容を一度だけ読み込む（同期で書き換わっても、入力中の内容を上書きしない）
   useEffect(() => {
@@ -322,6 +308,7 @@ export function RecordScreen({
             アルバム
           </button>
         </div>
+        <p className="muted small">写真は、カップが真ん中に来るように撮ってください。中央を正方形に切り取って残します。</p>
         {[
           { ref: videoInput, accept: 'video/*', capture: true, multiple: false },
           { ref: photoInput, accept: 'image/*', capture: true, multiple: false },

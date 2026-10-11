@@ -1,5 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { db } from '../data/db'
 import { activateSkill, createDomain, deleteDomain, getSettings, importTemplate, renameDomain } from '../data/repo'
 import { canActivate, computeStates, indexById, prereqsDone, sortByDepth } from '../domain/logic'
@@ -13,6 +13,12 @@ import { go, href } from './router'
 import { readStorage, writeStorage } from './storage'
 
 const LAST_DOMAIN_KEY = 'michishirube:last-domain'
+const VIEW_KEY = 'michishirube:types-view'
+
+// 図の部品（React Flow）は大きいので、ロードマップを開いたときに読み込む（今日の画面の表示を遅くしない）
+const RoadmapGraph = lazy(() => import('./RoadmapGraph').then((m) => ({ default: m.RoadmapGraph })))
+
+type View = 'roadmap' | 'list'
 
 function NewDomainForm({ onDone }: { onDone: () => void }) {
   const run = useAction()
@@ -50,6 +56,12 @@ export function MapScreen({ domainId }: { domainId?: string }) {
   const importInput = useRef<HTMLInputElement>(null)
   const [addingDomain, setAddingDomain] = useState(false)
   const [renaming, setRenaming] = useState<string | null>(null)
+  // どう進めばいいかが分かるよう、最初はつながりの図（ロードマップ）を出す。切り替えたほうを覚えておく
+  const [view, setView] = useState<View>(() => (readStorage('local', VIEW_KEY) === 'list' ? 'list' : 'roadmap'))
+  const changeView = (v: View) => {
+    setView(v)
+    writeStorage('local', VIEW_KEY, v)
+  }
 
   const data = useLiveQuery(async () => {
     const [domains, settings, allSkills] = await Promise.all([
@@ -131,6 +143,36 @@ export function MapScreen({ domainId }: { domainId?: string }) {
         </div>
       )}
 
+      {skills.length > 0 && (
+        <div className="segmented small view-switch" role="group" aria-label="表示">
+          <button
+            type="button"
+            className={view === 'roadmap' ? 'selected' : ''}
+            aria-pressed={view === 'roadmap'}
+            onClick={() => changeView('roadmap')}
+          >
+            ロードマップ
+          </button>
+          <button
+            type="button"
+            className={view === 'list' ? 'selected' : ''}
+            aria-pressed={view === 'list'}
+            onClick={() => changeView('list')}
+          >
+            一覧
+          </button>
+        </div>
+      )}
+
+      {view === 'roadmap' && current && skills.length > 0 && (
+        <>
+          <Suspense fallback={<div className="graph" aria-busy="true" />}>
+            <RoadmapGraph key={current.id} skills={skills} />
+          </Suspense>
+          <p className="muted small">型を押すと、合格の目安と記録が見られます。指で動かしたり、広げたりできます。</p>
+        </>
+      )}
+
       {current && skills.length === 0 && (
         <div className="empty">
           <p>まだ型がありません。下の「型と分野の管理」から追加するか、設定の「用意されているロードマップ」から入れてください。</p>
@@ -142,7 +184,7 @@ export function MapScreen({ domainId }: { domainId?: string }) {
         </div>
       )}
 
-      {active.length > 0 && (
+      {view === 'list' && active.length > 0 && (
         <section className="section">
           <h2>練習中</h2>
           <ul className="type-cards">
@@ -167,6 +209,7 @@ export function MapScreen({ domainId }: { domainId?: string }) {
         </section>
       )}
 
+      {/* 次に始められる型は、どちらの表示でもすぐ始められるように出す */}
       {available.length > 0 && (
         <section className="section">
           <h2>次に挑戦できる</h2>
@@ -214,7 +257,7 @@ export function MapScreen({ domainId }: { domainId?: string }) {
         </section>
       )}
 
-      {locked.length > 0 && (
+      {view === 'list' && locked.length > 0 && (
         <section className="section">
           <h2>その先</h2>
           <ul className="type-rows">
@@ -237,7 +280,7 @@ export function MapScreen({ domainId }: { domainId?: string }) {
         </section>
       )}
 
-      {done.length > 0 && (
+      {view === 'list' && done.length > 0 && (
         <section className="section done-section">
           <h2>できた</h2>
           <ul className="done-grid">

@@ -6,6 +6,7 @@ import { startAutoUpload } from './data/youtube'
 import { formatBytes } from './ui/common'
 import { CupIcon, LeafIcon, NotebookIcon, SlidersIcon } from './ui/icons'
 import { EditSkillScreen, NewSkillScreen } from './ui/EditSkillScreen'
+import { CupScreen } from './ui/CupScreen'
 import { DebugOverlay } from './ui/DebugOverlay'
 import { FeedbackProvider, useToast } from './ui/feedback'
 import { MapScreen } from './ui/MapScreen'
@@ -34,11 +35,12 @@ function Screen({ route }: { route: Route }) {
           key={`${route.skillId}-${route.recordId ?? ''}`}
           skillId={route.skillId}
           recordId={route.recordId}
-          openCamera={route.camera}
         />
       )
     case 'records':
       return <RecordsScreen />
+    case 'cup':
+      return <CupScreen key={route.recordId} recordId={route.recordId} />
     case 'settings':
       return <SettingsScreen notice={route.notice} />
   }
@@ -66,7 +68,7 @@ function Background() {
 }
 
 const TABS = [
-  { path: '/', label: '今日', Icon: CupIcon, match: (r: Route) => r.name === 'today' || r.name === 'record' },
+  { path: '/', label: '今日', Icon: CupIcon, match: (r: Route) => ['today', 'record', 'cup'].includes(r.name) },
   { path: '/records', label: 'カップ帳', Icon: NotebookIcon, match: (r: Route) => r.name === 'records' },
   {
     path: '/map',
