@@ -1,7 +1,8 @@
 name: Deploy worker (Cloudflare)
 
 # サーバー（worker/）に関わる変更が main に入ったら、D1 のマイグレーションを当ててからデプロイする。
-# Cloudflare の API トークンとアカウント ID を、リポジトリの Secrets に入れておく（手順は docs/setup.md）
+# Cloudflare の API トークンとアカウント ID は、Environment「production」の Secrets に入れておく（手順は docs/setup.md）。
+# Environment の設定で main ブランチだけに限るので、ほかのブランチや PR のワークフローからはトークンを読めない
 on:
   push:
     branches: [main]
@@ -24,6 +25,7 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: production
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

@@ -70,9 +70,11 @@ npx wrangler secret put APP_TOKEN --config worker/wrangler.jsonc
 GitHub に fork・push して使っている場合、サーバー（`worker/`）の変更が `main` に入ったときに、GitHub Actions が自動でサーバーを更新します（データベースの更新も一緒に行います）。そのために、Cloudflare の API トークンを GitHub に登録します。登録しなければ、これまでどおり `pnpm worker:deploy` で手で更新します。
 
 1. Cloudflare のダッシュボード → 右上のアイコン →「プロフィール」→「API トークン」→「トークンを作成」
-2. 「Cloudflare Workers を編集する」のテンプレートを選び、権限に **アカウント → D1 → 編集** を足して作成します。表示されたトークンを控えます（一度しか表示されません）
+2. 「Cloudflare Workers を編集する」のテンプレートを選び、権限に **アカウント → D1 → 編集** を足します。「アカウント リソース」は自分のアカウントだけにし、必要なら「TTL」で有効期限も付けて作成します。表示されたトークンを控えます（一度しか表示されません）
 3. ダッシュボードの「Workers & Pages」の右側に出ている **アカウント ID** を控えます
-4. GitHub のリポジトリ →「Settings」→「Secrets and variables」→「Actions」→「New repository secret」で、次の2つを登録します
+4. GitHub のリポジトリ →「Settings」→「Environments」→「New environment」で、`production` という名前の Environment を作ります
+5. 作った Environment の「Deployment branches and tags」で「Selected branches and tags」を選び、`main` だけを足します（ほかのブランチや PR からはトークンを使えなくなります）。デプロイのたびに自分で承認したいときは、「Required reviewers」に自分を入れます
+6. 同じ画面の「Environment secrets」→「Add environment secret」で、次の2つを登録します
    - `CLOUDFLARE_API_TOKEN`：2 のトークン
    - `CLOUDFLARE_ACCOUNT_ID`：3 のアカウント ID
 
