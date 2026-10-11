@@ -53,7 +53,7 @@ export function RecordsScreen() {
     <div className="screen">
       <header className="screen-header">
         <h1>カップ帳</h1>
-        <span className="pill">{data.total} 件</span>
+        <span className="pill">{data.total}杯</span>
       </header>
 
       {data.recorded.size > 1 && (

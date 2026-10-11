@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { db } from '../data/db'
 import { activateSkill, cupNumbers, getSettings, recordsOf, setFocusOrder } from '../data/repo'
 import { getSyncConfig, getSyncStatus } from '../data/sync'
-import { computeStates, indexById, moveItem, orderBy, prereqsDone, sortByDepth } from '../domain/logic'
+import { computeStates, indexById, moveItem, orderBy, practiceOrder, prereqsDone, sortByDepth } from '../domain/logic'
 import type { Media, PracticeRecord, Skill } from '../domain/types'
 import { OUTCOME_MARK } from '../domain/format'
 import { formatAgo, splitName, useObjectUrl } from './common'
@@ -239,12 +239,13 @@ function PracticeBlock({
       </a>
       {!compact && (
         <>
-          <p className="next-line">
-            <span className="next-label">次の一手</span>
-            <span className={next ? 'next-text' : 'next-text none'}>
-              {next ?? 'まだありません。記録のときに書いておくと、ここに出ます'}
-            </span>
-          </p>
+          {/* 次の一手は、書いたことがあるときだけ出す（無いときの説明は記録画面にある） */}
+          {next && (
+            <p className="next-line">
+              <span className="next-label">次の一手</span>
+              <span className="next-text">{next}</span>
+            </p>
+          )}
           <a className="btn primary shoot" href={href(`/record/${skill.id}`)}>
             <CameraIcon size={20} />
             {/* 記録ボタンは、その型で何杯目か（杯の No. は全体の通し番号） */}
@@ -301,18 +302,20 @@ export function TodayScreen() {
     // 杯の番号は、型に関係なく全部の記録の通し番号（No.）
     const numbered = [...recentOf.flat(), ...others.map((o) => o.record), ...(heroRecord ? [heroRecord] : [])]
     const numbers = await cupNumbers([...new Map(numbered.map((r) => [r.id, r])).values()])
-    const byLast = perSkill
-      .map(({ skill, records }, i) => ({
-        skill,
-        count: records.length,
-        next: records.find((r) => r.nextAction)?.nextAction,
-        recent: recentOf[i].map((record) => ({ record, media: cupOf(record), number: numbers.get(record.id) ?? 0 })),
-        last: records[0]?.createdAt ?? skill.activatedAt ?? 0,
-      }))
-      // 並びを決めていない型は、最近練習した順
-      .sort((a, b) => b.last - a.last)
-    // 利用者が並べ替えた順を優先する（いま集中している型を上に）
-    const practices: Practice[] = orderBy(byLast, settings.focusOrder, (p) => p.skill.id)
+    const unordered = perSkill.map(({ skill, records }, i) => ({
+      skill,
+      count: records.length,
+      next: records.find((r) => r.nextAction)?.nextAction,
+      recent: recentOf[i].map((record) => ({ record, media: cupOf(record), number: numbers.get(record.id) ?? 0 })),
+      last: records[0]?.createdAt ?? skill.activatedAt ?? 0,
+    }))
+    // 利用者が並べ替えた順を優先し、決めていない型は最近練習した順（いま集中している型を上に）
+    const practices: Practice[] = practiceOrder(
+      unordered,
+      settings.focusOrder,
+      (p) => p.skill.id,
+      (p) => p.last,
+    )
     const thisWeek = await db.records.where('createdAt').aboveOrEqual(startOfWeek(Date.now())).count()
     // 次のおすすめ：前提ができている「次の一歩」を先に、前提を練習中のものを後に並べる
     const available = sortByDepth(skills.filter((s) => states.get(s.id) === 'available'))

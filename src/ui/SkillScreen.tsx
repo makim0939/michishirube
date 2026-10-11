@@ -111,7 +111,17 @@ export function SkillScreen({ id }: { id: string }) {
       db.skills.where('domainId').equals(skill.domainId).toArray(),
       db.domains.get(skill.domainId),
       recordsOf(id),
-      db.media.where('skillId').equals(id).sortBy('createdAt'),
+      // iPhone の Safari は、索引（skillId）から読んだ Blob を表示できないことがあるので、
+      // 索引からは id だけを取り、中身は id で読み直す
+      db.media
+        .where('skillId')
+        .equals(id)
+        .primaryKeys()
+        .then(async (ids) =>
+          (await db.media.bulkGet(ids as string[]))
+            .filter((m): m is Media => !!m)
+            .sort((a, b) => a.createdAt - b.createdAt),
+        ),
       getSettings(),
     ])
     // 上限は全分野の合計なので、挑戦できるかは全スキルで判定する

@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import { dlog } from '../debug'
 
 /** 長押しと見なすまでの時間と、それまでに指が動いてよい距離（これより動いたらスクロール） */
 const HOLD_MS = 420
@@ -87,7 +86,6 @@ export function useLongPressReorder(ids: string[], onCommit: (next: string[]) =>
     }
 
     const start = () => {
-      dlog('reorder:start', pending?.id ?? 'none')
       if (!pending) return
       drag.current = { id: pending.id, pointerId: pending.pointerId, grab: pending.grab, y: pending.y }
       startOrder = orderRef.current.join()
@@ -108,7 +106,6 @@ export function useLongPressReorder(ids: string[], onCommit: (next: string[]) =>
     }
 
     const finish = () => {
-      dlog('reorder:finish', !!drag.current)
       cancelPending()
       const d = drag.current
       if (!d) return
@@ -148,16 +145,12 @@ export function useLongPressReorder(ids: string[], onCommit: (next: string[]) =>
         y: e.clientY,
         grab: Math.min(e.clientY - rect.top, 36),
       }
-      dlog('reorder:down', e.pointerType)
       timer = setTimeout(start, HOLD_MS)
     }
 
     const move = (e: PointerEvent) => {
       if (pending && e.pointerId === pending.pointerId) {
-        if (Math.hypot(e.clientX - pending.x, e.clientY - pending.y) > SLOP_PX) {
-          dlog('reorder:moved-before-hold')
-          cancelPending()
-        }
+        if (Math.hypot(e.clientX - pending.x, e.clientY - pending.y) > SLOP_PX) cancelPending()
         else pending.y = e.clientY
       }
       const d = drag.current
@@ -183,7 +176,6 @@ export function useLongPressReorder(ids: string[], onCommit: (next: string[]) =>
     // スクロールが始まって取り消されたときは、ドラッグ前なら長押しを取りやめる。
     // ドラッグ中の指は touchmove で追い続ける（iPhone は途中で pointercancel を送ることがある）
     const cancel = (e: PointerEvent) => {
-      dlog('reorder:pointercancel', !!drag.current)
       if (!drag.current) cancelPending()
       else if (e.pointerType !== 'touch') finish()
     }

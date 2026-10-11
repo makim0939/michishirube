@@ -1609,12 +1609,6 @@ video.media.playing {
   line-height: 1.6;
 }
 
-.next-line .next-text.none {
-  font-weight: 400;
-  font-size: 0.85rem;
-  color: var(--muted);
-}
-
 .btn.shoot {
   min-height: 56px;
   font-size: 1rem;
