@@ -199,8 +199,6 @@ function RecentCup({
 type Practice = {
   skill: Skill
   count: number
-  /** 次に記録する杯の通し番号 */
-  nextNumber: number
   next?: string
   /** その型の新しい杯（通し番号つき） */
   recent: { record: PracticeRecord; media?: Media; number: number }[]
@@ -221,7 +219,7 @@ function PracticeBlock({
   /** 読み上げで使う人のための並べ替え（-1 で上へ、1 で下へ）。動かせないときは undefined */
   onMove?: { up?: () => void; down?: () => void }
 }) {
-  const { skill, count, nextNumber, next, recent } = practice
+  const { skill, count, next, recent } = practice
   const { main, sub } = splitName(skill.name)
   return (
     <section
@@ -249,7 +247,8 @@ function PracticeBlock({
           </p>
           <a className="btn primary shoot" href={href(`/record/${skill.id}`)}>
             <CameraIcon size={20} />
-            No.{nextNumber} を記録する
+            {/* 記録ボタンは、その型で何杯目か（杯の No. は全体の通し番号） */}
+            {count + 1}杯目を記録する
           </a>
           {recent.length > 0 && (
             <ul className="recent-cups" aria-label={`${main}の最近の杯`}>
@@ -279,7 +278,7 @@ export function TodayScreen() {
   const toast = useToast()
 
   const data = useLiveQuery(async () => {
-    const [skills, settings, total] = await Promise.all([db.skills.toArray(), getSettings(), db.records.count()])
+    const [skills, settings] = await Promise.all([db.skills.toArray(), getSettings()])
     const byId = indexById(skills)
     const states = computeStates(skills)
     const active = skills.filter((s) => s.status === 'active')
@@ -306,7 +305,6 @@ export function TodayScreen() {
       .map(({ skill, records }, i) => ({
         skill,
         count: records.length,
-        nextNumber: total + 1,
         next: records.find((r) => r.nextAction)?.nextAction,
         recent: recentOf[i].map((record) => ({ record, media: cupOf(record), number: numbers.get(record.id) ?? 0 })),
         last: records[0]?.createdAt ?? skill.activatedAt ?? 0,
