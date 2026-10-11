@@ -1,12 +1,22 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { db } from '../data/db'
-import { activateSkill, createDomain, deleteDomain, getSettings, importTemplate, renameDomain } from '../data/repo'
+import {
+  activateSkill,
+  createDomain,
+  deleteDomain,
+  getSettings,
+  importTemplate,
+  recordsOf,
+  renameDomain,
+} from '../data/repo'
+import { recentForm, type RecentForm } from '../domain/form'
 import { canActivate, computeStates, indexById, practiceOrder, prereqsDone, sortByDepth } from '../domain/logic'
 import { entitiesToTemplate } from '../domain/template'
 import type { Skill } from '../domain/types'
 import { ConfirmButton, saveFile, splitName } from './common'
 import { useAction, useToast } from './feedback'
+import { FormDots } from './FormDots'
 import { PlusIcon } from './icons'
 import { PatternImage } from './PatternImage'
 import { go, href } from './router'
@@ -79,13 +89,13 @@ export function MapScreen({ domainId }: { domainId?: string }) {
     const wanted = domainId ?? readStorage('local', LAST_DOMAIN_KEY)
     const current = domains.find((d) => d.id === wanted) ?? domains[0]
     const skills = current ? allSkills.filter((s) => s.domainId === current.id) : []
-    // 練習中の型だけ、杯数と◎の数、最後に練習した日時（並びに使う）を出す
-    const stats = new Map<string, { count: number; good: number; last: number }>()
+    // 練習中の型だけ、杯数と最近の調子、最後に練習した日時（並びに使う）を出す
+    const stats = new Map<string, { count: number; form: RecentForm; last: number }>()
     for (const s of skills.filter((s) => s.status === 'active')) {
-      const records = await db.records.where('skillId').equals(s.id).toArray()
+      const records = await recordsOf(s.id)
       // 今日の画面と同じく、最後の記録の日時（記録が無ければ練習を始めた日時）
-      const last = records.reduce((max, r) => Math.max(max, r.createdAt), records.length > 0 ? 0 : (s.activatedAt ?? 0))
-      stats.set(s.id, { count: records.length, good: records.filter((r) => r.outcome === 'good').length, last })
+      const last = records[0]?.createdAt ?? s.activatedAt ?? 0
+      stats.set(s.id, { count: records.length, form: recentForm(records), last })
     }
     return { domains, current, skills, settings, allSkills, stats }
   }, [domainId])
@@ -200,7 +210,7 @@ export function MapScreen({ domainId }: { domainId?: string }) {
           <Suspense fallback={<div className="graph" aria-busy="true" />}>
             <RoadmapGraph key={current.id} skills={skills} />
           </Suspense>
-          <p className="muted small">型を押すと、合格の目安と記録が見られます。指で動かしたり、広げたりできます。</p>
+          <p className="muted small">型を押すと、やり方と記録が見られます。指で動かしたり、広げたりできます。</p>
         </>
       )}
 
@@ -227,10 +237,9 @@ export function MapScreen({ domainId }: { domainId?: string }) {
                     <PatternImage name={s.name} className="large" />
                     <span className="type-card-body">
                       <span className="type-name">{splitName(s.name).main}</span>
-                      <span className="muted small">
-                        {st ? `${st.count}杯 · うち ◎ ${st.good}杯` : '0杯'}
-                      </span>
-                      <span className="type-card-link">記録と合格の目安を見る</span>
+                      <span className="muted small">{st?.count ?? 0}杯</span>
+                      {st && <FormDots form={st.form} />}
+                      <span className="type-card-link">記録とやり方を見る</span>
                     </span>
                   </a>
                 </li>

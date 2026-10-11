@@ -112,7 +112,7 @@ export function CupScreen({ recordId }: { recordId: string }) {
 
       {skill && (
         <a className="sub-link" href={href(`/skill/${skill.id}`)}>
-          「{name}」の記録と合格の目安を見る
+          「{name}」の記録とやり方を見る
         </a>
       )}
     </div>

@@ -44,14 +44,14 @@ function SkillForm({
         <input value={form.name} onChange={(e) => set('name', e.target.value)} required placeholder="例：ハート" />
       </label>
       <label className="field">
-        <span>合格の目安</span>
+        <span>参考の目安（任意）</span>
         <textarea
           rows={2}
           value={form.criteria}
           onChange={(e) => set('criteria', e.target.value)}
           placeholder="例：中央に左右対称のハートが10回中8回描ける"
         />
-        <small className="muted">「できた気がする」ではなく、回数や状態で判定できる書き方にすると、「できた」の判断がぶれません。</small>
+        <small className="muted">「できた」は、最近の調子（直近10杯の結果）を見て自分で決めます。目安を書いておくと、そのときの参考になります。</small>
       </label>
       <label className="field">
         <span>説明・やり方</span>

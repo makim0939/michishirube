@@ -311,7 +311,7 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
 
       {skill.criteria && (
         <details className="criteria-details">
-          <summary>合格の目安</summary>
+          <summary>参考の目安</summary>
           <p>{skill.criteria}</p>
         </details>
       )}
