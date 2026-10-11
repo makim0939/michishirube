@@ -20,5 +20,6 @@ export function FormDots({ form }: { form: RecentForm }) {
 /** 最近の調子を文で（型の詳細・「できた」の確認） */
 export function formSummary(form: RecentForm): string {
   if (form.outcomes.length === 0) return 'まだ記録がありません'
+  if (form.good + form.meh + form.bad === 0) return `直近${form.outcomes.length}杯は、結果（◎△✕）を付けていません`
   return `直近${form.outcomes.length}杯で ${OUTCOME_MARK.good}${form.good}・${OUTCOME_MARK.meh}${form.meh}・${OUTCOME_MARK.bad}${form.bad}`
 }
