@@ -25,6 +25,27 @@ export function canRecordInApp(): boolean {
 }
 
 /**
+ * 画面の枠（object-fit: cover で映したプレビューの上）が、カメラの元の映像のどこに当たるか。
+ * 枠が無ければ、映像の中央の正方形
+ */
+function guideToSource(video: HTMLVideoElement, guide: HTMLElement | null) {
+  const vw = video.videoWidth
+  const vh = video.videoHeight
+  const fallback = { sx: (vw - Math.min(vw, vh)) / 2, sy: (vh - Math.min(vw, vh)) / 2, side: Math.min(vw, vh) }
+  if (!guide) return fallback
+  const el = video.getBoundingClientRect()
+  const g = guide.getBoundingClientRect()
+  const scale = Math.max(el.width / vw, el.height / vh)
+  if (!scale) return fallback
+  const offsetX = (el.width - vw * scale) / 2
+  const offsetY = (el.height - vh * scale) / 2
+  const side = Math.min(g.width / scale, vw, vh)
+  const sx = Math.min(Math.max(0, (g.left - el.left - offsetX) / scale), vw - side)
+  const sy = Math.min(Math.max(0, (g.top - el.top - offsetY) / scale), vh - side)
+  return { sx, sy, side }
+}
+
+/**
  * アプリの中で、画質を抑えて録画する（スマホ標準のカメラより数分の1の大きさ）。
  * 使えないときや許可されなかったときは、onFallback で標準のカメラに切り替える
  */
@@ -48,6 +69,8 @@ export function Recorder({
   const [now, setNow] = useState(Date.now())
   /** 録画を止めたあと、できあがりの写真を待っている動画 */
   const [finished, setFinished] = useState<File>()
+  const [shooting, setShooting] = useState(false)
+  const guide = useRef<HTMLDivElement>(null)
 
   // カメラを開く（音の有無を切り替えたら開き直す）
   useEffect(() => {
@@ -139,20 +162,20 @@ export function Recorder({
 
   const recording = startedAt !== undefined
 
-  /** いま映っているコマから、中央の正方形を写真にする（開いているカメラのまま、1回押すだけ） */
+  /** いま映っているコマから、枠の中を写真にする（開いているカメラのまま、1回押すだけ） */
   const shoot = async () => {
     const video = preview.current
-    if (!finished) return
+    // 2回押しても、二重に記録に入れない
+    if (!finished || shooting) return
+    setShooting(true)
     let photo: File | undefined
     if (video && video.videoWidth && video.videoHeight) {
-      const side = Math.min(video.videoWidth, video.videoHeight)
-      const size = Math.min(side, 1600)
+      const { sx, sy, side } = guideToSource(video, guide.current)
+      const size = Math.round(Math.min(side, 1600))
       const canvas = document.createElement('canvas')
       canvas.width = size
       canvas.height = size
-      canvas
-        .getContext('2d')!
-        .drawImage(video, (video.videoWidth - side) / 2, (video.videoHeight - side) / 2, side, side, 0, 0, size, size)
+      canvas.getContext('2d')!.drawImage(video, sx, sy, side, side, 0, 0, size, size)
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.85))
       if (blob) photo = new File([blob], finished.name.replace(/\.[^.]+$/, '') + '-cup.jpg', { type: 'image/jpeg' })
     }
@@ -163,11 +186,16 @@ export function Recorder({
     return (
       <div className="recorder" role="dialog" aria-modal="true" aria-label="できあがりを撮る">
         <video ref={preview} className="recorder-preview" autoPlay playsInline muted />
-        <div className="finish-guide" aria-hidden="true" />
+        <div className="finish-guide" ref={guide} aria-hidden="true" />
         <p className="finish-hint">できあがりのカップを、枠の中に入れて1枚</p>
         <div className="recorder-bottom">
-          <button className="shutter-button" aria-label="できあがりを撮る" onClick={() => void shoot()} />
-          <button className="btn small ghost recorder-native" onClick={() => onDone(finished)}>
+          <button
+            className="shutter-button"
+            aria-label="できあがりを撮る"
+            disabled={shooting}
+            onClick={() => void shoot()}
+          />
+          <button className="btn small ghost recorder-native" disabled={shooting} onClick={() => onDone(finished)}>
             スキップ
           </button>
         </div>
