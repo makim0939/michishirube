@@ -144,3 +144,21 @@ export const PlusIcon = (p: P) => (
     <path d="M12 5v14M5 12h14" />
   </Icon>
 )
+
+export const GripIcon = (p: P) => (
+  <Icon {...p}>
+    <path d="M5 8h14M5 12h14M5 16h14" />
+  </Icon>
+)
+
+export const ChevronUpIcon = (p: P) => (
+  <Icon {...p}>
+    <path d="M6 15l6-6 6 6" />
+  </Icon>
+)
+
+export const ChevronDownIcon = (p: P) => (
+  <Icon {...p}>
+    <path d="M6 9l6 6 6-6" />
+  </Icon>
+)

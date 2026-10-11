@@ -3,12 +3,13 @@ import { useEffect, useState } from 'react'
 import { db } from '../data/db'
 import { activateSkill, getSettings, recordsOf } from '../data/repo'
 import { getSyncConfig, getSyncStatus } from '../data/sync'
-import { computeStates, indexById, prereqsDone, sortByDepth } from '../domain/logic'
+import { computeStates, indexById, orderBy, prereqsDone, sortByDepth } from '../domain/logic'
 import type { Media, PracticeRecord, Skill } from '../domain/types'
 import { OUTCOME_MARK } from '../domain/format'
 import { formatAgo, splitName, useObjectUrl } from './common'
 import { hasPhoto, pickCupMedia, useCupImage } from './cupImage'
 import { useAction, useToast } from './feedback'
+import { FocusOrder } from './FocusOrder'
 import { AlertIcon, CameraIcon } from './icons'
 import { href } from './router'
 import { readStorage, writeStorage } from './storage'
@@ -235,6 +236,7 @@ function PracticeBlock({ practice }: { practice: Practice }) {
 export function TodayScreen() {
   const run = useAction()
   const toast = useToast()
+  const [reordering, setReordering] = useState(false)
 
   const data = useLiveQuery(async () => {
     const [skills, settings] = await Promise.all([db.skills.toArray(), getSettings()])
@@ -264,7 +266,7 @@ export function TodayScreen() {
       .filter((r) => !activeIds.has(r.skillId))
       .slice(0, RECENT)
       .map((record) => ({ record, media: cupOf(record), name: splitName(byId.get(record.skillId)?.name ?? '').main }))
-    const practices: Practice[] = perSkill
+    const byLast = perSkill
       .map(({ skill, records }, i) => ({
         skill,
         count: records.length,
@@ -272,8 +274,10 @@ export function TodayScreen() {
         recent: recentOf[i].map((record, j) => ({ record, media: cupOf(record), number: records.length - j })),
         last: records[0]?.createdAt ?? skill.activatedAt ?? 0,
       }))
-      // 最近練習した型を上に
+      // 並びを決めていない型は、最近練習した順
       .sort((a, b) => b.last - a.last)
+    // 利用者が並べ替えた順を優先する（いま集中している型を上に）
+    const practices: Practice[] = orderBy(byLast, settings.focusOrder, (p) => p.skill.id)
     const thisWeek = await db.records.where('createdAt').aboveOrEqual(startOfWeek(Date.now())).count()
     // 前提を達成済みの「次の一歩」を先に、前提を練習中で並行して挑戦できるものを後に並べる
     const available = sortByDepth(skills.filter((s) => states.get(s.id) === 'available'))
@@ -296,6 +300,8 @@ export function TodayScreen() {
   })
 
   if (!data) return null
+  // 練習中が1つになったら並べ替えを終える（次に2つになったとき、勝手に並べ替えの画面にならないように）
+  if (reordering && data.practices.length <= 1) setReordering(false)
   const room = data.settings.maxActive - data.practices.length
 
   return (
@@ -317,11 +323,21 @@ export function TodayScreen() {
               <span className="muted small">
                 今週 {data.thisWeek}杯 ·{' '}
                 <a href={href('/records')}>カップ帳</a>
+                {data.practices.length > 1 && !reordering && (
+                  <>
+                    {' · '}
+                    <button type="button" className="link-button" onClick={() => setReordering(true)}>
+                      並べ替え
+                    </button>
+                  </>
+                )}
               </span>
             </div>
-            {data.practices.map((p) => (
-              <PracticeBlock key={p.skill.id} practice={p} />
-            ))}
+            {reordering && data.practices.length > 1 ? (
+              <FocusOrder skills={data.practices.map((p) => p.skill)} onDone={() => setReordering(false)} />
+            ) : (
+              data.practices.map((p) => <PracticeBlock key={p.skill.id} practice={p} />)
+            )}
           </>
         ) : data.skillCount > 0 ? (
           <div className="sheet-empty">

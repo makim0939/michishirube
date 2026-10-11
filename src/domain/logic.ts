@@ -122,3 +122,22 @@ export function sortByDepth(skills: Skill[]): Skill[] {
   const d = depths(skills)
   return [...skills].sort((a, b) => d.get(a.id)! - d.get(b.id)! || a.createdAt - b.createdAt)
 }
+
+/**
+ * 利用者が決めた順（order の id の並び）に並べる。order に無いものは、元の並びのまま後ろに付ける
+ */
+export function orderBy<T>(items: T[], order: string[] | undefined, idOf: (item: T) => string): T[] {
+  const rank = new Map((order ?? []).map((id, i) => [id, i]))
+  return items
+    .map((item, i) => ({ item, i, r: rank.get(idOf(item)) ?? Infinity }))
+    .sort((a, b) => a.r - b.r || a.i - b.i)
+    .map((x) => x.item)
+}
+
+/** 配列の from 番目を to 番目へ動かした新しい配列 */
+export function moveItem<T>(items: T[], from: number, to: number): T[] {
+  const next = items.slice()
+  const [moved] = next.splice(from, 1)
+  next.splice(Math.max(0, Math.min(next.length, to)), 0, moved)
+  return next
+}

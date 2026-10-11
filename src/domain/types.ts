@@ -91,6 +91,8 @@ export interface Settings {
   maxActive: number
   /** YouTube に上げ終えた古い動画を、端末から自動で消す */
   autoTidy: boolean
+  /** 今日の画面で練習中の型を並べる順（型の id）。利用者が並べ替える。入っていない型は後ろに付く */
+  focusOrder?: string[]
   updatedAt: number
 }
 

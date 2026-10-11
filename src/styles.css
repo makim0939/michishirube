@@ -2016,3 +2016,91 @@ a.notice {
   white-space: pre-wrap;
   line-height: 1.7;
 }
+
+/* ---- 今日：練習中の型の並べ替え ---- */
+
+.link-button {
+  appearance: none;
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.focus-order {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.focus-order-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.focus-order-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 6px 6px 0;
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  transition: box-shadow 0.15s;
+}
+
+.focus-order-list li.dragging {
+  box-shadow: 0 10px 24px -8px rgb(42 30 23 / 40%);
+  outline: 2px solid var(--active);
+}
+
+.focus-order-handle {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  color: var(--muted);
+  /* つまみの上では、指の動きをページのスクロールではなく並べ替えに使う */
+  touch-action: none;
+  cursor: grab;
+}
+
+.focus-order-name {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mincho);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pattern-image.tiny {
+  width: 40px;
+  height: 40px;
+}
+
+.icon-button {
+  appearance: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.icon-button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
