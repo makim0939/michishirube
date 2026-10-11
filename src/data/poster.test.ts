@@ -30,10 +30,10 @@ describe('動画のサムネイル（できあがりのコマ）', () => {
     )
   })
 
-  it('メイン写真には、写真か、動画のできあがりのコマだけを使う', () => {
-    expect(hasCupImage(video({ poster: blob }))).toBe(false)
-    expect(hasCupImage(video({ poster: blob, posterEnd: true }))).toBe(true)
-    expect(hasCupImage(video({ cloudPosterEnd: true }))).toBe(true)
+  it('今日の大きな写真には、写真だけを使う（動画のコマは使わない）', () => {
+    expect(hasCupImage(video({ poster: blob, posterEnd: true }))).toBe(false)
+    expect(hasCupImage(video({ cloudPosterEnd: true }))).toBe(false)
     expect(hasCupImage(video({ type: 'image/jpeg', blob }))).toBe(true)
+    expect(hasCupImage(video({ type: 'image/jpeg', cloudPhoto: true }))).toBe(true)
   })
 })
