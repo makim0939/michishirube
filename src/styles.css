@@ -2017,90 +2017,47 @@ a.notice {
   line-height: 1.7;
 }
 
-/* ---- 今日：練習中の型の並べ替え ---- */
+/* ---- 今日：練習中の型を長押しで並べ替える ---- */
 
-.link-button {
-  appearance: none;
-  border: none;
-  background: none;
-  padding: 0;
-  font: inherit;
-  color: inherit;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  cursor: pointer;
-}
-
-.focus-order {
+.practice-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 14px;
 }
 
-.focus-order-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+.practice-block {
+  /* 長押しで、リンクのプレビューや文字の選択を出さない */
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
-.focus-order-list li {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 6px 6px 0;
-  border-radius: 16px;
-  background: var(--surface);
-  box-shadow: var(--shadow);
+/* iPhone は、リンクや画像を長押しすると端末のドラッグ（ほかのアプリへ渡す）を始めて指の操作を取り消すので、止める */
+.practice-block a,
+.practice-block img {
+  -webkit-user-drag: none;
+}
+
+/* 画像の長押しで、画像の選択やメニューが出ないよう、触れたら下のカード（リンク）が受け取る */
+.practice-block img {
+  pointer-events: none;
+}
+
+.practice-block.compact {
+  padding: 10px 14px;
   transition: box-shadow 0.15s;
 }
 
-.focus-order-list li.dragging {
-  box-shadow: 0 10px 24px -8px rgb(42 30 23 / 40%);
+.practice-block.lifted {
+  position: relative;
+  z-index: 5;
+  box-shadow: 0 16px 32px -12px rgb(42 30 23 / 45%);
   outline: 2px solid var(--active);
 }
 
-.focus-order-handle {
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  flex: none;
-  color: var(--muted);
-  /* つまみの上では、指の動きをページのスクロールではなく並べ替えに使う */
-  touch-action: none;
-  cursor: grab;
-}
-
-.focus-order-name {
-  flex: 1;
-  min-width: 0;
-  font-family: var(--font-mincho);
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.pattern-image.tiny {
-  width: 40px;
-  height: 40px;
-}
-
-.icon-button {
-  appearance: none;
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  flex: none;
-  border: 1px solid var(--border);
-  border-radius: 50%;
-  background: var(--surface);
-  color: var(--text);
-  cursor: pointer;
-}
-
-.icon-button:disabled {
-  opacity: 0.35;
-  cursor: default;
+/* 並べ替えている間は、ページのどこでも文字を選択させない */
+.reordering,
+.reordering * {
+  user-select: none;
+  -webkit-user-select: none;
 }
