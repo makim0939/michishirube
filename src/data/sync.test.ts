@@ -92,6 +92,28 @@ describe('同期', () => {
   })
 })
 
+describe('動画のサムネイル', () => {
+  it('サムネイルをサーバーに置き、cloudPoster を立てて同期する', async () => {
+    const server = fakeServer()
+    vi.stubGlobal('fetch', server.fetch)
+    const domainId = await createDomain('ピアノ')
+    const recordId = await addRecord({
+      skillId: await createSkill(domainId, input('A')),
+      reason: 'x',
+      nextAction: '',
+      files: [new Blob(['video'], { type: 'video/mp4' })],
+    })
+    const [m] = await db.media.where('recordId').equals(recordId).toArray()
+    await db.media.update(m.id, { poster: new Blob(['poster'], { type: 'image/jpeg' }) })
+    await connectSync({ url: 'https://api.example', token: 't' })
+    await runSync()
+    const puts = server.fetch.mock.calls.filter(([url, init]) => String(url).includes('/api/photos/') && init?.method === 'PUT')
+    expect(puts.map(([url]) => new URL(String(url)).pathname)).toContain(`/api/photos/${m.id}.poster`)
+    expect((await db.media.get(m.id))?.cloudPoster).toBe(true)
+    expect((server.rows.get(`media:${m.id}`)?.data as { cloudPoster?: boolean }).cloudPoster).toBe(true)
+  })
+})
+
 describe('記録の印', () => {
   it('残す印を付けると同期の対象になる', async () => {
     const domainId = await createDomain('ピアノ')

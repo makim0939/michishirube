@@ -85,6 +85,8 @@ export interface Media {
   youtubeId?: string
   /** 写真をサーバーに置いた */
   cloudPhoto?: boolean
+  /** 動画のサムネイルをサーバーに置いた（端末から動画が消えても、別の端末でもサムネイルを出せる） */
+  cloudPoster?: boolean
 }
 
 export interface Settings {

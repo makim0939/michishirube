@@ -37,6 +37,9 @@ export const SYNC_LIMITS = {
 /** 写真は縮小してから送るので、これを超えるものは受け付けない */
 export const PHOTO_MAX_BYTES = 2 * 1024 * 1024
 
+/** 動画のサムネイルを、写真と同じ置き場に置くときの id */
+export const posterPhotoId = (mediaId: string) => `${mediaId}.poster`
+
 export function isEntityKind(v: unknown): v is EntityKind {
   return typeof v === 'string' && (ENTITY_KINDS as readonly string[]).includes(v)
 }
