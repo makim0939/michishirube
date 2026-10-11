@@ -84,7 +84,7 @@ export function MapScreen({ domainId }: { domainId?: string }) {
     for (const s of skills.filter((s) => s.status === 'active')) {
       const records = await db.records.where('skillId').equals(s.id).toArray()
       // 今日の画面と同じく、最後の記録の日時（記録が無ければ練習を始めた日時）
-      const last = records.length > 0 ? Math.max(...records.map((r) => r.createdAt)) : (s.activatedAt ?? 0)
+      const last = records.reduce((max, r) => Math.max(max, r.createdAt), records.length > 0 ? 0 : (s.activatedAt ?? 0))
       stats.set(s.id, { count: records.length, good: records.filter((r) => r.outcome === 'good').length, last })
     }
     return { domains, current, skills, settings, allSkills, stats }
