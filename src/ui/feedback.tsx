@@ -116,7 +116,7 @@ function CelebrationOverlay({
             </ul>
           </div>
         ) : (
-          <p className="muted">この型の先に、新しく開く型はありません。</p>
+          <p className="muted">この型のあとに、新しくおすすめになる型はありません。</p>
         )}
         <div className="celebration-actions">
           {unlocked.length === 1 && (

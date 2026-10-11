@@ -428,19 +428,11 @@ export async function setMediaKeep(id: string, keep: boolean) {
  */
 export async function cupNumbers(records: PracticeRecord[]): Promise<Map<string, number>> {
   if (records.length === 0) return new Map()
-  // 日時の索引だけを古い順に1回読み、それぞれの記録が何番目かを二分探索で求める（記録の中身は読まない）
-  const times = (await db.records.orderBy('createdAt').keys()) as number[]
-  const countUpTo = (t: number) => {
-    let lo = 0
-    let hi = times.length
-    while (lo < hi) {
-      const mid = (lo + hi) >> 1
-      if (times[mid] <= t) lo = mid + 1
-      else hi = mid
-    }
-    return lo
-  }
-  return new Map(records.map((r) => [r.id, countUpTo(r.createdAt)]))
+  // 日時の索引の順（同じ日時なら id の順）に id だけを読み、何番目かを番号にする（記録の中身は読まない）。
+  // 同じ日時の記録があっても、番号が重なったり飛んだりしない
+  const order = (await db.records.orderBy('createdAt').primaryKeys()) as string[]
+  const index = new Map(order.map((id, i) => [id, i + 1]))
+  return new Map(records.map((r) => [r.id, index.get(r.id) ?? 0]))
 }
 
 export async function recordsOf(skillId: string): Promise<PracticeRecord[]> {

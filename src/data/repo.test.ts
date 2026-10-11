@@ -247,4 +247,17 @@ describe('杯の通し番号', () => {
     const numbers = await cupNumbers(records.filter((r) => !!r))
     expect(ids.map((id) => numbers.get(id))).toEqual([1, 2, 3])
   })
+
+  it('同じ日時の記録があっても、番号が重ならない', async () => {
+    const { a } = await chain()
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(2026, 0, 1))
+    const ids = [
+      await addRecord({ skillId: a, reason: 'x', nextAction: '', files: [] }),
+      await addRecord({ skillId: a, reason: 'y', nextAction: '', files: [] }),
+    ]
+    vi.useRealTimers()
+    const numbers = await cupNumbers((await db.records.bulkGet(ids)).filter((r) => !!r))
+    expect(new Set(ids.map((id) => numbers.get(id)))).toEqual(new Set([1, 2]))
+  })
 })

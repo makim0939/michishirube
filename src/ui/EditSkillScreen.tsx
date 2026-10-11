@@ -88,7 +88,7 @@ function SkillForm({
       </fieldset>
 
       <fieldset className="field">
-        <legend>前提（先にできておく型）</legend>
+        <legend>前提（おすすめの順で、先にする型。前提がまだでも始められます）</legend>
         {candidates.length === 0 ? (
           <p className="muted">この分野にほかの型はありません。</p>
         ) : (
