@@ -1,5 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { db } from '../data/db'
 import { activateSkill, cupNumbers, getSettings, recordsOf, setFocusOrder } from '../data/repo'
 import { getSyncConfig, getSyncStatus } from '../data/sync'
@@ -15,12 +15,17 @@ import { AlertIcon, CameraIcon } from './icons'
 import { href } from './router'
 import { readStorage, writeStorage } from './storage'
 import { PatternImage } from './PatternImage'
-import { LIGHT_LABEL, lightFor, lightUrl } from './world'
+import { LIGHT_LABEL, lightFor, lightUrl, type Light } from './world'
 
 const HINT_KEY = 'michishirube:install-hint-dismissed'
 /** メイン写真を探しにいく、新しい記録の数 */
 const HERO_LOOKBACK = 20
-const RECENT = 4
+/** 大きな写真でめくれる、最近の杯の数 */
+const HERO_SLIDES = 6
+/** 型ごとの最近の杯（横にスクロールして見る） */
+const RECENT = 12
+/** いちばん最初の写真のある杯を探す、古い記録の数 */
+const FIRST_LOOKAHEAD = 30
 
 const WEEKDAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
 
@@ -125,44 +130,87 @@ function Notice() {
   return null
 }
 
-function Hero({
-  media,
-  record,
-  number,
-  skillName,
-}: {
+type Slide = {
+  record: PracticeRecord
   media?: Media
-  record?: PracticeRecord
-  number?: number
+  number: number
   skillName?: string
-}) {
-  const blob = useCupImage(media)
-  const url = useObjectUrl(blob, media ? `${media.id}-hero-${blob?.size ?? 0}` : undefined)
+  /** いちばん最初の1杯（いまと見比べられるよう、最後に置く） */
+  first?: boolean
+}
+
+/** 大きな写真の1枚。写真がまだ読めないあいだは、いまの時刻の光の絵 */
+function HeroSlide({ slide, light }: { slide: Slide; light: Light }) {
+  const blob = useCupImage(slide.media)
+  const url = useObjectUrl(blob, slide.media ? `${slide.media.id}-hero-${blob?.size ?? 0}` : undefined)
+  return (
+    <div className="hero-slide">
+      <img
+        className="hero-image"
+        src={url ?? lightUrl(light)}
+        alt={url ? `No.${slide.number} ${slide.skillName ? splitName(slide.skillName).main : ''}` : ''}
+      />
+    </div>
+  )
+}
+
+/**
+ * 今日の画面のいちばん上。最近の杯の写真を左右にめくれて、最後の1枚は「はじまりの1杯」（いまと見比べる）。
+ * 写真がまだ無いあいだは、いまの時刻の光の絵を出す
+ */
+function Hero({ slides }: { slides: Slide[] }) {
   const now = useNow()
   const light = lightFor(now)
   const date = `${now.getMonth() + 1}.${now.getDate()} ${WEEKDAYS[now.getDay()]} · ${LIGHT_LABEL[light]}`
-  // 自分の写真が無いあいだは、いまの時刻の光の絵を出す（自分の1杯ではないので説明は付けない）
-  const own = !!media && !!url
+  const track = useRef<HTMLDivElement>(null)
+  const [index, setIndex] = useState(0)
+  // 新しい杯を記録したら、いちばん新しい1枚に戻す
+  const newest = slides[0]?.record.id
+  useEffect(() => {
+    track.current?.scrollTo({ left: 0 })
+    setIndex(0)
+  }, [newest])
+  const current = slides[Math.min(index, slides.length - 1)]
+
   return (
-    <section className="today-hero" aria-label={own ? '最新の1杯' : undefined}>
-      <img
-        className="hero-image"
-        src={own ? url : lightUrl(light)}
-        alt={own ? `No.${number} ${skillName ?? ''}` : ''}
-      />
+    <section className="today-hero" aria-label={slides.length > 0 ? '最近の杯（左右にめくれます）' : undefined}>
+      {slides.length === 0 ? (
+        <img className="hero-image" src={lightUrl(light)} alt="" />
+      ) : (
+        <div
+          className="hero-track"
+          ref={track}
+          onScroll={(e) => {
+            const el = e.currentTarget
+            setIndex(Math.round(el.scrollLeft / Math.max(1, el.clientWidth)))
+          }}
+        >
+          {slides.map((s) => (
+            <HeroSlide key={s.record.id} slide={s} light={light} />
+          ))}
+        </div>
+      )}
       <div className="hero-shade" aria-hidden="true" />
       <div className="hero-top">
         <span className="wordmark">Latelier</span>
         <span className="hero-date">{date}</span>
       </div>
-      {own && record && (
+      {current && (
         <div className="hero-caption">
-          <span className="hero-no">No.{number}</span>
+          {current.first && <span className="hero-first">はじまりの1杯</span>}
+          <span className="hero-no">No.{current.number}</span>
           <span>
-            {formatAgo(record.createdAt, now.getTime())}
-            {skillName && `　${splitName(skillName).main}`}
-            {record.outcome && `　${OUTCOME_MARK[record.outcome]}`}
+            {formatAgo(current.record.createdAt, now.getTime())}
+            {current.skillName && `　${splitName(current.skillName).main}`}
+            {current.record.outcome && `　${OUTCOME_MARK[current.record.outcome]}`}
           </span>
+        </div>
+      )}
+      {slides.length > 1 && (
+        <div className="hero-dots" aria-hidden="true">
+          {slides.map((s, i) => (
+            <span key={s.record.id} className={i === index ? 'on' : ''} />
+          ))}
         </div>
       )}
     </section>
@@ -285,24 +333,30 @@ export function TodayScreen() {
     const states = computeStates(skills)
     const active = skills.filter((s) => s.status === 'active')
     const perSkill = await Promise.all(active.map(async (skill) => ({ skill, records: await recordsOf(skill.id) })))
-    // 新しい記録から、メイン写真にする1杯を選ぶ
-    const latest = await db.records.orderBy('createdAt').reverse().limit(HERO_LOOKBACK).toArray()
-    // 動画・写真は、メイン写真の候補と各型の最近の杯の分をまとめて1回で読む
+    // 新しい記録から、大きな写真でめくる杯を選ぶ。最後に「はじまりの1杯」（いちばん古い、写真のある杯）を置く
+    const [latest, oldest] = await Promise.all([
+      db.records.orderBy('createdAt').reverse().limit(HERO_LOOKBACK).toArray(),
+      db.records.orderBy('createdAt').limit(FIRST_LOOKAHEAD).toArray(),
+    ])
+    // 動画・写真は、大きな写真の候補と各型の最近の杯の分をまとめて1回で読む
     const recentOf = perSkill.map(({ records }) => records.slice(0, RECENT))
-    const mediaIds = [...latest, ...recentOf.flat()].flatMap((r) => r.mediaIds ?? [])
+    const mediaIds = [...latest, ...oldest, ...recentOf.flat()].flatMap((r) => r.mediaIds ?? [])
     const media = await db.media.bulkGet([...new Set(mediaIds)])
     const mediaById = new Map(media.filter((m) => !!m).map((m) => [m.id, m]))
     const cupOf = (r: PracticeRecord) => pickCupMedia((r.mediaIds ?? []).map((id) => mediaById.get(id)))
-    // 写真、または動画のできあがりのコマがある、いちばん新しい杯
-    const heroRecord = latest.find((r) => hasCupImage(cupOf(r)))
+    // 写真、または動画のできあがりのコマがある杯
+    const heroRecords = latest.filter((r) => hasCupImage(cupOf(r))).slice(0, HERO_SLIDES)
+    const firstRecord = oldest.find((r) => hasCupImage(cupOf(r)))
+    const withFirst = firstRecord && !heroRecords.some((r) => r.id === firstRecord.id)
     // 練習中ではない型（できた・並行して記録した型）の新しい杯も、ホームで見返せるようにする
     const activeIds = new Set(active.map((s) => s.id))
     const others = latest
       .filter((r) => !activeIds.has(r.skillId))
       .slice(0, RECENT)
       .map((record) => ({ record, media: cupOf(record), name: splitName(byId.get(record.skillId)?.name ?? '').main }))
+    const heroAll = withFirst ? [...heroRecords, firstRecord] : heroRecords
     // 杯の番号は、型に関係なく全部の記録の通し番号（No.）
-    const numbered = [...recentOf.flat(), ...others.map((o) => o.record), ...(heroRecord ? [heroRecord] : [])]
+    const numbered = [...recentOf.flat(), ...others.map((o) => o.record), ...heroAll]
     const numbers = await cupNumbers([...new Map(numbered.map((r) => [r.id, r])).values()])
     const unordered = perSkill.map(({ skill, records }, i) => ({
       skill,
@@ -328,12 +382,15 @@ export function TodayScreen() {
       thisWeek,
       practices,
       others: others.map((o) => ({ ...o, number: numbers.get(o.record.id) ?? 0 })),
-      hero: heroRecord && {
-        record: heroRecord,
-        media: cupOf(heroRecord),
-        number: numbers.get(heroRecord.id) ?? 0,
-        skillName: byId.get(heroRecord.skillId)?.name,
-      },
+      slides: heroAll.map(
+        (record): Slide => ({
+          record,
+          media: cupOf(record),
+          number: numbers.get(record.id) ?? 0,
+          skillName: byId.get(record.skillId)?.name,
+          first: withFirst && record.id === firstRecord.id,
+        }),
+      ),
       available,
       skillCount: skills.length,
     }
@@ -355,12 +412,7 @@ export function TodayScreen() {
 
   return (
     <div className="screen today">
-      <Hero
-        media={data.hero?.media}
-        record={data.hero?.record}
-        number={data.hero?.number}
-        skillName={data.hero?.skillName}
-      />
+      <Hero slides={data.slides} />
 
       <div className="today-sheet">
         <Notice />

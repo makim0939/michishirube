@@ -3,14 +3,15 @@ import { useState } from 'react'
 import { db } from '../data/db'
 import { cupNumbers } from '../data/repo'
 import type { Media } from '../domain/types'
-import { formatAgo } from './common'
-import { RecordCard } from './RecordCard'
+import { formatAgo, splitName } from './common'
+import { type Cup, CupGrid } from './CupGrid'
+import { pickCupMedia } from './cupImage'
 import { href } from './router'
 
-/** 動画を一度に読み込みすぎないよう、少しずつ出す */
-const PAGE = 15
+/** 一度にたくさん読み込みすぎないよう、少しずつ出す（3列なので3の倍数） */
+const PAGE = 24
 
-/** 「記録」タブ：全部のスキルの記録を新しい順に。日付ごとに区切る */
+/** カップ帳：全部の型の杯を新しい順に、写真の格子で。日付ごとに区切り、押すとその1杯の詳細を開く */
 export function RecordsScreen() {
   const [limit, setLimit] = useState(PAGE)
   const [skillFilter, setSkillFilter] = useState<string>('')
@@ -37,16 +38,24 @@ export function RecordsScreen() {
   if (!data) return null
   const skillById = new Map(data.skills.map((s) => [s.id, s]))
   const domainName = new Map(data.domains.map((d) => [d.id, d.name]))
+  // 分野が1つなら、型の名前だけで分かる
+  const manyDomains = data.domains.length > 1
   const mediaById = new Map(data.media.map((m) => [m.id, m]))
   const shown = data.records.slice(0, limit)
   const more = data.records.length > limit
 
   // 日付の見出しで区切る
-  const groups: { label: string; items: typeof shown }[] = []
+  const groups: { label: string; cups: Cup[] }[] = []
   for (const r of shown) {
     const label = formatAgo(r.createdAt)
-    if (groups.at(-1)?.label === label) groups.at(-1)!.items.push(r)
-    else groups.push({ label, items: [r] })
+    const cup: Cup = {
+      record: r,
+      media: pickCupMedia((r.mediaIds ?? []).map((id) => mediaById.get(id))),
+      number: data.numbers.get(r.id) ?? 0,
+      skillName: skillById.get(r.skillId)?.name,
+    }
+    if (groups.at(-1)?.label === label) groups.at(-1)!.cups.push(cup)
+    else groups.push({ label, cups: [cup] })
   }
 
   return (
@@ -68,7 +77,8 @@ export function RecordsScreen() {
               .filter((s) => data.recorded.has(s.id))
               .map((s) => (
                 <option key={s.id} value={s.id}>
-                  {domainName.get(s.domainId)}・{s.name}
+                  {manyDomains ? `${domainName.get(s.domainId)}・` : ''}
+                  {splitName(s.name).main}
                 </option>
               ))}
           </select>
@@ -86,21 +96,7 @@ export function RecordsScreen() {
         groups.map((g) => (
           <section key={g.label} className="section">
             <h2>{g.label}</h2>
-            <ul className="records">
-              {g.items.map((r) => {
-                const skill = skillById.get(r.skillId)
-                return (
-                  <RecordCard
-                    key={r.id}
-                    record={r}
-                    media={(r.mediaIds ?? []).map((id) => mediaById.get(id)).filter((m): m is Media => !!m)}
-                    skill={skill}
-                    domainName={skill && domainName.get(skill.domainId)}
-                    number={data.numbers.get(r.id)}
-                  />
-                )
-              })}
-            </ul>
+            <CupGrid cups={g.cups} />
           </section>
         ))
       )}

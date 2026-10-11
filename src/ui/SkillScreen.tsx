@@ -16,16 +16,16 @@ import type { Media } from '../domain/types'
 import { ConfirmButton, Empty, formatDate, isVideo, splitName, StateBadge, STATE_LABEL } from './common'
 import { PatternImage } from './PatternImage'
 import { MediaItem } from './MediaItem'
-import { RecordCard } from './RecordCard'
+import { CupGrid } from './CupGrid'
+import { pickCupMedia } from './cupImage'
 import { References } from './References'
 import { useAction, useCelebrate, useToast } from './feedback'
 import { backHandler, href } from './router'
 import { BackIcon, PlayIcon } from './icons'
 
-/** 動画をまとめて読み込むと重いので、記録は少しずつ出す */
-const RECORDS_PAGE = 10
-/** スキル画面では、まず新しいものを数件だけ出す */
-const RECORDS_FIRST = 3
+/** 記録は写真の格子で、まず新しいものを数段だけ出し、少しずつ足す（3列なので3の倍数） */
+const RECORDS_FIRST = 9
+const RECORDS_PAGE = 12
 
 
 /** 最新と最初を並べて、上達を目で見られるようにする（今日の画面と同じく、新しいほうを左に） */
@@ -266,30 +266,23 @@ export function SkillScreen({ id }: { id: string }) {
 
       <section className="section">
         <div className="section-head">
-          <h2>記録（{records.length}）</h2>
-          {state !== 'done' && (
-            <a className="btn small" href={href(`/record/${skill.id}`)}>
-              ＋ 記録する
-            </a>
-          )}
+          <h2>記録（{records.length}杯）</h2>
         </div>
         {records.length === 0 ? (
           <p className="muted">まだ記録がありません。</p>
         ) : (
-          <ul className="records">
-            {records.slice(0, shown).map((r) => (
-              <RecordCard
-                key={r.id}
-                record={r}
-                media={r.mediaIds.map((m) => mediaById.get(m)).filter((m) => !!m)}
-                number={data.numbers?.get(r.id)}
-              />
-            ))}
-          </ul>
+          <CupGrid
+            cups={records.slice(0, shown).map((r) => ({
+              record: r,
+              media: pickCupMedia(r.mediaIds.map((m) => mediaById.get(m))),
+              number: data.numbers?.get(r.id) ?? 0,
+              skillName: skill.name,
+            }))}
+          />
         )}
         {records.length > shown && (
           <button className="btn" onClick={() => setShown((n) => n + RECORDS_PAGE)}>
-            さらに表示（残り {records.length - shown} 件）
+            さらに表示（残り {records.length - shown}杯）
           </button>
         )}
       </section>
