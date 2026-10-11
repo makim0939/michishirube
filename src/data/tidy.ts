@@ -49,7 +49,7 @@ export async function tidyVideos(now = Date.now()): Promise<{ count: number; byt
     if (!m || !needsLocalPoster(m)) continue
     try {
       const poster = await makePoster(await inMemory(m.blob!))
-      if (poster) await db.media.update(id, { poster, posterEnd: true })
+      if (poster && (poster.end || !m.poster)) await db.media.update(id, { poster: poster.blob, posterEnd: poster.end })
     } catch {
       // 作れなくても、整理は続ける
     }

@@ -93,6 +93,8 @@ export interface Media {
   cloudPoster?: boolean
   /** サーバーに置いたサムネイルが、動画の最後のコマか */
   cloudPosterEnd?: boolean
+  /** 中身（動画・写真）を入れた・差し替えた日時。端末ごとに中身が食い違ったとき、新しいほうを残すのに使う */
+  contentAt?: number
 }
 
 export interface Settings {

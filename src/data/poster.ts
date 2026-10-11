@@ -30,9 +30,11 @@ export function hasCupImage(m: Media | undefined): boolean {
 // 動画を読み込むのは重いので、1本ずつ順に作る。同じ動画を二重に作らない
 let queue: Promise<unknown> = Promise.resolve()
 const pending = new Set<string>()
+// 作れなかった動画は、アプリを開いている間は作り直さない（開くたびに動画全体を読み込まないように）
+const failed = new Set<string>()
 
 export function ensurePoster(m: Media) {
-  const local = needsLocalPoster(m)
+  const local = needsLocalPoster(m) && !failed.has(m.id)
   const remote = !local && needsRemotePoster(m)
   if ((!local && !remote) || pending.has(m.id)) return
   pending.add(m.id)
@@ -44,11 +46,14 @@ export function ensurePoster(m: Media) {
       }
       // iPhone では IndexedDB の動画を直接読めないことがあるので、メモリに写してから作る
       const poster = await makePoster(await inMemory(m.blob!))
+      // 最後のコマにできなかったら、最初のコマで我慢して、開いている間は作り直さない
+      if (!poster?.end) failed.add(m.id)
       // 作り直したら、サーバーにも置き直す（cloudPosterEnd が立つまで同期で送る）
-      if (poster) await db.media.update(m.id, { poster, posterEnd: true })
+      if (poster && (poster.end || !m.poster)) await db.media.update(m.id, { poster: poster.blob, posterEnd: poster.end })
     })
     .catch(() => {
-      // 作れない・取れないときは、次に出すときにまた試す
+      // 作れない・取れないときは、作るほうは開いている間は試さない（取るほうは次に出すときにまた試す）
+      if (local) failed.add(m.id)
     })
     .finally(() => pending.delete(m.id))
 }

@@ -89,33 +89,61 @@ function toWire(kind: EntityKind, row: Record<string, unknown>): Record<string, 
   return rest
 }
 
+/** 中身（動画・写真）とそれに付いた結果。中身を差し替えた端末の値を、まとめて残す */
+const CONTENT_KEYS = [
+  'type',
+  'name',
+  'size',
+  'upload',
+  'uploadError',
+  'uploadAttempts',
+  'youtubeId',
+  'cloudPhoto',
+  'cloudPoster',
+  'cloudPosterEnd',
+  'contentAt',
+] as const
+
 /**
- * 動画・写真を上げた結果は、上げた端末だけが書く。別の端末の古い行（まだ結果を知らない）で上書きされたら、
- * 端末の結果を残し、直した行をもう一度送る（同じ動画を二重に上げないため）
+ * サーバーから来た動画・写真の行を、端末の行と合わせる。
+ * - 端末のほうが新しい中身（切り取ったなど）を持っていれば、中身まわりは端末の値を残して送り直す
+ * - サーバーのほうが新しい中身なら、端末の古い中身・サムネイルは捨てる（取り直す）
+ * - 同じ中身なら、上げた結果（YouTube・写真・サムネイル）は上げた端末だけが書くので、
+ *   別の端末の古い行（まだ結果を知らない）で消されたら、端末の結果を残して送り直す（同じ動画を二重に上げないため）
  */
 function mergeMedia(remote: Media, local: Media | undefined): { row: Media; repaired: boolean } {
   const row: Media = { ...remote }
-  if (local?.blob) row.blob = local.blob
-  if (local?.poster) {
+  if (!local) return { row, repaired: false }
+  const remoteAt = remote.contentAt ?? 0
+  const localAt = local.contentAt ?? 0
+  if (remoteAt > localAt) return { row, repaired: false }
+  if (local.blob) row.blob = local.blob
+  if (local.poster) {
     row.poster = local.poster
     row.posterEnd = local.posterEnd
   }
+  if (localAt > remoteAt) {
+    const fields = row as unknown as Record<string, unknown>
+    for (const key of CONTENT_KEYS) fields[key] = local[key]
+    row.updatedAt = Date.now()
+    return { row, repaired: true }
+  }
   let repaired = false
-  if (local?.youtubeId && !remote.youtubeId) {
+  if (local.youtubeId && !remote.youtubeId) {
     row.youtubeId = local.youtubeId
     row.upload = 'done'
     delete row.uploadError
     repaired = true
   }
-  if (local?.cloudPhoto && !remote.cloudPhoto) {
+  if (local.cloudPhoto && !remote.cloudPhoto) {
     row.cloudPhoto = true
     repaired = true
   }
-  if (local?.cloudPoster && !remote.cloudPoster) {
+  if (local.cloudPoster && !remote.cloudPoster) {
     row.cloudPoster = true
     repaired = true
   }
-  if (local?.cloudPosterEnd && !remote.cloudPosterEnd) {
+  if (local.cloudPosterEnd && !remote.cloudPosterEnd) {
     row.cloudPosterEnd = true
     repaired = true
   }

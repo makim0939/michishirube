@@ -287,6 +287,8 @@ export async function revertAchievement(id: string) {
 export interface NewMedia {
   blob: Blob
   poster?: Blob
+  /** poster が最後のコマ（できあがり）か。作れずに最初のコマにしたときは false */
+  posterEnd?: boolean
 }
 
 export interface RecordInput {
@@ -303,9 +305,10 @@ function asNewMedia(f: Blob | NewMedia): NewMedia {
 }
 
 /** 中身を差し替えたときの項目。動画は YouTube に上げ直す */
-function contentFields(m: NewMedia): Partial<Media> {
+function contentFields(m: NewMedia, now: number): Partial<Media> {
   const type = m.blob.type || 'application/octet-stream'
   return {
+    contentAt: now,
     blob: m.blob,
     poster: m.poster,
     type,
@@ -319,7 +322,7 @@ function contentFields(m: NewMedia): Partial<Media> {
           uploadError: undefined,
           uploadAttempts: undefined,
           // 撮ったときに作ったサムネイルは、できあがりのコマ。中身が変わったらサーバーにも置き直す
-          posterEnd: !!m.poster,
+          posterEnd: !!m.poster && m.posterEnd !== false,
           cloudPoster: false,
           cloudPosterEnd: false,
         }
@@ -334,7 +337,7 @@ function newMediaRows(recordId: string, skillId: string, files: NewMedia[], now:
     skillId,
     createdAt: now + i,
     updatedAt: now,
-    ...(contentFields(m) as Pick<Media, 'type' | 'size'>),
+    ...(contentFields(m, now) as Pick<Media, 'type' | 'size'>),
   }))
 }
 
@@ -404,7 +407,7 @@ export async function updateRecord(input: RecordUpdate) {
     await db.media.bulkAdd(added)
     for (const r of input.replace) {
       if (removed.has(r.id)) continue
-      await db.media.update(r.id, { ...contentFields(r), updatedAt: now })
+      await db.media.update(r.id, { ...contentFields(r, now), updatedAt: now })
     }
     await db.records.update(record.id, {
       outcome: input.outcome,

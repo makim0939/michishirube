@@ -1,7 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useRef, useState } from 'react'
 import { db } from '../data/db'
-import { compressPhoto, inMemory, makePoster } from '../data/mediaPrep'
+import { compressPhoto, inMemory, makePoster, type Poster } from '../data/mediaPrep'
 import { addRecord, deleteRecord, lastNextAction, updateRecord, type NewMedia } from '../data/repo'
 import { LATTE_CAUSES } from '../domain/causes'
 import { OUTCOME_LABEL } from '../domain/format'
@@ -41,8 +41,8 @@ function useDraft(key: string, enabled: boolean) {
 
 /** 画面に並べる動画・写真。新しく撮ったものと、保存済みの記録にあるもの */
 type Item =
-  | { kind: 'new'; key: string; file: File; poster?: Blob; inMemory: boolean }
-  | { kind: 'existing'; key: string; media: Media; replaced?: { file: File; poster?: Blob } }
+  | { kind: 'new'; key: string; file: File; poster?: Poster; inMemory: boolean }
+  | { kind: 'existing'; key: string; media: Media; replaced?: { file: File; poster?: Poster } }
 
 function itemBlob(item: Item): Blob | undefined {
   if (item.kind === 'new') return item.file
@@ -191,8 +191,19 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
         const replace: ({ id: string } & NewMedia)[] = []
         for (const i of items) {
           // 切り取った動画は、もともとメモリ上にある
-          if (i.kind === 'new') added.push({ blob: i.inMemory ? i.file : await detach(i.file), poster: i.poster })
-          else if (i.replaced) replace.push({ id: i.media.id, blob: i.replaced.file, poster: i.replaced.poster })
+          if (i.kind === 'new')
+            added.push({
+              blob: i.inMemory ? i.file : await detach(i.file),
+              poster: i.poster?.blob,
+              posterEnd: i.poster?.end,
+            })
+          else if (i.replaced)
+            replace.push({
+              id: i.media.id,
+              blob: i.replaced.file,
+              poster: i.replaced.poster?.blob,
+              posterEnd: i.replaced.poster?.end,
+            })
         }
         if (recordId) {
           await updateRecord({
@@ -349,7 +360,7 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
             {items.map((item) => {
               const blob = itemBlob(item)
               const type = itemType(item)
-              const poster = item.kind === 'new' ? item.poster : (item.replaced?.poster ?? item.media.poster)
+              const poster = item.kind === 'new' ? item.poster?.blob : (item.replaced?.poster?.blob ?? item.media.poster)
               return (
                 <li key={item.key}>
                   {blob ? (
@@ -397,7 +408,10 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
               aria-checked={outcome === o.value}
               className={outcome === o.value ? `selected outcome-${o.value}` : ''}
               onClick={() => {
-                setOutcome(outcome === o.value ? undefined : o.value)
+                const nextOutcome = outcome === o.value ? undefined : o.value
+                setOutcome(nextOutcome)
+                // 原因は、うまくいかなかったときだけのもの。◎にしたら外す
+                if (nextOutcome !== 'meh' && nextOutcome !== 'bad') setDraft((d) => ({ ...d, causes: undefined }))
                 change()
               }}
             >
@@ -407,7 +421,7 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
         </div>
 
         {/* うまくいかなかったときだけ、よくある原因をワンタップで選べる（書かなくて済むように） */}
-        {causeOptions.length > 0 && (outcome === 'meh' || outcome === 'bad' || (draft.causes?.length ?? 0) > 0) && (
+        {causeOptions.length > 0 && (outcome === 'meh' || outcome === 'bad') && (
           <div className="cause-chips" role="group" aria-label="原因（あてはまるもの）">
             {causeOptions.map((c) => {
               const on = draft.causes?.includes(c) ?? false
