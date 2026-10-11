@@ -1482,8 +1482,10 @@ video.media.playing {
 }
 
 .wordmark {
-  font-family: var(--font-latin);
-  font-size: 30px;
+  font-family: var(--font-mincho);
+  font-weight: 600;
+  font-size: 26px;
+  letter-spacing: 0.12em;
   line-height: 1;
 }
 

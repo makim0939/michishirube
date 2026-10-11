@@ -285,7 +285,7 @@ export function SettingsScreen({ notice }: { notice?: string }) {
       </section>
 
       <p className="muted small center">
-        ラテリエ v{__APP_VERSION__}・
+        ラテ帳 v{__APP_VERSION__}・
         <a href={`${import.meta.env.BASE_URL}privacy.html`} target="_blank" rel="noopener noreferrer">
           プライバシーポリシー
         </a>

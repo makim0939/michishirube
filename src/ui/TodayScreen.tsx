@@ -205,7 +205,7 @@ function Hero({ slides }: { slides: Slide[] }) {
       )}
       <div className="hero-shade" aria-hidden="true" />
       <div className="hero-top">
-        <span className="wordmark">Latelier</span>
+        <span className="wordmark">ラテ帳</span>
         <span className="hero-date">{date}</span>
       </div>
       {slides.length > 1 && (
@@ -435,7 +435,6 @@ export function TodayScreen() {
               <span className="muted small">
                 今週 {data.thisWeek}杯 ·{' '}
                 <a href={href('/records')}>カップ帳</a>
-                {data.practices.length > 1 && ' · 長押しで並べ替え'}
               </span>
             </div>
             <div className="practice-list" ref={containerRef}>

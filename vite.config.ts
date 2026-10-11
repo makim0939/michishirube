@@ -16,8 +16,8 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
-        name: 'ラテリエ',
-        short_name: 'ラテリエ',
+        name: 'ラテ帳',
+        short_name: 'ラテ帳',
         description: 'ラテアートの練習を1杯ずつ撮って残すアプリ',
         lang: 'ja',
         theme_color: '#faf7f2',
