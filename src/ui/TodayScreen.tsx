@@ -146,7 +146,7 @@ function Hero({
       <img
         className="hero-image"
         src={own ? url : lightUrl(light)}
-        alt={own ? `No.${number} ${skillName ?? ''}` : ''}
+        alt={own ? `${skillName ?? ''} ${number}杯目` : ''}
       />
       <div className="hero-shade" aria-hidden="true" />
       <div className="hero-top">
@@ -155,7 +155,10 @@ function Hero({
       </div>
       {own && record && (
         <div className="hero-caption">
-          <span className="hero-no">No.{number}</span>
+          <span className="hero-no">
+            {number}
+            <small>杯目</small>
+          </span>
           <span>
             {formatAgo(record.createdAt, now.getTime())}
             {skillName && `　${splitName(skillName).main}`}
@@ -234,7 +237,7 @@ export function TodayScreen() {
   const toast = useToast()
 
   const data = useLiveQuery(async () => {
-    const [skills, settings, total] = await Promise.all([db.skills.toArray(), getSettings(), db.records.count()])
+    const [skills, settings] = await Promise.all([db.skills.toArray(), getSettings()])
     const byId = indexById(skills)
     const states = computeStates(skills)
     const active = skills.filter((s) => s.status === 'active')
@@ -247,8 +250,20 @@ export function TodayScreen() {
     const media = await db.media.bulkGet([...new Set(mediaIds)])
     const mediaById = new Map(media.filter((m) => !!m).map((m) => [m.id, m]))
     const cupOf = (r: PracticeRecord) => pickCupMedia((r.mediaIds ?? []).map((id) => mediaById.get(id)))
-    const heroIndex = latest.findIndex((r) => hasPhoto(cupOf(r)))
-    const heroRecord = heroIndex >= 0 ? latest[heroIndex] : undefined
+    const heroRecord = latest.find((r) => hasPhoto(cupOf(r)))
+    // メイン写真の杯も、型ごとのまとまりと同じく「その型の何杯目か」で数える
+    const heroNumber =
+      heroRecord &&
+      (await db.records
+        .where('[skillId+createdAt]')
+        .between([heroRecord.skillId, -Infinity], [heroRecord.skillId, heroRecord.createdAt], true, true)
+        .count())
+    // 練習中ではない型（できた・並行して記録した型）の新しい杯も、ホームで見返せるようにする
+    const activeIds = new Set(active.map((s) => s.id))
+    const others = latest
+      .filter((r) => !activeIds.has(r.skillId))
+      .slice(0, RECENT)
+      .map((record) => ({ record, media: cupOf(record), name: splitName(byId.get(record.skillId)?.name ?? '').main }))
     const practices: Practice[] = perSkill
       .map(({ skill, records }, i) => ({
         skill,
@@ -266,13 +281,13 @@ export function TodayScreen() {
       .sort((a, b) => Number(a.parallel) - Number(b.parallel))
     return {
       settings,
-      total,
       thisWeek,
       practices,
+      others,
       hero: heroRecord && {
         record: heroRecord,
         media: cupOf(heroRecord),
-        number: total - heroIndex,
+        number: heroNumber ?? 0,
         skillName: byId.get(heroRecord.skillId)?.name,
       },
       available,
@@ -329,6 +344,17 @@ export function TodayScreen() {
               型を用意する
             </a>
           </div>
+        )}
+
+        {data.others.length > 0 && (
+          <section className="section">
+            <h2>ほかの型の最近の杯</h2>
+            <ul className="recent-cups">
+              {data.others.map((o) => (
+                <RecentCup key={o.record.id} record={o.record} media={o.media} label={o.name} />
+              ))}
+            </ul>
+          </section>
         )}
 
         {data.available.length > 0 && room > 0 && (

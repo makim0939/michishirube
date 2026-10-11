@@ -1536,9 +1536,17 @@ video.media.playing {
 .hero-no {
   font-family: var(--font-latin);
   font-style: italic;
-  font-size: 24px;
+  font-size: 26px;
   line-height: 1.1;
   letter-spacing: 0;
+}
+
+.hero-no small {
+  font-family: var(--font-sans);
+  font-style: normal;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  margin-left: 3px;
 }
 
 .today-sheet {
@@ -1642,6 +1650,10 @@ video.media.playing {
 }
 
 .recent-no {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-family: var(--font-latin);
   font-size: 14px;
 }
@@ -1816,10 +1828,10 @@ a.notice {
 /* ---- 型：ロードマップ（つながりの図） ---- */
 
 .graph {
-  height: min(64vh, 560px);
-  margin: 0 -16px;
-  border-top: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
+  /* 両側に余白を残し、図の外を指でなぞればページを動かせるようにする */
+  height: min(56vh, 480px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   background: var(--surface-2);
   overflow: hidden;
 }
