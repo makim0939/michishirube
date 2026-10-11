@@ -39,16 +39,16 @@ export function countActive(skills: Skill[]): number {
   return skills.filter((s) => s.status === 'active').length
 }
 
-export type ActivateCheck =
-  | { ok: true }
-  | { ok: false; reason: 'locked' | 'done' | 'already' | 'limit' }
+export type ActivateCheck = { ok: true } | { ok: false; reason: 'done' | 'already' | 'limit' }
 
-/** 挑戦中にできるか。上限は全分野の合計で数える（分散を防ぐため） */
+/**
+ * 練習中にできるか。前提はおすすめの順で、まだの型でも自由に始められる（やってみたい型から練習できるように）。
+ * 上限は全分野の合計で数える（分散を防ぐため）
+ */
 export function canActivate(skill: Skill, skills: Skill[], maxActive: number): ActivateCheck {
   const state = skillState(skill, indexById(skills))
   if (state === 'done') return { ok: false, reason: 'done' }
   if (state === 'active') return { ok: false, reason: 'already' }
-  if (state === 'locked') return { ok: false, reason: 'locked' }
   if (countActive(skills) >= maxActive) return { ok: false, reason: 'limit' }
   return { ok: true }
 }

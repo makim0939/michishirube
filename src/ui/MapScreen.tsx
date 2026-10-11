@@ -46,6 +46,12 @@ function NewDomainForm({ onDone }: { onDone: () => void }) {
   )
 }
 
+function LimitNote({ max }: { max: number }) {
+  return (
+    <p className="muted small">練習中は {max} つまでです。どれかを「できた」にするか、練習を中断すると始められます。</p>
+  )
+}
+
 function names(list: Skill[]) {
   return list.map((s) => `「${splitName(s.name).main}」`).join('')
 }
@@ -56,8 +62,8 @@ export function MapScreen({ domainId }: { domainId?: string }) {
   const importInput = useRef<HTMLInputElement>(null)
   const [addingDomain, setAddingDomain] = useState(false)
   const [renaming, setRenaming] = useState<string | null>(null)
-  // どう進めばいいかが分かるよう、最初はつながりの図（ロードマップ）を出す。切り替えたほうを覚えておく
-  const [view, setView] = useState<View>(() => (readStorage('local', VIEW_KEY) === 'list' ? 'list' : 'roadmap'))
+  // 初めは一覧（すぐ始められる）。つながりの図（ロードマップ）に切り替えたら、そちらを覚えておく
+  const [view, setView] = useState<View>(() => (readStorage('local', VIEW_KEY) === 'roadmap' ? 'roadmap' : 'list'))
   const changeView = (v: View) => {
     setView(v)
     writeStorage('local', VIEW_KEY, v)
@@ -115,6 +121,23 @@ export function MapScreen({ domainId }: { domainId?: string }) {
   }
 
   const prereqsOf = (s: Skill) => s.prereqIds.map((id) => byId.get(id)).filter((p): p is Skill => !!p)
+  // 練習中の上限は全分野の合計で数える
+  const atLimit = allSkills.filter((s) => s.status === 'active').length >= settings.maxActive
+
+  const startButton = (skill: Skill, disabled: boolean) => (
+    <button
+      className="btn small"
+      disabled={disabled}
+      onClick={() =>
+        run(async () => {
+          await activateSkill(skill.id)
+          toast.show(`「${splitName(skill.name).main}」の練習を始めます`)
+        })
+      }
+    >
+      はじめる
+    </button>
+  )
 
   return (
     <div className="screen types">
@@ -147,19 +170,19 @@ export function MapScreen({ domainId }: { domainId?: string }) {
         <div className="segmented small view-switch" role="group" aria-label="表示">
           <button
             type="button"
-            className={view === 'roadmap' ? 'selected' : ''}
-            aria-pressed={view === 'roadmap'}
-            onClick={() => changeView('roadmap')}
-          >
-            ロードマップ
-          </button>
-          <button
-            type="button"
             className={view === 'list' ? 'selected' : ''}
             aria-pressed={view === 'list'}
             onClick={() => changeView('list')}
           >
             一覧
+          </button>
+          <button
+            type="button"
+            className={view === 'roadmap' ? 'selected' : ''}
+            aria-pressed={view === 'roadmap'}
+            onClick={() => changeView('roadmap')}
+          >
+            ロードマップ
           </button>
         </div>
       )}
@@ -212,7 +235,7 @@ export function MapScreen({ domainId }: { domainId?: string }) {
       {/* 次に始められる型は、どちらの表示でもすぐ始められるように出す */}
       {available.length > 0 && (
         <section className="section">
-          <h2>次に挑戦できる</h2>
+          <h2>次のおすすめ</h2>
           <ul className="type-rows">
             {available.map((s) => {
               const check = canActivate(s, allSkills, settings.maxActive)
@@ -226,57 +249,46 @@ export function MapScreen({ domainId }: { domainId?: string }) {
                       <span className="type-name">{splitName(s.name).main}</span>
                       <span className="muted small">
                         {parallel
-                          ? '前提と並行して練習できる'
+                          ? '前提を練習中'
                           : prereqs.length > 0
                             ? `${names(prereqs)}のつぎ`
                             : '最初の型'}
                       </span>
                     </span>
                   </a>
-                  <button
-                    className="btn small"
-                    disabled={!check.ok}
-                    onClick={() =>
-                      run(async () => {
-                        await activateSkill(s.id)
-                        toast.show(`「${splitName(s.name).main}」の練習を始めます`)
-                      })
-                    }
-                  >
-                    はじめる
-                  </button>
+                  {startButton(s, !check.ok)}
                 </li>
               )
             })}
           </ul>
-          {available.some((s) => !canActivate(s, allSkills, settings.maxActive).ok) && (
-            <p className="muted small">
-              練習中は {settings.maxActive} つまでです。どれかを「できた」にするか、練習をやめると始められます。
-            </p>
-          )}
+          {atLimit && <LimitNote max={settings.maxActive} />}
         </section>
       )}
 
       {view === 'list' && locked.length > 0 && (
         <section className="section">
           <h2>その先</h2>
+          <p className="muted small">前提はおすすめの順です。やってみたい型から始められます。</p>
           <ul className="type-rows">
             {locked.map((s) => {
-              // 前提を練習し始めれば、この型も並行して練習できる（「できた」にできるのは前提ができてから）
-              const pending = prereqsOf(s).filter((p) => p.status === 'idle')
+              const pending = prereqsOf(s).filter((p) => p.status !== 'done')
               return (
                 <li key={s.id} className="type-row">
                   <a href={href(`/skill/${s.id}`)} className="type-row-main">
                     <PatternImage name={s.name} dim />
                     <span className="type-row-text">
-                      <span className="type-name muted">{splitName(s.name).main}</span>
-                      <span className="muted small">{pending.length > 0 ? `${names(pending)}を始めたら` : ''}</span>
+                      <span className="type-name">{splitName(s.name).main}</span>
+                      <span className="muted small">
+                        {pending.length > 0 ? `おすすめ：${names(pending)}のあと` : ''}
+                      </span>
                     </span>
                   </a>
+                  {startButton(s, atLimit)}
                 </li>
               )
             })}
           </ul>
+          {atLimit && available.length === 0 && <LimitNote max={settings.maxActive} />}
         </section>
       )}
 

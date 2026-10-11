@@ -108,7 +108,7 @@ function CelebrationOverlay({
         <h2 id="celebration-title">{splitName(celebration.skill.name).main}</h2>
         {unlocked.length > 0 ? (
           <div className="celebration-unlocked">
-            <p>次に目指せるようになった型</p>
+            <p>次のおすすめになった型</p>
             <ul>
               {unlocked.map((s) => (
                 <li key={s.id}>{splitName(s.name).main}</li>

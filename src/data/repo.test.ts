@@ -1,19 +1,20 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { exportBackup, importBackup } from './backup'
 import { db } from './db'
 import {
   achieveSkill,
   activateSkill,
-  addReference,
-  removeReference,
   addRecord,
+  addReference,
   createDomain,
   createSkill,
+  cupNumbers,
   deleteRecord,
   deleteSkill,
   ensureSeeded,
   lastNextAction,
   recordsOf,
+  removeReference,
   revertAchievement,
   setMaxActive,
   updateRecord,
@@ -41,22 +42,19 @@ describe('ensureSeeded', () => {
 })
 
 describe('挑戦と達成', () => {
-  it('前提が挑戦中なら並行して挑戦できるが、達成は前提を達成してから', async () => {
+  it('前提はおすすめの順で、まだの型でも始められ、「できた」にもできる', async () => {
     const { a, b, c } = await chain()
-    await expect(activateSkill(b)).rejects.toThrow(/前提/)
-    await activateSkill(a)
+    // 前提（a）を始めていなくても、やってみたい型（b）から始められる
     await activateSkill(b)
-    await expect(achieveSkill(b)).rejects.toThrow(/前提/)
+    // b ができると、b を前提にする型（おすすめになった型）を返す
+    const { unlocked } = await achieveSkill(b)
+    expect(unlocked.map((s) => s.id)).toEqual([c])
+    await achieveSkill(a)
 
-    const { unlocked } = await achieveSkill(a)
-    expect(unlocked.map((s) => s.id)).toEqual([b])
-    await achieveSkill(b)
-
-    // 達成を取り消しても、挑戦中のものは勝手に外さない
+    // 達成を取り消しても、練習中のものは勝手に外さない
     await activateSkill(c)
     await revertAchievement(b)
     expect((await db.skills.get(c))!.status).toBe('active')
-    await expect(achieveSkill(c)).rejects.toThrow(/前提/)
   })
 
   it('挑戦中の上限を超えられない', async () => {
@@ -232,5 +230,21 @@ describe('記録を直す', () => {
     await expect(
       updateRecord({ recordId: id, reason: ' ', nextAction: '', addFiles: [], removeMediaIds: [m], replace: [] }),
     ).rejects.toThrow(/1つ以上/)
+  })
+})
+
+describe('杯の通し番号', () => {
+  it('型に関係なく、全部の記録の中で古いほうから何杯目かを返す', async () => {
+    const { a, b } = await chain()
+    const ids: string[] = []
+    vi.useFakeTimers({ toFake: ['Date'] })
+    for (const [skillId, i] of [[a, 0], [b, 1], [a, 2]] as const) {
+      vi.setSystemTime(new Date(2026, 0, 1 + i))
+      ids.push(await addRecord({ skillId, reason: 'x', nextAction: '', files: [] }))
+    }
+    vi.useRealTimers()
+    const records = await db.records.bulkGet(ids)
+    const numbers = await cupNumbers(records.filter((r) => !!r))
+    expect(ids.map((id) => numbers.get(id))).toEqual([1, 2, 3])
   })
 })

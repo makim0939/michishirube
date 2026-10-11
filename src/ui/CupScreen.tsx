@@ -1,6 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../data/db'
-import { recordsOf } from '../data/repo'
+import { cupNumbers } from '../data/repo'
 import { OUTCOME_LABEL } from '../domain/format'
 import type { Media } from '../domain/types'
 import { Empty, formatDate, splitName } from './common'
@@ -14,13 +14,13 @@ export function CupScreen({ recordId }: { recordId: string }) {
   const data = useLiveQuery(async () => {
     const record = await db.records.get(recordId)
     if (!record) return { record }
-    const [skill, media, ofSkill] = await Promise.all([
+    const [skill, media, numbers] = await Promise.all([
       db.skills.get(record.skillId),
       db.media.bulkGet(record.mediaIds ?? []),
-      recordsOf(record.skillId),
+      cupNumbers([record]),
     ])
-    // その型の何杯目か（古い順に数える）
-    const number = ofSkill.length - ofSkill.findIndex((r) => r.id === record.id)
+    // 型に関係なく、全部の記録の通し番号
+    const number = numbers.get(record.id) ?? 0
     return { record, skill, media: media.filter((m): m is Media => !!m), number }
   }, [recordId])
 
@@ -47,7 +47,7 @@ export function CupScreen({ recordId }: { recordId: string }) {
         <div>
           <h1>{name}</h1>
           <p className="muted small">
-            {number}杯目
+            No.{number}
             {record.outcome && (
               <span className={`outcome outcome-${record.outcome}`}>　{OUTCOME_LABEL[record.outcome]}</span>
             )}

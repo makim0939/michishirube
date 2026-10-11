@@ -6,10 +6,11 @@ import {
   activateSkill,
   deactivateSkill,
   getSettings,
+  cupNumbers,
   recordsOf,
   revertAchievement,
 } from '../data/repo'
-import { canActivate, computeStates, indexById, prereqsDone } from '../domain/logic'
+import { canActivate, computeStates, indexById } from '../domain/logic'
 import { isWebUrl } from '../domain/template'
 import type { Media } from '../domain/types'
 import { ConfirmButton, Empty, formatDate, isVideo, splitName, StateBadge, STATE_LABEL } from './common'
@@ -115,7 +116,9 @@ export function SkillScreen({ id }: { id: string }) {
     ])
     // 上限は全分野の合計なので、挑戦できるかは全スキルで判定する
     const allSkills = await db.skills.toArray()
-    return { skill, skills, domain, records, media, settings, allSkills }
+    // 杯の番号は、型に関係なく全部の記録の通し番号（No.）
+    const numbers = await cupNumbers(records)
+    return { skill, skills, domain, records, media, settings, allSkills, numbers }
   }, [id])
 
   if (!data) return null
@@ -127,7 +130,8 @@ export function SkillScreen({ id }: { id: string }) {
   const prereqs = skill.prereqIds.map((p) => byId.get(p)).filter((s) => !!s)
   const leadsTo = skills.filter((s) => s.prereqIds.includes(skill.id))
   const check = canActivate(skill, allSkills, settings.maxActive)
-  const achievable = prereqsDone(skill, byId)
+  // 前提はおすすめの順。まだの型でも自由に始められ、「できた」にもできる
+  const notStarted = state === 'available' || state === 'locked'
   const pendingPrereqs = prereqs.filter((p) => p.status !== 'done')
   const mediaById = new Map(media.map((m) => [m.id, m]))
 
@@ -171,7 +175,7 @@ export function SkillScreen({ id }: { id: string }) {
             記録する
           </a>
         )}
-        {state === 'available' && (
+        {notStarted && (
           <button
             className="btn primary"
             disabled={!check.ok}
@@ -185,34 +189,37 @@ export function SkillScreen({ id }: { id: string }) {
             練習を始める
           </button>
         )}
-        {(state === 'active' || state === 'available') && !askingAchieve && (
-          <button className="btn achieve" disabled={!achievable} onClick={() => setAskingAchieve(true)}>
+        {(state === 'active' || notStarted) && !askingAchieve && (
+          <button className="btn achieve" onClick={() => setAskingAchieve(true)}>
             できた
           </button>
         )}
         {state === 'active' && (
-          <button className="btn ghost" onClick={() => run(() => deactivateSkill(skill.id))}>
-            練習をやめる
+          <button
+            className="btn ghost"
+            onClick={() =>
+              run(async () => {
+                await deactivateSkill(skill.id)
+                toast.show('練習を中断しました。撮った記録はそのまま残ります')
+              })
+            }
+          >
+            練習を中断する
           </button>
         )}
         {state === 'done' && (
           <ConfirmButton
             className="btn ghost"
             confirmLabel="取り消す"
-            message="「できた」を取り消します。この型を前提にしている練習中の型は、練習中から外れます。"
+            message="「できた」を取り消します。撮った記録や、ほかの型の練習はそのままです。"
             onConfirm={() => run(() => revertAchievement(skill.id))}
           >
             「できた」を取り消す
           </ConfirmButton>
         )}
       </div>
-      {state === 'available' && !check.ok && check.reason === 'limit' && (
-        <p className="muted">練習中は {settings.maxActive} つまでです。いまの型を「できた」にするか、練習をやめると選べます。</p>
-      )}
-      {(state === 'active' || state === 'available') && !achievable && (
-        <p className="muted small">
-          並行して練習できます。「できた」にできるのは、「{pendingPrereqs.map((p) => splitName(p.name).main).join('」「')}」ができてからです。
-        </p>
+      {notStarted && !check.ok && check.reason === 'limit' && (
+        <p className="muted">練習中は {settings.maxActive} つまでです。いまの型を「できた」にするか、練習を中断すると始められます。</p>
       )}
 
       {askingAchieve && (
@@ -241,18 +248,16 @@ export function SkillScreen({ id }: { id: string }) {
         </div>
       )}
 
-      {state === 'locked' && (
+      {state !== 'done' && pendingPrereqs.length > 0 && (
         <section className="section">
-          <h2>先に練習する型</h2>
-          <p className="muted small">これらの練習を始めると、この型も並行して練習できます。</p>
+          <h2>おすすめの順</h2>
+          <p className="muted small">ロードマップでは、先にこれらの型をすると進めやすくなります。この型から始めることもできます。</p>
           <ul className="chips">
-            {prereqs
-              .filter((p) => p.status === 'idle')
-              .map((p) => (
-                <li key={p.id}>
-                  <a href={href(`/skill/${p.id}`)}>{splitName(p.name).main}</a>
-                </li>
-              ))}
+            {pendingPrereqs.map((p) => (
+              <li key={p.id}>
+                <a href={href(`/skill/${p.id}`)}>{splitName(p.name).main}</a>
+              </li>
+            ))}
           </ul>
         </section>
       )}
@@ -262,7 +267,7 @@ export function SkillScreen({ id }: { id: string }) {
       <section className="section">
         <div className="section-head">
           <h2>記録（{records.length}）</h2>
-          {(state === 'active' || state === 'available') && (
+          {state !== 'done' && (
             <a className="btn small" href={href(`/record/${skill.id}`)}>
               ＋ 記録する
             </a>
@@ -277,6 +282,7 @@ export function SkillScreen({ id }: { id: string }) {
                 key={r.id}
                 record={r}
                 media={r.mediaIds.map((m) => mediaById.get(m)).filter((m) => !!m)}
+                number={data.numbers?.get(r.id)}
               />
             ))}
           </ul>

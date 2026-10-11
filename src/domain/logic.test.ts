@@ -61,10 +61,10 @@ describe('canActivate', () => {
     expect(canActivate(skills[2], skills, 3)).toEqual({ ok: true })
   })
 
-  it('ロック中・達成済み・挑戦中は挑戦にできない', () => {
+  it('達成済み・練習中は練習中にできない。前提がまだでも始められる', () => {
     const skills = [skill('a', [], 'done'), skill('b', ['x']), skill('c', [], 'active')]
     expect(canActivate(skills[0], skills, 3)).toEqual({ ok: false, reason: 'done' })
-    expect(canActivate(skills[1], skills, 3)).toEqual({ ok: false, reason: 'locked' })
+    expect(canActivate(skills[1], skills, 3)).toEqual({ ok: true })
     expect(canActivate(skills[2], skills, 3)).toEqual({ ok: false, reason: 'already' })
   })
 })

@@ -1,6 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useState } from 'react'
 import { db } from '../data/db'
+import { cupNumbers } from '../data/repo'
 import type { Media } from '../domain/types'
 import { formatAgo } from './common'
 import { RecordCard } from './RecordCard'
@@ -29,7 +30,8 @@ export function RecordsScreen() {
     // 記録のある型だけを絞り込みの候補にする。
     // iPhone の Safari は、記録が0件のときに重複なしのカーソル（uniqueKeys）を開けずに落ちるので、キーを全部読んでまとめる
     const recorded = new Set((await db.records.orderBy('skillId').keys()) as string[])
-    return { skills, domains, records, media, total, recorded }
+    const numbers = await cupNumbers(records.slice(0, limit))
+    return { skills, domains, records, media, total, recorded, numbers }
   }, [limit, skillFilter])
 
   if (!data) return null
@@ -94,6 +96,7 @@ export function RecordsScreen() {
                     media={(r.mediaIds ?? []).map((id) => mediaById.get(id)).filter((m): m is Media => !!m)}
                     skill={skill}
                     domainName={skill && domainName.get(skill.domainId)}
+                    number={data.numbers.get(r.id)}
                   />
                 )
               })}
