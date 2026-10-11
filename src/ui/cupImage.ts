@@ -14,7 +14,7 @@ export function pickCupMedia(list: (Media | undefined)[]): Media | undefined {
  * カップの絵の中身。写真はこの端末に無ければサーバーから取り、動画はサムネイル（できあがりのコマ）を使う
  * （無ければ作るか、サーバーから取る）
  */
-export function useCupImage(media: Media | undefined): Blob | undefined {
+export function useCupImage(media: Media | undefined, { upgrade = true }: { upgrade?: boolean } = {}): Blob | undefined {
   // どのメディアのために取った写真かも覚えておく（別のカップに切り替わった直後に、前の写真を出さないように）
   const [fetched, setFetched] = useState<{ id: string; blob: Blob }>()
   const id = media?.id
@@ -38,16 +38,20 @@ export function useCupImage(media: Media | undefined): Blob | undefined {
     // 同期のたびに media は別のオブジェクトになるので、id が変わったときだけ取り直す
   }, [id, needsFetch])
 
-  usePoster(media)
+  usePoster(media, upgrade)
 
   if (!media) return undefined
   if (video) return media.poster
   return media.blob ?? (fetched?.id === media.id ? fetched.blob : undefined)
 }
 
-/** 動画のサムネイルが無い・前の作り方（最初のコマ）なら、作るかサーバーから取る */
-export function usePoster(media: Media | undefined) {
-  const needs = !!media && (needsLocalPoster(media) || needsRemotePoster(media))
+/**
+ * 動画のサムネイルが無い・前の作り方（最初のコマ）なら、作るかサーバーから取る。
+ * upgrade が false なら、前の作り方のサムネイルはそのまま使う（一覧を見ただけで、たくさんの動画を読み込まないように）
+ */
+export function usePoster(media: Media | undefined, upgrade = true) {
+  const needs =
+    !!media && ((needsLocalPoster(media) && (upgrade || !media.poster)) || needsRemotePoster(media))
   useEffect(() => {
     if (needs && media) ensurePoster(media)
     // 同期のたびに media は別のオブジェクトになるので、id と要否が変わったときだけ
