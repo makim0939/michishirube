@@ -330,7 +330,11 @@ export function TodayScreen() {
   })
 
   // 型のカードを長押しして動かすと並べ替えられる（いま集中している型を上に）
-  const saveOrder = (next: string[]) => void run(() => setFocusOrder(next))
+  const saveOrder = async (next: string[]) =>
+    (await run(async () => {
+      await setFocusOrder(next)
+      return true
+    })) === true
   const { containerRef, order, dragging } = useLongPressReorder(data?.practices.map((p) => p.skill.id) ?? [], saveOrder)
 
   if (!data) return null
@@ -369,8 +373,8 @@ export function TodayScreen() {
                   compact={dragging !== null}
                   lifted={dragging === p.skill.id}
                   onMove={{
-                    up: i > 0 ? () => saveOrder(moveItem(shownIds, i, i - 1)) : undefined,
-                    down: i < shown.length - 1 ? () => saveOrder(moveItem(shownIds, i, i + 1)) : undefined,
+                    up: i > 0 ? () => void saveOrder(moveItem(shownIds, i, i - 1)) : undefined,
+                    down: i < shown.length - 1 ? () => void saveOrder(moveItem(shownIds, i, i + 1)) : undefined,
                   }}
                 />
               ))}

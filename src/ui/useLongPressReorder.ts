@@ -21,7 +21,7 @@ type Drag = {
  * ドラッグ中はページのスクロールを止め、指についてくるよう要素を translate で動かす。
  * ドラッグのあとのクリック（カード内のリンク）は無効にする
  */
-export function useLongPressReorder(ids: string[], onCommit: (next: string[]) => void) {
+export function useLongPressReorder(ids: string[], onCommit: (next: string[]) => Promise<boolean> | void) {
   // 一覧はデータを読み込んでから出るので、要素が付いたときに見張り始める
   const [root, setRoot] = useState<HTMLElement | null>(null)
   const [order, setOrder] = useState(ids)
@@ -31,6 +31,8 @@ export function useLongPressReorder(ids: string[], onCommit: (next: string[]) =>
   const drag = useRef<Drag | null>(null)
   const commit = useRef(onCommit)
   commit.current = onCommit
+  const idsRef = useRef(ids)
+  idsRef.current = ids
 
   // データ側の並びが変わったら（同期・練習の開始や終了）、ドラッグ中でなければ合わせる
   const idsKey = ids.join()
@@ -71,6 +73,19 @@ export function useLongPressReorder(ids: string[], onCommit: (next: string[]) =>
       if (next.join() !== orderRef.current.join()) setOrder(next)
     }
 
+    // 画面の端で指を止めていても、ドラッグ中は自動でスクロールし続ける
+    let raf = 0
+    const autoScroll = () => {
+      const d = drag.current
+      if (!d) return
+      const step = d.y < EDGE_PX ? -10 : d.y > window.innerHeight - TABBAR_PX - EDGE_PX ? 10 : 0
+      if (step) {
+        window.scrollBy(0, step)
+        place()
+      }
+      raf = requestAnimationFrame(autoScroll)
+    }
+
     const start = () => {
       dlog('reorder:start', pending?.id ?? 'none')
       if (!pending) return
@@ -84,6 +99,7 @@ export function useLongPressReorder(ids: string[], onCommit: (next: string[]) =>
       setDragging(drag.current.id)
       // たたんだ表示になってから位置を合わせる
       requestAnimationFrame(() => requestAnimationFrame(place))
+      raf = requestAnimationFrame(autoScroll)
     }
 
     const cancelPending = () => {
@@ -97,6 +113,7 @@ export function useLongPressReorder(ids: string[], onCommit: (next: string[]) =>
       const d = drag.current
       if (!d) return
       drag.current = null
+      cancelAnimationFrame(raf)
       document.documentElement.classList.remove('reordering')
       window.getSelection()?.removeAllRanges()
       const el = itemOf(d.id)
@@ -105,7 +122,12 @@ export function useLongPressReorder(ids: string[], onCommit: (next: string[]) =>
         delete el.dataset.shift
       }
       setDragging(null)
-      if (orderRef.current.join() !== startOrder) commit.current(orderRef.current)
+      if (orderRef.current.join() !== startOrder) {
+        // 保存できなかったら、保存されている並びに戻す
+        void Promise.resolve(commit.current(orderRef.current)).then((ok) => {
+          if (ok === false) setOrder(idsRef.current)
+        })
+      }
       // 離した直後のクリックだけを止める（クリックが来なかったときに、次の操作まで止めないように）
       setTimeout(() => (suppressClick = false), 400)
     }
@@ -115,8 +137,9 @@ export function useLongPressReorder(ids: string[], onCommit: (next: string[]) =>
       suppressClick = false
       const item = (e.target as HTMLElement).closest<HTMLElement>('[data-reorder-id]')
       if (!item || !root.contains(item)) return
-      // ボタン（記録する・杯）は長押しの対象にしない
+      // ボタンは長押しの対象にしない。並べる相手がいない（1つだけ）ときも始めない
       if ((e.target as HTMLElement).closest('button')) return
+      if (root.querySelectorAll('[data-reorder-id]').length < 2) return
       const rect = item.getBoundingClientRect()
       pending = {
         id: item.dataset.reorderId!,
@@ -152,9 +175,6 @@ export function useLongPressReorder(ids: string[], onCommit: (next: string[]) =>
       const t = e.touches[0]
       if (!t) return
       d.y = t.clientY
-      // 画面の端に近づいたら、自動でスクロールする
-      if (t.clientY < EDGE_PX) window.scrollBy(0, -12)
-      else if (t.clientY > window.innerHeight - TABBAR_PX - EDGE_PX) window.scrollBy(0, 12)
       place()
     }
 
@@ -201,6 +221,7 @@ export function useLongPressReorder(ids: string[], onCommit: (next: string[]) =>
     root.addEventListener('click', click, true)
     return () => {
       clearTimeout(timer)
+      cancelAnimationFrame(raf)
       document.documentElement.classList.remove('reordering')
       root.removeEventListener('pointerdown', down)
       window.removeEventListener('pointermove', move)
