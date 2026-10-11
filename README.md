@@ -68,4 +68,5 @@ pnpm build      # dist/ に PWA を出力
 - 構成：Vite + React + TypeScript、IndexedDB は Dexie、ロードマップの図は React Flow + dagre、PWA は vite-plugin-pwa。文字は Google Fonts（Zen Old Mincho・Zen Kaku Gothic New・Instrument Serif）
 - サーバー：`worker/`（Cloudflare Workers + Hono + D1）。`pnpm worker:dev` でローカル起動（`worker/.dev.vars.example` を `.dev.vars` にコピーして APP_TOKEN を入れる）。アプリとサーバーの通信の形は `shared/protocol.ts`
 - `main` に入ると GitHub Actions で GitHub Pages にデプロイされます（`BASE_PATH` にリポジトリ名を入れてビルド）
+- サーバー（`worker/`・`shared/`）の変更が `main` に入ると、GitHub Actions が D1 のマイグレーションを当ててから Cloudflare にデプロイします（Secrets に `CLOUDFLARE_API_TOKEN` と `CLOUDFLARE_ACCOUNT_ID` が必要。無ければ飛ばします。手順は [docs/setup.md](docs/setup.md) の 1-5）
 - アイコン（`public/pwa-*.png` など）と `public/world/` の絵（型の見本・時間帯の光）は、描き起こした画像をそのまま置いています。型の見本は、型の名前から `src/ui/world.ts` の `patternFor` で選びます
