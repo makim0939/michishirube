@@ -33,7 +33,8 @@ export function Recorder({
   onClose,
   onFallback,
 }: {
-  onDone: (file: File) => void
+  /** photo は、録画のあとに撮った「できあがり」の写真（スキップしたら無い） */
+  onDone: (file: File, photo?: File) => void
   onClose: () => void
   onFallback: () => void
 }) {
@@ -45,6 +46,8 @@ export function Recorder({
   const [ready, setReady] = useState(false)
   const [startedAt, setStartedAt] = useState<number>()
   const [now, setNow] = useState(Date.now())
+  /** 録画を止めたあと、できあがりの写真を待っている動画 */
+  const [finished, setFinished] = useState<File>()
 
   // カメラを開く（音の有無を切り替えたら開き直す）
   useEffect(() => {
@@ -76,6 +79,11 @@ export function Recorder({
       stream.current = null
     }
   }, [audio])
+
+  // できあがりを撮る画面に切り替えたら、開いているカメラをそのまま映す
+  useEffect(() => {
+    if (finished && preview.current && stream.current) preview.current.srcObject = stream.current
+  }, [finished])
 
   // 録画中の経過時間と、上限での自動停止
   useEffect(() => {
@@ -115,7 +123,8 @@ export function Recorder({
         return
       }
       const stamp = new Date().toISOString().replace(/[-:]/g, '').slice(0, 15)
-      onDone(new File([blob], `rec-${stamp}.${extensionFor(type)}`, { type: blob.type }))
+      // 動画の最後に、きれいにカップが写っているとは限らないので、続けてできあがりを1枚撮ってもらう
+      setFinished(new File([blob], `rec-${stamp}.${extensionFor(type)}`, { type: blob.type }))
     }
     recorder.current = r
     try {
@@ -129,6 +138,42 @@ export function Recorder({
   }
 
   const recording = startedAt !== undefined
+
+  /** いま映っているコマから、中央の正方形を写真にする（開いているカメラのまま、1回押すだけ） */
+  const shoot = async () => {
+    const video = preview.current
+    if (!finished) return
+    let photo: File | undefined
+    if (video && video.videoWidth && video.videoHeight) {
+      const side = Math.min(video.videoWidth, video.videoHeight)
+      const size = Math.min(side, 1600)
+      const canvas = document.createElement('canvas')
+      canvas.width = size
+      canvas.height = size
+      canvas
+        .getContext('2d')!
+        .drawImage(video, (video.videoWidth - side) / 2, (video.videoHeight - side) / 2, side, side, 0, 0, size, size)
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.85))
+      if (blob) photo = new File([blob], finished.name.replace(/\.[^.]+$/, '') + '-cup.jpg', { type: 'image/jpeg' })
+    }
+    onDone(finished, photo)
+  }
+
+  if (finished) {
+    return (
+      <div className="recorder" role="dialog" aria-modal="true" aria-label="できあがりを撮る">
+        <video ref={preview} className="recorder-preview" autoPlay playsInline muted />
+        <div className="finish-guide" aria-hidden="true" />
+        <p className="finish-hint">できあがりのカップを、枠の中に入れて1枚</p>
+        <div className="recorder-bottom">
+          <button className="shutter-button" aria-label="できあがりを撮る" onClick={() => void shoot()} />
+          <button className="btn small ghost recorder-native" onClick={() => onDone(finished)}>
+            スキップ
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="recorder" role="dialog" aria-modal="true" aria-label="録画">

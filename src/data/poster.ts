@@ -20,11 +20,11 @@ export function needsRemotePoster(m: Media): boolean {
   return isVideo(m) && !m.blob && !!m.cloudPoster && (!m.poster || (!m.posterEnd && !!m.cloudPosterEnd))
 }
 
-/** カップの絵として出せるか（写真、または動画のできあがりのコマ） */
+/**
+ * 今日の大きな写真に出せるか。写真だけを使う（動画の最後のコマに、きれいにカップが写っているとは限らないので）
+ */
 export function hasCupImage(m: Media | undefined): boolean {
-  if (!m) return false
-  if (!isVideo(m)) return !!m.blob || !!m.cloudPhoto
-  return (!!m.poster && !!m.posterEnd) || !!m.cloudPosterEnd
+  return !!m && !isVideo(m) && (!!m.blob || !!m.cloudPhoto)
 }
 
 // 動画を読み込むのは重いので、1本ずつ順に作る。同じ動画を二重に作らない

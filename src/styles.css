@@ -2242,3 +2242,40 @@ a.notice {
   background: var(--danger);
   color: #fff;
 }
+
+/* ---- 録画のあと：できあがりを1枚 ---- */
+
+.finish-guide {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(100% - 24px);
+  max-width: 70vh;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border: 2px solid rgb(255 255 255 / 85%);
+  border-radius: 18px;
+  box-shadow: 0 0 0 100vmax rgb(0 0 0 / 35%);
+  pointer-events: none;
+}
+
+.finish-hint {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + 24px);
+  left: 16px;
+  right: 16px;
+  text-align: center;
+  color: #fff;
+  font-weight: 700;
+  text-shadow: 0 1px 6px rgb(0 0 0 / 60%);
+}
+
+.shutter-button {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  border: 5px solid rgb(255 255 255 / 60%);
+  background: #fff;
+  background-clip: padding-box;
+  cursor: pointer;
+}

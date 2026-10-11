@@ -495,9 +495,10 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
 
       {recording && (
         <Recorder
-          onDone={(file) => {
+          onDone={(file, photo) => {
             setRecording(false)
-            void addFiles([file], true)
+            // できあがりの写真も撮ったら、動画と一緒に記録に入れる（カップの絵には写真を使う）
+            void addFiles(photo ? [file, photo] : [file], true)
           }}
           onClose={() => setRecording(false)}
           onFallback={() => {

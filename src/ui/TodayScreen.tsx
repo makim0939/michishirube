@@ -336,7 +336,7 @@ export function TodayScreen() {
     // 新しい記録から、大きな写真でめくる杯を選ぶ。最後に「はじまりの1杯」（いちばん古い、写真のある杯）を置く
     const [latest, firstMedia] = await Promise.all([
       db.records.orderBy('createdAt').reverse().limit(HERO_LOOKBACK).toArray(),
-      // いちばん古い、写真（または動画のできあがりのコマ）。古い順にたどって最初に見つかったもの
+      // いちばん古い写真。古い順にたどって最初に見つかったもの
       db.media.orderBy('createdAt').filter((m) => hasCupImage(m)).first(),
     ])
     const firstCandidate = firstMedia && (await db.records.get(firstMedia.recordId))
@@ -348,7 +348,7 @@ export function TodayScreen() {
     const media = await db.media.bulkGet([...new Set(mediaIds)])
     const mediaById = new Map(media.filter((m) => !!m).map((m) => [m.id, m]))
     const cupOf = (r: PracticeRecord) => pickCupMedia((r.mediaIds ?? []).map((id) => mediaById.get(id)))
-    // 写真、または動画のできあがりのコマがある杯
+    // 写真のある杯（動画のコマは、きれいにカップが写っているとは限らないので使わない）
     const heroRecords = latest.filter((r) => hasCupImage(cupOf(r))).slice(0, HERO_SLIDES)
     const firstRecord = firstCandidate && hasCupImage(cupOf(firstCandidate)) ? firstCandidate : undefined
     const withFirst = firstRecord && !heroRecords.some((r) => r.id === firstRecord.id)
