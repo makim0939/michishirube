@@ -10,9 +10,12 @@ export function RecordCard({
   media,
   skill,
   domainName,
+  number,
 }: {
   record: PracticeRecord
   media: Media[]
+  /** 杯の通し番号（No.） */
+  number?: number
   /** 「記録」タブでは、どのスキルの記録かも出す */
   skill?: Skill
   domainName?: string
@@ -20,7 +23,10 @@ export function RecordCard({
   return (
     <li className="record">
       <div className="record-head">
-        <span className="muted">{formatDate(record.createdAt)}</span>
+        <span className="muted">
+          {number !== undefined && <span className="record-no">No.{number}</span>}
+          {formatDate(record.createdAt)}
+        </span>
         {record.outcome && <span className={`outcome outcome-${record.outcome}`}>{OUTCOME_LABEL[record.outcome]}</span>}
       </div>
       {skill && (

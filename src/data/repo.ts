@@ -238,10 +238,9 @@ export function defaultReferenceTitle(url: string): string {
 // ---- 挑戦・達成 ----
 
 const ACTIVATE_MESSAGES = {
-  locked: '前提の型を、まだ練習していません',
   done: 'すでにできています',
   already: 'すでに練習中です',
-  limit: '練習中の上限に達しています。どれかを「できた」にするか、練習をやめてください',
+  limit: '練習中の上限に達しています。どれかを「できた」にするか、練習を中断してください',
 } as const
 
 async function setSkill(id: string, patch: Partial<Skill>) {
@@ -270,10 +269,8 @@ export async function achieveSkill(id: string): Promise<{ skill: Skill; unlocked
     const skills = await db.skills.toArray()
     const skill = skills.find((s) => s.id === id)
     if (!skill) throw new RepoError('型が見つかりません')
+    // 前提はおすすめの順なので、前提がまだでも「できた」にできる
     if (skill.status === 'done') throw new RepoError('すでにできています')
-    if (!skill.prereqIds.every((p) => skills.find((s) => s.id === p)?.status === 'done')) {
-      throw new RepoError('前提の型が、まだできていません')
-    }
     const unlocked = newlyUnlocked(id, skills)
     await setSkill(id, { status: 'done', achievedAt: Date.now(), activatedAt: undefined })
     return { skill: { ...skill, status: 'done' as const }, unlocked }
@@ -423,6 +420,19 @@ export async function setMediaKeep(id: string, keep: boolean) {
     await db.media.update(id, { keep, updatedAt: Date.now() })
     await markDirty('media', [id])
   })
+}
+
+/**
+ * 杯の通し番号（No.）。型に関係なく、全部の記録の中で古いほうから何杯目か。
+ * これまでどれだけ練習したかが分かるよう、カップ帳・今日の画面で同じ番号を使う
+ */
+export async function cupNumbers(records: PracticeRecord[]): Promise<Map<string, number>> {
+  if (records.length === 0) return new Map()
+  // 日時の索引の順（同じ日時なら id の順）に id だけを読み、何番目かを番号にする（記録の中身は読まない）。
+  // 同じ日時の記録があっても、番号が重なったり飛んだりしない
+  const order = (await db.records.orderBy('createdAt').primaryKeys()) as string[]
+  const index = new Map(order.map((id, i) => [id, i + 1]))
+  return new Map(records.map((r) => [r.id, index.get(r.id) ?? 0]))
 }
 
 export async function recordsOf(skillId: string): Promise<PracticeRecord[]> {

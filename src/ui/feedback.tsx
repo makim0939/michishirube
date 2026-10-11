@@ -108,7 +108,7 @@ function CelebrationOverlay({
         <h2 id="celebration-title">{splitName(celebration.skill.name).main}</h2>
         {unlocked.length > 0 ? (
           <div className="celebration-unlocked">
-            <p>次に目指せるようになった型</p>
+            <p>次のおすすめになった型</p>
             <ul>
               {unlocked.map((s) => (
                 <li key={s.id}>{splitName(s.name).main}</li>
@@ -116,7 +116,7 @@ function CelebrationOverlay({
             </ul>
           </div>
         ) : (
-          <p className="muted">この型の先に、新しく開く型はありません。</p>
+          <p className="muted">この型のあとに、新しくおすすめになる型はありません。</p>
         )}
         <div className="celebration-actions">
           {unlocked.length === 1 && (

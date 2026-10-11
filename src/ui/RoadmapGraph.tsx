@@ -67,7 +67,7 @@ function layout(skills: Skill[]): { nodes: SkillNode[]; edges: Edge[]; focus: st
 
 /**
  * 最初に映す範囲。全体を収めるとスマホでは文字が読めないので、
- * 「いま挑戦できる・練習中」の型と、その直前・直後だけに寄せる
+ * 「次のおすすめ・練習中」の型と、その直前・直後だけに寄せる
  */
 function frontier(skills: Skill[], states: Map<string, SkillState>): string[] {
   const current = skills.filter((s) => ['available', 'active'].includes(states.get(s.id)!))

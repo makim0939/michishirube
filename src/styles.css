@@ -1557,13 +1557,6 @@ video.media.playing {
   letter-spacing: 0;
 }
 
-.hero-no small {
-  font-family: var(--font-sans);
-  font-style: normal;
-  font-size: 0.72rem;
-  letter-spacing: 0.14em;
-  margin-left: 3px;
-}
 
 .today-sheet {
   position: relative;
@@ -2076,4 +2069,12 @@ a.notice {
 .reordering * {
   user-select: none;
   -webkit-user-select: none;
+}
+
+/* 杯の通し番号（カップ帳・型の記録） */
+.record-no {
+  font-family: var(--font-latin);
+  font-size: 1.05rem;
+  color: var(--text);
+  margin-right: 8px;
 }

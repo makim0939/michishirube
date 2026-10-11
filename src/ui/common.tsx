@@ -4,8 +4,8 @@ import type { Media, SkillState } from '../domain/types'
 import { PlayIcon } from './icons'
 
 export const STATE_LABEL: Record<SkillState, string> = {
-  locked: 'まだ先',
-  available: '挑戦できる',
+  locked: 'その先',
+  available: '次のおすすめ',
   active: '練習中',
   done: 'できた',
 }
