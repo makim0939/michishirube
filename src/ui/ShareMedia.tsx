@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { inMemory } from '../data/mediaPrep'
+import { youtubeUrl } from '../data/youtube'
 import type { Media } from '../domain/types'
 import { saveFile } from './common'
 import { useToast } from './feedback'
@@ -31,7 +32,7 @@ export function ShareMediaButton({ media, blob }: { media: Media; blob: Blob }) 
   const name = fileNameFor(media)
   const [ready, setReady] = useState<{ key: string; file: File }>()
   const [waiting, setWaiting] = useState(false)
-  // 同じ中身の間は写し直さない（同期や「端末に残す」の切り替えで media が読み直されても）
+  // 同じ中身の間は写し直さない（同期で media が読み直されても）
   const key = `${media.id}-${media.contentAt ?? 0}-${blob.size}`
   const latest = useRef(blob)
   latest.current = blob
@@ -86,6 +87,36 @@ export function ShareMediaButton({ media, blob }: { media: Media; blob: Blob }) 
     <button type="button" className="tool-button" disabled={waiting} onClick={() => void share()}>
       <ShareIcon size={17} />
       {waiting ? '準備中…' : '保存・共有'}
+    </button>
+  )
+}
+
+/** 端末に無く YouTube にだけある動画は、ファイルの代わりに YouTube のリンクを送る（PC ではリンクを写す） */
+export function ShareLinkButton({ youtubeId }: { youtubeId: string }) {
+  const toast = useToast()
+  const url = youtubeUrl(youtubeId)
+  const share = async () => {
+    const touch = window.matchMedia('(pointer: coarse)').matches
+    if (touch && navigator.share) {
+      try {
+        await navigator.share({ url })
+      } catch (e) {
+        if (e instanceof DOMException && e.name === 'AbortError') return
+        toast.show('共有できませんでした', 'error')
+      }
+      return
+    }
+    try {
+      await navigator.clipboard.writeText(url)
+      toast.show('リンクを写しました')
+    } catch {
+      toast.show('リンクを写せませんでした', 'error')
+    }
+  }
+  return (
+    <button type="button" className="tool-button" onClick={() => void share()}>
+      <ShareIcon size={17} />
+      リンクを共有
     </button>
   )
 }

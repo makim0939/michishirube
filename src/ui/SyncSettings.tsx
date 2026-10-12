@@ -1,6 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useCallback, useEffect, useState } from 'react'
 import { db } from '../data/db'
+import { getVideoStorage } from '../data/videoStorage'
 import { connectSync, disconnectSync, getSyncConfig, getSyncStatus, runSync } from '../data/sync'
 import {
   disconnectYoutube,
@@ -78,7 +79,10 @@ function YoutubeSection({ notice }: { notice?: string }) {
   const run = useAction()
   const toast = useToast()
   const [status, setStatus] = useState<YoutubeStatus | null>()
-  const pending = useLiveQuery(() => db.media.where('upload').anyOf('pending', 'uploading', 'failed').count(), [])
+  // 保存先が端末なら上げないので、アップ待ちも数えない
+  const pending = useLiveQuery(async () =>
+    (await getVideoStorage()) === 'youtube' ? db.media.where('upload').anyOf('pending', 'uploading', 'failed').count() : 0,
+  )
 
   const refresh = useCallback(() => {
     youtubeStatus()
@@ -160,7 +164,7 @@ function YoutubeSection({ notice }: { notice?: string }) {
         </button>
       )}
       <p className="muted small">
-        動画は保存のたびに、YouTube へ「非公開」で上げます（あなただけが YouTube アプリで見られます）。初回は「Google
+        下の「動画の保存先」を YouTube にすると、動画を YouTube へ「限定公開」で上げます（URL を知っている人だけが見られます。URL はこのアプリの中にだけ残ります）。初回は「Google
         はこのアプリを確認していません」と出るので、「詳細」→「（安全ではないページ）に移動」で進んでください。最後に「連携しました」と出たら、その画面を閉じてアプリに戻ってください。
       </p>
     </div>

@@ -1333,6 +1333,112 @@ a.media.placeholder {
   font-size: 1.2rem;
 }
 
+/* ---- YouTube にだけある動画（アプリの中で再生） ---- */
+
+.yt-player {
+  position: relative;
+  overflow: hidden;
+  background: #111;
+  container-type: inline-size;
+}
+
+/* 見比べの狭い枠では、時間を出さずにつまみを広くする */
+@container (max-width: 240px) {
+  .yt-time {
+    display: none;
+  }
+}
+
+/* 動画を正方形の枠いっぱいに広げる（はみ出した上下・左右は隠れる） */
+.yt-frame {
+  position: absolute;
+  pointer-events: none;
+}
+
+.yt-frame iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+/* 動画の上の操作はアプリで受ける。再生前はサムネイルと再生ボタンを出す */
+.yt-surface {
+  appearance: none;
+  position: absolute;
+  inset: 0;
+  border: none;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.yt-surface.cover {
+  background-color: #111;
+  background-size: cover;
+  background-position: center;
+}
+
+.yt-play {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgb(0 0 0 / 55%);
+  color: #fff;
+  font-size: 1.2rem;
+}
+
+.yt-controls {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 18px 4px 2px;
+  background: linear-gradient(transparent, rgb(0 0 0 / 55%));
+  color: #fff;
+  font-size: 0.75rem;
+}
+
+.yt-control {
+  appearance: none;
+  flex: none;
+  display: grid;
+  place-items: center;
+  min-width: 36px;
+  height: 36px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.yt-rate.on {
+  background: rgb(255 255 255 / 25%);
+}
+
+.yt-seek {
+  flex: 1;
+  min-width: 0;
+  accent-color: #fff;
+}
+
+.yt-time {
+  flex: none;
+  min-width: 2.6em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 
 
 

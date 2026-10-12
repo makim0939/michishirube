@@ -2,8 +2,10 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useRef, useState } from 'react'
 import { estimateBackupSize, exportBackup, importBackup, type BackupPart } from '../data/backup'
 import { db } from '../data/db'
-import { BUNDLED_TEMPLATES, getSettings, importTemplate, setAutoTidy, setMaxActive } from '../data/repo'
-import { TIDY_POLICY } from '../data/tidy'
+import { BUNDLED_TEMPLATES, getSettings, importTemplate, setMaxActive } from '../data/repo'
+import { TIDY_AFTER_DAYS } from '../data/tidy'
+import { getVideoStorage, setVideoStorage, type VideoStorage } from '../data/videoStorage'
+import { resumeUploads } from '../data/youtube'
 import { MAX_ACTIVE_RANGE } from '../domain/types'
 import { ConfirmButton, formatBytes, requestPersist, saveFile } from './common'
 import { useAction, useToast } from './feedback'
@@ -51,6 +53,11 @@ function StorageStatus() {
   )
 }
 
+const STORAGE_CHOICES: { value: VideoStorage; label: string }[] = [
+  { value: 'device', label: 'この端末' },
+  { value: 'youtube', label: 'YouTube' },
+]
+
 export function SettingsScreen({ notice }: { notice?: string }) {
   const run = useAction()
   const toast = useToast()
@@ -64,11 +71,23 @@ export function SettingsScreen({ notice }: { notice?: string }) {
 
   const data = useLiveQuery(async () => ({
     settings: await getSettings(),
+    storage: await getVideoStorage(),
     domainNames: (await db.domains.toArray()).map((d) => d.name),
     mediaSize: await estimateBackupSize(true),
     counts: { records: await db.records.count(), media: await db.media.count() },
   }))
   if (!data) return null
+
+  const changeStorage = async (value: VideoStorage) => {
+    await setVideoStorage(value)
+    if (value === 'youtube') {
+      toast.show('動画を YouTube に上げ始めます')
+      // 連携していなければ何もしない（連携すると上げ始める）
+      void resumeUploads().catch(() => {})
+    } else {
+      toast.show('これから撮る動画は、この端末にだけ置きます')
+    }
+  }
 
   const doExport = (includeMedia: boolean) =>
     run(async () => {
@@ -116,24 +135,27 @@ export function SettingsScreen({ notice }: { notice?: string }) {
       </section>
 
       <section className="section">
-        <h2>端末の容量</h2>
-        <p className="muted">
-          記録・動画・写真は、まずこの端末に保存します。クラウド同期をつなぐと、記録・ロードマップ・写真はサーバーに、動画は
-          YouTube にも保存されるので、端末から消えても戻せます。
+        <h2>動画の保存先</h2>
+        <div className="segmented">
+          {STORAGE_CHOICES.map((c) => (
+            <button
+              key={c.value}
+              type="button"
+              className={data.storage === c.value ? 'selected' : ''}
+              aria-pressed={data.storage === c.value}
+              onClick={() => {
+                if (data.storage !== c.value) run(() => changeStorage(c.value))
+              }}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+        <p className="muted small">
+          {data.storage === 'device'
+            ? '動画はこの端末にだけ置きます。30秒の動画100本で、約0.5GBです。'
+            : `YouTube に限定公開で上げ、${TIDY_AFTER_DAYS}日たったら端末から消します。消えたあともアプリの中で見られますが、切り取りなどの編集はできません。`}
         </p>
-        <label className="toggle">
-          <input
-            type="checkbox"
-            checked={data.settings.autoTidy}
-            onChange={(e) => run(() => setAutoTidy(e.target.checked))}
-          />
-          <span>
-            YouTube に上げ終えた古い動画を、端末から自動で消す
-            <small className="muted">
-              {TIDY_POLICY.minAgeDays}日より前のもの。型ごとの最初の1本・最新{TIDY_POLICY.keepLatest}本・「残す」印を付けたものは消しません。
-            </small>
-          </span>
-        </label>
         <StorageStatus />
       </section>
 

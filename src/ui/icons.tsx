@@ -163,14 +163,3 @@ export const ExternalIcon = (p: P) => (
     <path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" />
   </Icon>
 )
-
-/** 端末に残す（ピン）。filled で印を付けた状態 */
-export const PinIcon = ({ filled, ...p }: P & { filled?: boolean }) => (
-  <Icon {...p}>
-    <path
-      d="M9 3h6l-1 6 3.5 3.5V14H6.5v-1.5L10 9z"
-      fill={filled ? 'currentColor' : 'none'}
-    />
-    <path d="M12 14v7" />
-  </Icon>
-)

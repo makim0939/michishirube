@@ -2,47 +2,42 @@ import type { Media } from '../domain/types'
 import { db } from './db'
 import { inMemory, makePoster } from './mediaPrep'
 import { needsLocalPoster } from './poster'
-import { getSettings } from './repo'
+import { getVideoStorage } from './videoStorage'
 
 /**
- * 端末の容量を空けるため、YouTube に上げ終えた古い動画を端末から消す（YouTube には残る）。
- * 比べるのに使う「最初の1本」と「最新の数本」、残す印を付けたものは消さない
+ * 保存先が YouTube のとき、YouTube に上げ終えた動画を端末から消す（YouTube には残り、アプリの中でも再生できる）。
+ * 撮ってすぐは編集できるように、少し置いてから消す
  */
 
-export const TIDY_POLICY = {
-  /** これより古いものだけを消す */
-  minAgeDays: 14,
-  /** スキルごとに端末に残す、新しい動画の本数 */
-  keepLatest: 3,
-} as const
+/** 撮った（編集した）日から、この日数がたった動画を消す。YouTube 側の処理も、それまでに終わっている */
+export const TIDY_AFTER_DAYS = 3
 
-type MediaInfo = Pick<Media, 'id' | 'skillId' | 'type' | 'createdAt' | 'keep' | 'youtubeId'> & { hasBlob: boolean }
+type MediaInfo = Pick<Media, 'id' | 'type' | 'createdAt' | 'contentAt' | 'upload' | 'youtubeId'> & { hasBlob: boolean }
 
-export function selectVideosToDrop(media: MediaInfo[], now: number, policy = TIDY_POLICY): string[] {
-  const videos = media.filter((m) => m.type.startsWith('video/'))
-  const protectedIds = new Set<string>()
-  const bySkill = new Map<string, MediaInfo[]>()
-  for (const m of videos) bySkill.set(m.skillId, [...(bySkill.get(m.skillId) ?? []), m])
-  for (const list of bySkill.values()) {
-    list.sort((a, b) => a.createdAt - b.createdAt)
-    protectedIds.add(list[0].id)
-    for (const m of list.slice(-policy.keepLatest)) protectedIds.add(m.id)
-  }
-  const cutoff = now - policy.minAgeDays * 24 * 60 * 60 * 1000
-  return videos
-    .filter((m) => m.hasBlob && m.youtubeId && !m.keep && !protectedIds.has(m.id) && m.createdAt < cutoff)
+export function selectVideosToDrop(media: MediaInfo[], now: number, afterDays = TIDY_AFTER_DAYS): string[] {
+  const cutoff = now - afterDays * 24 * 60 * 60 * 1000
+  return media
+    .filter(
+      (m) =>
+        m.type.startsWith('video/') &&
+        m.hasBlob &&
+        m.upload === 'done' &&
+        !!m.youtubeId &&
+        // 編集した動画は、上げ直した日から数える
+        (m.contentAt ?? m.createdAt) < cutoff,
+    )
     .map((m) => m.id)
 }
 
-/** 自動整理がオンなら、消せる動画の中身を端末から消す。消した本数と大きさを返す */
+/** 保存先が YouTube なら、消せる動画の中身を端末から消す。消した本数と大きさを返す */
 export async function tidyVideos(now = Date.now()): Promise<{ count: number; bytes: number }> {
-  if (!(await getSettings()).autoTidy) return { count: 0, bytes: 0 }
+  if ((await getVideoStorage()) !== 'youtube') return { count: 0, bytes: 0 }
   const media = await db.media.toArray()
   const ids = selectVideosToDrop(
     media.map((m) => ({ ...m, hasBlob: !!m.blob })),
     now,
   )
-  // 消したあとは YouTube（非公開でサムネイルも見られない）にしか残らないので、先にサムネイルを作っておく。
+  // 消したあとに再生前の絵として出せるよう、先にサムネイルを作っておく。
   // サムネイルは同期でサーバーにも置かれ、入れ直した端末でも出せる
   for (const id of ids) {
     const m = await db.media.get(id)

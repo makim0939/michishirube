@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { exportBackup, importBackup } from './backup'
 import { db } from './db'
 import { pickRecorderMimeType } from './mediaPrep'
-import { addRecord, createDomain, createSkill, ensureSeeded, setMediaKeep } from './repo'
+import { addRecord, createDomain, createSkill, ensureSeeded } from './repo'
+import { ensureVideoStorage, getVideoStorage, setVideoStorage } from './videoStorage'
 import { applyRemote, connectSync, runSync } from './sync'
 import { selectVideosToDrop } from './tidy'
 import { uploadVideo } from './youtube'
@@ -122,8 +123,8 @@ describe('動画のサムネイル', () => {
   })
 })
 
-describe('記録の印', () => {
-  it('残す印を付けると同期の対象になる', async () => {
+describe('動画の保存先', () => {
+  it('選んでいなければ、YouTube に上げた動画がある端末は YouTube、無ければ端末', async () => {
     const domainId = await createDomain('ピアノ')
     await addRecord({
       skillId: await createSkill(domainId, input('A')),
@@ -131,11 +132,13 @@ describe('記録の印', () => {
       nextAction: '',
       files: [new Blob(['v'], { type: 'video/mp4' })],
     })
+    expect(await getVideoStorage()).toBe('device')
     const [m] = await db.media.toArray()
-    expect(m.upload).toBe('pending')
-    await db.outbox.clear()
-    await setMediaKeep(m.id, true)
-    expect(await db.outbox.get(['media', m.id])).toBeDefined()
+    await db.media.update(m.id, { upload: 'done', youtubeId: 'yt1' })
+    expect(await getVideoStorage()).toBe('youtube')
+    // 一度覚えたら、動画が増えても変わらない
+    await setVideoStorage('device')
+    expect(await ensureVideoStorage()).toBe('device')
   })
 })
 
@@ -144,34 +147,25 @@ describe('動画の自動整理', () => {
   const now = 100 * day
   const video = (id: string, daysAgo: number, extra: object = {}) => ({
     id,
-    skillId: 's',
     type: 'video/mp4',
     createdAt: now - daysAgo * day,
+    upload: 'done' as const,
     youtubeId: `yt-${id}`,
     hasBlob: true,
     ...extra,
   })
 
-  it('最初の1本・最新3本・残す印・上げていないもの・新しいものは消さない', () => {
+  it('YouTube に上げ終えて3日たった動画だけを消す', () => {
     const media = [
-      video('first', 60),
-      video('old1', 50),
-      video('old2', 40, { keep: true }),
-      video('old3', 30, { youtubeId: undefined }),
-      video('old4', 20),
-      video('recent1', 3),
-      video('recent2', 2),
-      video('recent3', 1),
+      video('old', 30),
+      video('just', 4),
+      video('recent', 2),
+      video('notUploaded', 30, { upload: 'pending', youtubeId: undefined }),
+      video('gone', 30, { hasBlob: false }),
+      video('edited', 30, { contentAt: now - 1 * day }),
+      video('photo', 30, { type: 'image/jpeg' }),
     ]
-    expect(selectVideosToDrop(media, now).sort()).toEqual(['old1', 'old4'])
-  })
-})
-
-describe('録画の形式', () => {
-  it('MP4 を優先し、無ければ WebM', () => {
-    expect(pickRecorderMimeType((t) => t.startsWith('video/mp4'))).toMatch(/^video\/mp4/)
-    expect(pickRecorderMimeType((t) => t === 'video/webm')).toBe('video/webm')
-    expect(pickRecorderMimeType(() => false)).toBeUndefined()
+    expect(selectVideosToDrop(media, now).sort()).toEqual(['just', 'old'])
   })
 })
 
@@ -185,7 +179,7 @@ describe('YouTube へのアップロード', () => {
     }) as unknown as typeof fetch
     const id = await uploadVideo(new Blob(['v'], { type: 'video/mp4' }), { title: 't', description: 'd' }, 'token', fetchImpl)
     expect(id).toBe('abc123')
-    expect(JSON.parse(String(calls[0].init?.body)).status.privacyStatus).toBe('private')
+    expect(JSON.parse(String(calls[0].init?.body)).status.privacyStatus).toBe('unlisted')
     expect(calls[1].url).toBe('https://upload.example/session')
   })
 

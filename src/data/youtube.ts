@@ -3,9 +3,11 @@ import { formatDateTime, OUTCOME_LABEL } from '../domain/format'
 import type { Media } from '../domain/types'
 import { db, markDirty, mediaByIndex } from './db'
 import { api, getSyncConfig, SyncError, type SyncConfig } from './sync'
+import { getVideoStorage } from './videoStorage'
 
 /**
- * 動画を YouTube に「非公開」で上げる。
+ * 動画を YouTube に「限定公開」で上げる（アプリの中で再生できるように。URL を知らない人には見つからない）。
+ * 上げるのは、動画の保存先が YouTube の端末だけ。
  * access token はサーバーから1時間だけ使えるものをもらい、動画はアプリから YouTube へ直接送る。
  */
 
@@ -98,7 +100,7 @@ export async function uploadVideo(
   const contentType = blob.type || 'video/mp4'
   const resource = JSON.stringify({
     snippet: { title: meta.title, description: meta.description, categoryId: '26' },
-    status: { privacyStatus: 'private', selfDeclaredMadeForKids: false },
+    status: { privacyStatus: 'unlisted', embeddable: true, selfDeclaredMadeForKids: false },
   })
   const auth = { Authorization: `Bearer ${accessToken}` }
   const start = await fetchImpl(`${UPLOAD_BASE}resumable`, {
@@ -178,6 +180,8 @@ export function runUploads(): Promise<void> {
 async function doUploads() {
   const config = await getSyncConfig()
   if (!config || Date.now() < blockedUntil) return
+  // 保存先が端末なら上げない（アップ待ちのまま残し、YouTube に切り替えたら上げる）
+  if ((await getVideoStorage()) !== 'youtube') return
   const paused = (await db.meta.get(PAUSE_KEY))?.value as number | undefined
   if (paused && paused > Date.now()) return
   const tried = new Set<string>()

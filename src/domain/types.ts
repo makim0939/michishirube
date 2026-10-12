@@ -79,7 +79,7 @@ export interface Media {
   size: number
   createdAt: number
   updatedAt: number
-  /** 自動整理で端末から消さない */
+  /** 以前の「端末に残す」印。今は使わない（同期で届く古いデータに残っていることがある） */
   keep?: boolean
   /** 動画を YouTube に上げた結果 */
   upload?: UploadState
@@ -99,10 +99,8 @@ export interface Media {
 
 export interface Settings {
   maxActive: number
-  /** YouTube に上げ終えた古い動画を、端末から自動で消す */
-  autoTidy: boolean
   updatedAt: number
 }
 
-export const DEFAULT_SETTINGS: Settings = { maxActive: 3, autoTidy: true, updatedAt: 0 }
+export const DEFAULT_SETTINGS: Settings = { maxActive: 3, updatedAt: 0 }
 export const MAX_ACTIVE_RANGE = { min: 1, max: 5 } as const

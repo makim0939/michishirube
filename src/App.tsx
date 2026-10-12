@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ensureSeeded } from './data/repo'
 import { startAutoSync } from './data/sync'
 import { tidyVideos } from './data/tidy'
+import { ensureVideoStorage } from './data/videoStorage'
 import { startAutoUpload } from './data/youtube'
 import { formatBytes } from './ui/common'
 import { CupIcon, LeafIcon, NotebookIcon, SlidersIcon } from './ui/icons'
@@ -46,15 +47,18 @@ function Screen({ route }: { route: Route }) {
   }
 }
 
-/** 同期・YouTube へのアップ・古い動画の整理を、画面の裏で動かす */
+/** 同期・YouTube へのアップ・YouTube に上げた動画の整理を、画面の裏で動かす */
 function Background() {
   const toast = useToast()
   useEffect(() => {
     const stopSync = startAutoSync()
     const stopUpload = startAutoUpload()
-    tidyVideos()
+    ensureVideoStorage()
+      .then(() => tidyVideos())
       .then(({ count, bytes }) => {
-        if (count > 0) toast.show(`YouTube に上げ終えた古い動画 ${count} 本を端末から整理しました（${formatBytes(bytes)}）`)
+        if (count > 0) {
+          toast.show(`YouTube に上げた動画 ${count} 本を端末から消しました（${formatBytes(bytes)}）。アプリではこれまでどおり見られます`)
+        }
       })
       .catch(() => {
         // 整理できなくても、次に開いたときにまた試す

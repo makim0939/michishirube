@@ -1,13 +1,15 @@
+import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useState } from 'react'
-import { setMediaKeep } from '../data/repo'
 import { fetchPhoto } from '../data/sync'
+import { getVideoStorage } from '../data/videoStorage'
 import { MAX_UPLOAD_ATTEMPTS, retryUpload, youtubeUrl } from '../data/youtube'
 import type { Media } from '../domain/types'
-import { isVideo, MediaView, useObjectUrl } from './common'
+import { isVideo, MediaView, type PlayerControl, videoControl } from './common'
 import { usePoster } from './cupImage'
-import { useAction, useToast } from './feedback'
-import { ShareMediaButton } from './ShareMedia'
-import { ExternalIcon, PhotoIcon, PinIcon, PlayIcon, VideoIcon } from './icons'
+import { useAction } from './feedback'
+import { ShareLinkButton, ShareMediaButton } from './ShareMedia'
+import { ExternalIcon, PhotoIcon, VideoIcon } from './icons'
+import { YoutubePlayer } from './YoutubePlayer'
 
 const UPLOAD_LABEL = {
   pending: 'YouTube へのアップ待ち',
@@ -38,29 +40,32 @@ function useRemotePhoto(media: Media): Blob | undefined {
 }
 
 /**
- * 記録の動画・写真1つ。端末に中身があれば再生し、無ければ YouTube やサーバーから見る。
- * 動画は YouTube へのアップ状況と、自動整理で消さない「残す」印も出す
+ * 記録の動画・写真1つ。端末に中身があれば再生し、無ければ YouTube（アプリの中で再生）やサーバーから見る。
+ * 保存先が YouTube なら、動画のアップ状況も出す
  */
 export function MediaItem({
   media,
-  videoRef,
+  playerRef,
   autoLoad = false,
   bare = false,
 }: {
   media: Media
-  videoRef?: (el: HTMLVideoElement | null) => void
+  /** 見比べで、2本を同時に再生するための操作を受け取る */
+  playerRef?: (p: PlayerControl | null) => void
   /** 動画をすぐ読み込む（最初と最新を比べるとき） */
   autoLoad?: boolean
   /** 動画・写真だけを出し、保存・共有などの操作は出さない（狭い列で見比べるとき） */
   bare?: boolean
 }) {
   const run = useAction()
-  const toast = useToast()
+  const storage = useLiveQuery(getVideoStorage)
   const blob = useRemotePhoto(media)
   usePoster(media)
   const video = isVideo(media)
-  // 端末に動画が無いときも、サムネイルがあれば YouTube へのリンクの背景に出す
-  const posterUrl = useObjectUrl(!blob && video ? media.poster : undefined, `${media.id}-yt-poster-${media.poster?.size ?? 0}`)
+  // 保存先が端末なら上げないので、アップ待ちは出さない
+  const uploadState = video && storage === 'youtube' && media.upload !== 'done' ? media.upload : undefined
+  const onYoutube = video && !!media.youtubeId
+  const toolbar = !bare && (blob || onYoutube || !!uploadState)
 
   return (
     <figure className={bare ? 'media-item' : 'media-item media-card'}>
@@ -71,20 +76,10 @@ export function MediaItem({
           poster={media.poster}
           cacheKey={media.id}
           autoLoad={autoLoad}
-          videoRef={videoRef}
+          videoRef={playerRef && ((el) => playerRef(el ? videoControl(el) : null))}
         />
-      ) : video && media.youtubeId ? (
-        <a
-          className={`media placeholder${posterUrl ? ' with-poster' : ''}`}
-          style={posterUrl ? { backgroundImage: `url(${posterUrl})` } : undefined}
-          href={youtubeUrl(media.youtubeId)}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <PlayIcon size={22} />
-          YouTube で見る
-          <small>（非公開・YouTube アプリで再生）</small>
-        </a>
+      ) : onYoutube ? (
+        <YoutubePlayer videoId={media.youtubeId!} poster={media.poster} cacheKey={media.id} playerRef={playerRef} />
       ) : (
         <div className="media placeholder">
           {video ? <VideoIcon size={22} /> : <PhotoIcon size={22} />}
@@ -92,11 +87,10 @@ export function MediaItem({
         </div>
       )}
       {/* この動画・写真への操作は、すぐ下に付けたバーにまとめる（どれへの操作か分かるように） */}
-      {/* 端末に中身があるとき、またはアップの途中・失敗を知らせるときだけ（YouTube にだけある動画は、上の枠が YouTube へのリンク） */}
-      {!bare && (blob || (video && !!media.upload && media.upload !== 'done')) && (
+      {toolbar && (
         <figcaption className="media-toolbar">
           <span className="media-toolbar-status">
-            {video && media.upload === 'failed' && (media.uploadAttempts ?? 0) >= MAX_UPLOAD_ATTEMPTS && blob ? (
+            {uploadState === 'failed' && (media.uploadAttempts ?? 0) >= MAX_UPLOAD_ATTEMPTS && blob ? (
               <button
                 type="button"
                 className="tool-button"
@@ -105,38 +99,21 @@ export function MediaItem({
               >
                 ↻ アップを再試行
               </button>
-            ) : video && media.upload && media.upload !== 'done' ? (
-              <span className={`upload upload-${media.upload}`} title={media.uploadError}>
-                {UPLOAD_LABEL[media.upload]}
+            ) : uploadState ? (
+              <span className={`upload upload-${uploadState}`} title={media.uploadError}>
+                {UPLOAD_LABEL[uploadState]}
               </span>
-            ) : video && media.youtubeId && blob ? (
-              <a className="tool-button" href={youtubeUrl(media.youtubeId)} target="_blank" rel="noopener noreferrer">
+            ) : onYoutube ? (
+              <a className="tool-button" href={youtubeUrl(media.youtubeId!)} target="_blank" rel="noopener noreferrer">
                 YouTube
                 <ExternalIcon size={15} label="（別の画面で開く）" />
               </a>
             ) : null}
           </span>
-          {blob && <ShareMediaButton media={media} blob={blob} />}
-          {/* 古い動画の自動整理で、この端末から消さない印 */}
-          {video && blob && (
-            <button
-              type="button"
-              className={`tool-button${media.keep ? ' on' : ''}`}
-              aria-pressed={!!media.keep}
-              onClick={() =>
-                run(async () => {
-                  await setMediaKeep(media.id, !media.keep)
-                  toast.show(
-                    media.keep
-                      ? '「端末に残す」を外しました'
-                      : 'この動画は、古い動画を整理するときも端末に残します',
-                  )
-                })
-              }
-            >
-              <PinIcon size={17} filled={media.keep} />
-              端末に残す
-            </button>
+          {blob ? (
+            <ShareMediaButton media={media} blob={blob} />
+          ) : (
+            onYoutube && <ShareLinkButton youtubeId={media.youtubeId!} />
           )}
         </figcaption>
       )}

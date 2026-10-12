@@ -1,6 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useRef, useState } from 'react'
 import { db, mediaByIndex } from '../data/db'
+import { getVideoStorage } from '../data/videoStorage'
 import {
   achieveSkill,
   activateSkill,
@@ -14,7 +15,7 @@ import { canActivate, computeStates, indexById } from '../domain/logic'
 import { recentForm } from '../domain/form'
 import { isWebUrl } from '../domain/template'
 import type { Media } from '../domain/types'
-import { ConfirmButton, Empty, formatDate, isVideo, splitName, StateBadge, STATE_LABEL } from './common'
+import { ConfirmButton, Empty, formatDate, isVideo, type PlayerControl, splitName, StateBadge, STATE_LABEL } from './common'
 import { PatternImage } from './PatternImage'
 import { FormDots, formSummary } from './FormDots'
 import { MediaItem } from './MediaItem'
@@ -37,7 +38,7 @@ function Compare({ media }: { media: Media[] }) {
   // 2つ以上あって比べられる種類だけを選べるようにする（1つしかない種類を選ぶと、比べる欄ごと消えていた）
   const kinds = [...(videos.length >= 2 ? (['video'] as const) : []), ...(images.length >= 2 ? (['image'] as const) : [])]
   const [picked, setPicked] = useState<'video' | 'image'>()
-  const players = useRef<(HTMLVideoElement | null)[]>([])
+  const players = useRef<(PlayerControl | null)[]>([])
   const kind = picked && kinds.includes(picked) ? picked : kinds[0]
   if (!kind) return null
   const list = kind === 'video' ? videos : images
@@ -65,8 +66,8 @@ function Compare({ media }: { media: Media[] }) {
               media={m}
               autoLoad
               bare
-              videoRef={(el) => {
-                players.current[i] = el
+              playerRef={(p) => {
+                players.current[i] = p
               }}
             />
             <p className="compare-label">
@@ -79,17 +80,7 @@ function Compare({ media }: { media: Media[] }) {
         <button
           className="btn small"
           onClick={() => {
-            for (const v of players.current) {
-              if (!v) continue
-              // iPhone は音の出る動画を1本しか同時に再生できず、後から再生した方だけが動くので、音を消して並べて再生する
-              v.muted = true
-              // 止めたら音を戻す（そのあと1本だけ再生したときに音が出るように）
-              v.addEventListener('pause', () => (v.muted = false), { once: true })
-              v.currentTime = 0
-              v.play().catch(() => {
-                // 自動再生が止められた場合は、各動画の再生ボタンで再生してもらう
-              })
-            }
+            for (const p of players.current) p?.playMutedFromStart()
           }}
         >
           <PlayIcon size={16} />
@@ -121,7 +112,9 @@ export function SkillScreen({ id }: { id: string }) {
     const allSkills = await db.skills.toArray()
     // 杯の番号は、型に関係なく全部の記録の通し番号（No.）
     const numbers = await cupNumbers(records)
-    return { skill, skills, domain, records, media, settings, allSkills, numbers }
+    // アップの失敗は、保存先が YouTube のときだけ知らせる
+    const uploads = (await getVideoStorage()) === 'youtube'
+    return { skill, skills, domain, records, media, settings, allSkills, numbers, uploads }
   }, [id])
 
   if (!data) return null
@@ -283,7 +276,7 @@ export function SkillScreen({ id }: { id: string }) {
               media: pickCupMedia(r.mediaIds.map((m) => mediaById.get(m))),
               number: data.numbers?.get(r.id) ?? 0,
               skillName: skill.name,
-              failed: r.mediaIds.some((m) => mediaById.get(m)?.upload === 'failed'),
+              failed: data.uploads && r.mediaIds.some((m) => mediaById.get(m)?.upload === 'failed'),
             }))}
           />
         )}
