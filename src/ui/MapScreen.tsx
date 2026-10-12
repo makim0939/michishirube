@@ -110,11 +110,9 @@ export function MapScreen({ domainId }: { domainId?: string }) {
   const states = computeStates(skills)
   const byId = indexById(skills)
   const ordered = sortByDepth(skills)
-  // 練習中は、今日の画面と同じ並び（並べ替えた順・最近練習した順）
+  // 練習中は、今日の画面と同じ並び（最近練習した順）
   const active = practiceOrder(
     ordered.filter((s) => states.get(s.id) === 'active'),
-    settings.focusOrder,
-    (s) => s.id,
     (s) => stats.get(s.id)?.last ?? 0,
   )
   const available = ordered.filter((s) => states.get(s.id) === 'available')
