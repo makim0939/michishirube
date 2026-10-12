@@ -1295,64 +1295,17 @@ a.media.placeholder {
 }
 
 
-/* ---- 切り取り ---- */
 
-.trimmer-video {
-  height: 55%;
-  object-fit: contain;
-}
 
-.trimmer-panel {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  padding: 14px 16px calc(env(safe-area-inset-bottom, 0px) + 16px);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  background: rgb(20 20 20 / 92%);
-}
 
-.trimmer-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
 
-.trimmer-row input[type='range'] {
-  flex: 1;
-  min-width: 0;
-}
 
-.trimmer-slider {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  font-size: 0.85rem;
-}
 
-.trimmer-time {
-  font-variant-numeric: tabular-nums;
-  font-size: 0.85rem;
-  min-width: 4em;
-  text-align: right;
-}
-
-.trimmer-note {
-  font-size: 0.78rem;
-  opacity: 0.75;
-}
 
 .trimmer-error {
   color: #ff9b8f;
 }
 
-.trimmer input[type='range'] {
-  width: 100%;
-  accent-color: var(--gold);
-}
 
 .progress {
   height: 8px;
@@ -1395,13 +1348,6 @@ select {
   white-space: nowrap;
 }
 
-.trimmer-length {
-  padding: 4px 12px;
-  border-radius: 999px;
-  background: rgb(0 0 0 / 55%);
-  font-size: 0.85rem;
-  font-variant-numeric: tabular-nums;
-}
 
 .preview-actions {
   display: flex;
@@ -2316,4 +2262,231 @@ a.notice {
 
 .type-card-body .form-dots {
   margin: 2px 0;
+}
+
+/* ---- 動画の編集（写真アプリのように） ---- */
+
+.editor {
+  display: flex;
+  flex-direction: column;
+  background: #0d0b0a;
+  color: #fff;
+}
+
+.editor-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: calc(env(safe-area-inset-top, 0px) + 8px) 12px 8px;
+}
+
+.editor-title {
+  font-family: var(--font-latin);
+  font-size: 1.1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.editor-text-button {
+  appearance: none;
+  border: none;
+  background: none;
+  color: #fff;
+  font: inherit;
+  font-size: 1rem;
+  padding: 10px 8px;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.editor-text-button.primary {
+  color: #f5c542;
+  font-weight: 700;
+}
+
+.editor-text-button:disabled {
+  opacity: 0.4;
+}
+
+.editor-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
+
+.editor-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.editor-play {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border: none;
+  border-radius: 50%;
+  background: rgb(0 0 0 / 45%);
+  color: #fff;
+  cursor: pointer;
+}
+
+.editor-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 12px calc(env(safe-area-inset-bottom, 0px) + 14px);
+}
+
+.editor-status,
+.editor-note {
+  margin: 0;
+  text-align: center;
+  font-size: 0.78rem;
+  color: rgb(255 255 255 / 70%);
+}
+
+.editor-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.editor-sound,
+.editor-play-small {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 10px;
+  background: rgb(255 255 255 / 12%);
+  color: #fff;
+  cursor: pointer;
+}
+
+.editor-sound.off {
+  color: #f5c542;
+}
+
+.filmstrip {
+  position: relative;
+  flex: 1;
+  height: 52px;
+  /* 両端の取っ手が、枠の外にはみ出す分の余白 */
+  margin: 0 14px;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.filmstrip-frames {
+  position: absolute;
+  inset: 4px 0;
+  display: flex;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #2b2522;
+}
+
+.filmstrip-frames img,
+.filmstrip-frames span {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  object-fit: cover;
+}
+
+.filmstrip-shade {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  background: rgb(0 0 0 / 60%);
+  pointer-events: none;
+}
+
+/* 選んだ範囲の黄色い枠。両端が取っ手 */
+.filmstrip-frame {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border: 3px solid #f5c542;
+  border-left-width: 0;
+  border-right-width: 0;
+  border-radius: 6px;
+  pointer-events: none;
+}
+
+.filmstrip-handle {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 14px;
+  background: #f5c542;
+  pointer-events: auto;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.filmstrip-handle::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 3px;
+  height: 14px;
+  border-radius: 2px;
+  background: #5a4410;
+  transform: translate(-50%, -50%);
+}
+
+/* 指で押しやすいよう、見た目より広く反応させる */
+.filmstrip-handle::before {
+  content: '';
+  position: absolute;
+  inset: 0 -12px;
+}
+
+.filmstrip-handle.start {
+  left: -14px;
+  border-radius: 6px 0 0 6px;
+}
+
+.filmstrip-handle.end {
+  right: -14px;
+  border-radius: 0 6px 6px 0;
+}
+
+.filmstrip-head {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 3px;
+  margin-left: -1.5px;
+  border-radius: 2px;
+  background: #fff;
+  box-shadow: 0 0 4px rgb(0 0 0 / 60%);
+  pointer-events: none;
+}
+
+.editor-progress {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.editor-progress p {
+  margin: 0;
+}
+
+.editor-progress .progress {
+  width: 100%;
 }

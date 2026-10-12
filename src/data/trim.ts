@@ -2,7 +2,8 @@ import { dlog, traceVideo } from '../debug'
 import { extensionFor, pickRecorderMimeType, RECORDER_BITRATE } from './mediaPrep'
 
 /**
- * 動画を切り取る。指定した範囲を再生しながら、映像はキャンバス、音声は Web Audio 経由で録り直す。
+ * 動画を切り取る・音を消す。指定した範囲を再生しながら、映像はキャンバス、音声は Web Audio 経由で録り直す
+ * （音を消すときは映像だけを録る）。
  * 再エンコードなので、切り取った長さぶんの時間がかかる（30秒なら30秒）。
  *
  * iPhone では音つきの再生にタップが要るので、startTrim() はボタンを押した処理の中で同期的に呼ぶこと。
@@ -48,22 +49,33 @@ type VideoWithFrameCallback = HTMLVideoElement & {
  * video はすでに読み込み済みの要素（src を設定し、loadedmetadata まで済んでいるもの）を渡す。
  * 処理のあいだ video を再生するので、画面に出していてもよい
  */
-export function startTrim(video: HTMLVideoElement, audio: AudioContext, range: TrimRange, fileName: string): TrimJob {
-  const mimeType = pickRecorderMimeType((t) => MediaRecorder.isTypeSupported(t), true)
+export function startTrim(
+  video: HTMLVideoElement,
+  audio: AudioContext,
+  range: TrimRange,
+  fileName: string,
+  { muted = false }: { muted?: boolean } = {},
+): TrimJob {
+  const mimeType = pickRecorderMimeType((t) => MediaRecorder.isTypeSupported(t), !muted)
   if (!mimeType) {
     return { done: Promise.reject(new Error('この端末では動画を作り直せません')), cancel: () => {} }
   }
 
   // ---- ここまでをタップの処理の中で同期的に行う（iPhone の自動再生の制限のため） ----
   const untrace = traceVideo(video, 'trim')
-  dlog('trim start', range, mimeType, 'audio', audio.state, 'rs', video.readyState)
-  void audio.resume()
-  const source = audioSourceFor(video, audio)
-  const audioOut = audio.createMediaStreamDestination()
-  // 録り直している間はスピーカーから鳴らさず、録音にだけ流す
-  source.disconnect()
-  source.connect(audioOut)
-  video.muted = false
+  dlog('trim start', range, mimeType, 'audio', audio.state, 'rs', video.readyState, 'muted', muted)
+  // 音を消すときは、音声の経路を作らない（映像だけを録る）
+  let source: MediaElementAudioSourceNode | null = null
+  let audioOut: MediaStreamAudioDestinationNode | null = null
+  if (!muted) {
+    void audio.resume()
+    source = audioSourceFor(video, audio)
+    audioOut = audio.createMediaStreamDestination()
+    // 録り直している間はスピーカーから鳴らさず、録音にだけ流す
+    source.disconnect()
+    source.connect(audioOut)
+  }
+  video.muted = muted
   // タップの中で一度だけ再生を始めて止め、この video の音つき再生を許可させる。
   // 実際の再生は、始めの位置へ移動し終えてから行う（移動中に再生を始めると、先頭がずれるため）
   video.play().catch((e: unknown) => {
@@ -85,11 +97,14 @@ export function startTrim(video: HTMLVideoElement, audio: AudioContext, range: T
   canvas.width = Math.round(video.videoWidth * scale) || 1280
   canvas.height = Math.round(video.videoHeight * scale) || 720
   const draw = canvas.getContext('2d')!
-  const stream = new MediaStream([...canvas.captureStream(30).getVideoTracks(), ...audioOut.stream.getAudioTracks()])
+  const stream = new MediaStream([
+    ...canvas.captureStream(30).getVideoTracks(),
+    ...(audioOut ? audioOut.stream.getAudioTracks() : []),
+  ])
   const recorder = new MediaRecorder(stream, {
     mimeType,
     videoBitsPerSecond: RECORDER_BITRATE.video,
-    audioBitsPerSecond: RECORDER_BITRATE.audio,
+    ...(muted ? {} : { audioBitsPerSecond: RECORDER_BITRATE.audio }),
   })
   const chunks: Blob[] = []
   recorder.ondataavailable = (e) => {
@@ -141,22 +156,44 @@ export function startTrim(video: HTMLVideoElement, audio: AudioContext, range: T
     }
   })
 
+  // 動画の終わりまで録るとき、最後のコマのあとは requestVideoFrameCallback が呼ばれないので、終わりの通知でも止める
+  const onEnded = () => {
+    dlog('ended', video.currentTime)
+    if (firstTime !== null) lastTime = Math.max(lastTime, video.currentTime)
+    finish()
+  }
+  video.addEventListener('ended', onEnded)
+
   const cleanup = () => {
+    video.removeEventListener('ended', onEnded)
     untrace()
     dlog('cleanup', 'frames', firstTime, lastTime, 'chunks', chunks.length)
     video.pause()
     video.muted = true
     // 録り終えたら、プレビューの音がまたスピーカーから出るように戻す
-    source.disconnect()
-    source.connect(audio.destination)
+    if (source) {
+      source.disconnect()
+      source.connect(audio.destination)
+    }
     stream.getTracks().forEach((t) => t.stop())
   }
 
   const finish = () => {
     if (stopped) return
     stopped = true
-    if (recorder.state !== 'inactive') recorder.stop()
-    else cleanup()
+    if (recorder.state !== 'inactive') {
+      recorder.stop()
+      return
+    }
+    // 録り始める前に終わった（動画が最後まで進んでしまった・失敗した）。待たせたままにしない
+    cleanup()
+    rejectDone(
+      new Error(
+        failed
+          ? `動画を作り直せませんでした（${failed}）。元の動画はそのままです`
+          : '動画を作り直せませんでした。もう一度試してください。元の動画はそのままです',
+      ),
+    )
   }
 
   recorder.onstop = () => {
@@ -176,8 +213,8 @@ export function startTrim(video: HTMLVideoElement, audio: AudioContext, range: T
       rejectDone(new Error('途中で止まり、最後まで作り直せませんでした。元の動画はそのままです'))
       return
     }
-    const base = fileName.replace(/\.[^.]+$/, '')
-    resolveDone(new File([blob], `${base}-trim.${extensionFor(type)}`, { type }))
+    const base = fileName.replace(/\.[^.]+$/, '').replace(/-edit$/, '')
+    resolveDone(new File([blob], `${base}-edit.${extensionFor(type)}`, { type }))
   }
 
   playing
