@@ -45,11 +45,14 @@ export function MediaItem({
   media,
   videoRef,
   autoLoad = false,
+  bare = false,
 }: {
   media: Media
   videoRef?: (el: HTMLVideoElement | null) => void
   /** 動画をすぐ読み込む（最初と最新を比べるとき） */
   autoLoad?: boolean
+  /** 動画・写真だけを出し、保存・共有などの操作は出さない（狭い列で見比べるとき） */
+  bare?: boolean
 }) {
   const run = useAction()
   const blob = useRemotePhoto(media)
@@ -87,13 +90,13 @@ export function MediaItem({
           この端末にはありません
         </div>
       )}
-      {!video && blob && (
+      {!bare && !video && blob && (
         <figcaption className="media-caption">
           <span />
           <ShareMediaButton media={media} blob={blob} />
         </figcaption>
       )}
-      {video && (
+      {!bare && video && (
         <figcaption className="media-caption">
           {media.upload === 'failed' && (media.uploadAttempts ?? 0) >= MAX_UPLOAD_ATTEMPTS && blob ? (
             <button
