@@ -1085,6 +1085,15 @@ a.media.placeholder {
   white-space: nowrap;
 }
 
+.media-actions {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.keep:disabled {
+  opacity: 0.6;
+}
+
 .keep.on {
   border-color: var(--gold);
   color: var(--text);

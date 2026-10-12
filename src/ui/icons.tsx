@@ -144,3 +144,10 @@ export const PlusIcon = (p: P) => (
     <path d="M12 5v14M5 12h14" />
   </Icon>
 )
+
+export const ShareIcon = (p: P) => (
+  <Icon {...p}>
+    <path d="M12 3v12M8 7l4-4 4 4" />
+    <path d="M6 11v8a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-8" />
+  </Icon>
+)

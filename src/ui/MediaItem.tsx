@@ -6,6 +6,7 @@ import type { Media } from '../domain/types'
 import { isVideo, MediaView, useObjectUrl } from './common'
 import { usePoster } from './cupImage'
 import { useAction } from './feedback'
+import { ShareMediaButton } from './ShareMedia'
 import { PhotoIcon, PlayIcon, StarIcon, VideoIcon } from './icons'
 
 const UPLOAD_LABEL = {
@@ -86,6 +87,12 @@ export function MediaItem({
           この端末にはありません
         </div>
       )}
+      {!video && blob && (
+        <figcaption className="media-caption">
+          <span />
+          <ShareMediaButton media={media} blob={blob} />
+        </figcaption>
+      )}
       {video && (
         <figcaption className="media-caption">
           {media.upload === 'failed' && (media.uploadAttempts ?? 0) >= MAX_UPLOAD_ATTEMPTS && blob ? (
@@ -108,16 +115,19 @@ export function MediaItem({
           ) : (
             <span />
           )}
-          <button
-            type="button"
-            className={`keep ${media.keep ? 'on' : ''}`}
-            aria-pressed={!!media.keep}
-            title="自動整理で、この端末から消さない"
-            onClick={() => run(() => setMediaKeep(media.id, !media.keep))}
-          >
-            <StarIcon size={13} filled={media.keep} />
-            残す
-          </button>
+          <span className="media-actions">
+            {blob && <ShareMediaButton media={media} blob={blob} />}
+            <button
+              type="button"
+              className={`keep ${media.keep ? 'on' : ''}`}
+              aria-pressed={!!media.keep}
+              title="自動整理で、この端末から消さない"
+              onClick={() => run(() => setMediaKeep(media.id, !media.keep))}
+            >
+              <StarIcon size={13} filled={media.keep} />
+              残す
+            </button>
+          </span>
         </figcaption>
       )}
     </figure>
