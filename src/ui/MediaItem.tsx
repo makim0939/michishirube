@@ -7,7 +7,7 @@ import { isVideo, MediaView, useObjectUrl } from './common'
 import { usePoster } from './cupImage'
 import { useAction } from './feedback'
 import { ShareMediaButton } from './ShareMedia'
-import { PhotoIcon, PlayIcon, StarIcon, VideoIcon } from './icons'
+import { ExternalIcon, PhotoIcon, PlayIcon, VideoIcon } from './icons'
 
 const UPLOAD_LABEL = {
   pending: 'YouTube へのアップ待ち',
@@ -109,25 +109,29 @@ export function MediaItem({
               {UPLOAD_LABEL[media.upload]}
             </span>
           ) : media.youtubeId && blob ? (
-            <a href={youtubeUrl(media.youtubeId)} target="_blank" rel="noopener noreferrer">
-              YouTube
+            <a className="external-link" href={youtubeUrl(media.youtubeId)} target="_blank" rel="noopener noreferrer">
+              YouTube で見る
+              <ExternalIcon size={13} label="（別の画面で開く）" />
             </a>
           ) : (
             <span />
           )}
-          <span className="media-actions">
-            {blob && <ShareMediaButton media={media} blob={blob} />}
-            <button
-              type="button"
-              className={`keep ${media.keep ? 'on' : ''}`}
-              aria-pressed={!!media.keep}
-              title="自動整理で、この端末から消さない"
-              onClick={() => run(() => setMediaKeep(media.id, !media.keep))}
-            >
-              <StarIcon size={13} filled={media.keep} />
-              残す
-            </button>
-          </span>
+          {blob && <ShareMediaButton media={media} blob={blob} />}
+          {/* 古い動画の自動整理で、この端末から消さないための切り替え */}
+          {blob && (
+            <label className="keep-switch">
+              <input
+                type="checkbox"
+                role="switch"
+                checked={!!media.keep}
+                onChange={() => run(() => setMediaKeep(media.id, !media.keep))}
+              />
+              <span className="keep-switch-text">
+                この端末に残す
+                <small>古い動画を整理するときも消さない</small>
+              </span>
+            </label>
+          )}
         </figcaption>
       )}
     </figure>

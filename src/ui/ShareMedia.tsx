@@ -60,8 +60,8 @@ export function ShareMediaButton({ media, blob }: { media: Media; blob: Blob }) 
   }
 
   return (
-    <button type="button" className="keep" disabled={preparing} onClick={() => void share()}>
-      <ShareIcon size={13} />
+    <button type="button" className="btn small share-button" disabled={preparing} onClick={() => void share()}>
+      <ShareIcon size={16} />
       {preparing ? '準備中…' : prepared ? 'もう一度押す' : '保存・共有'}
     </button>
   )

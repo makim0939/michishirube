@@ -117,15 +117,6 @@ export const MicIcon = ({ off, ...p }: P & { off?: boolean }) => (
   </Icon>
 )
 
-export const StarIcon = ({ filled, ...p }: P & { filled?: boolean }) => (
-  <Icon {...p}>
-    <path
-      d="M12 4.5l2.3 4.7 5.2.8-3.8 3.7.9 5.1L12 16.4l-4.6 2.4.9-5.1-3.8-3.7 5.2-.8z"
-      fill={filled ? 'currentColor' : 'none'}
-    />
-  </Icon>
-)
-
 export const CheckIcon = (p: P) => (
   <Icon {...p}>
     <path d="M5 12.5l4.5 4.5L19 7.5" />
@@ -156,5 +147,19 @@ export const SpeakerIcon = ({ off, ...p }: P & { off?: boolean }) => (
   <Icon {...p}>
     <path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" />
     {off ? <path d="M16 9.5l5 5M21 9.5l-5 5" /> : <path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" />}
+  </Icon>
+)
+
+export const ForwardIcon = (p: P) => (
+  <Icon {...p}>
+    <path d="M9 5l7 7-7 7" />
+  </Icon>
+)
+
+/** 別の画面（ほかのアプリ）で開く */
+export const ExternalIcon = (p: P) => (
+  <Icon {...p}>
+    <path d="M14 4h6v6M20 4l-9 9" />
+    <path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" />
   </Icon>
 )

@@ -3,7 +3,7 @@ import { db } from '../data/db'
 import { OUTCOME_LABEL } from '../domain/format'
 import type { Media } from '../domain/types'
 import { Empty, formatDate, splitName } from './common'
-import { BackIcon } from './icons'
+import { BackIcon, ForwardIcon } from './icons'
 import { MediaItem } from './MediaItem'
 import { PatternImage } from './PatternImage'
 import { backHandler, href, replace } from './router'
@@ -45,7 +45,7 @@ export function CupScreen({ recordId }: { recordId: string }) {
         </a>
         <span className="title-block muted small">{formatDate(record.createdAt)}</span>
         <a className="btn small ghost" href={href(`/record/${record.skillId}/edit/${record.id}`)}>
-          直す
+          編集
         </a>
       </header>
 
@@ -95,15 +95,17 @@ export function CupScreen({ recordId }: { recordId: string }) {
       {/* 前後の杯へ（戻るで何杯もさかのぼらないよう、履歴は積まない） */}
       <nav className="cup-nav" aria-label="前後の杯">
         {prevId ? (
-          <button type="button" className="btn small" onClick={() => replace(`/cup/${prevId}`)}>
-            ‹ No.{number - 1}
+          <button type="button" className="btn cup-nav-button" onClick={() => replace(`/cup/${prevId}`)}>
+            <BackIcon size={18} />
+            No.{number - 1}
           </button>
         ) : (
           <span />
         )}
         {nextId ? (
-          <button type="button" className="btn small" onClick={() => replace(`/cup/${nextId}`)}>
-            No.{number + 1} ›
+          <button type="button" className="btn cup-nav-button" onClick={() => replace(`/cup/${nextId}`)}>
+            No.{number + 1}
+            <ForwardIcon size={18} />
           </button>
         ) : (
           <span />

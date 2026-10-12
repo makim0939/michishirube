@@ -62,7 +62,7 @@ let keySeq = 0
 const nextKey = () => `item-${++keySeq}`
 
 /**
- * 記録する画面。recordId があれば、保存した記録を直す
+ * 記録する画面。recordId があれば、保存した記録を編集する
  */
 export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?: string }) {
   const editing = !!recordId
@@ -216,7 +216,7 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
             removeMediaIds: removed,
             replace,
           })
-          toast.show('記録を直しました')
+          toast.show('記録を保存しました')
         } else {
           await addRecord({ skillId, outcome, reason, causes, nextAction, files: added })
           clearDraft()
@@ -254,7 +254,7 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
           <BackIcon size={26} />
         </a>
         <div className="title-block">
-          {editing && <span className="muted">記録を直す</span>}
+          {editing && <span className="muted">記録を編集</span>}
           <h1>{splitName(skill.name).main}</h1>
         </div>
       </header>
@@ -263,7 +263,7 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
         <div className="confirm">
           <p>
             {editing
-              ? '直した内容が保存されていません。保存せずに戻りますか？'
+              ? '編集した内容が保存されていません。保存せずに戻りますか？'
               : `撮った動画・写真が ${items.length} 件あります。保存せずに戻ると消えます。`}
           </p>
           <div className="row">
@@ -274,7 +274,7 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
               {'to' in confirmLeave ? '保存せずに移動' : '保存せずに戻る'}
             </button>
             <button className="btn" onClick={() => setConfirmLeave(null)}>
-              {editing ? '直すのを続ける' : '記録を続ける'}
+              {editing ? '編集を続ける' : '記録を続ける'}
             </button>
           </div>
         </div>
@@ -519,7 +519,7 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
 
       <div className="sticky-actions">
         <button className="btn primary block" disabled={saving || (editing && !dirty)} onClick={save}>
-          {saving ? '保存中…' : editing ? '直した内容を保存' : '保存する'}
+          {saving ? '保存中…' : '保存する'}
         </button>
       </div>
     </div>
