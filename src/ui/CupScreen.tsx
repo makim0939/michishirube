@@ -95,7 +95,7 @@ export function CupScreen({ recordId }: { recordId: string }) {
       {/* 前後の杯へ（戻るで何杯もさかのぼらないよう、履歴は積まない） */}
       <nav className="cup-nav" aria-label="前後の杯">
         {prevId ? (
-          <button type="button" className="btn cup-nav-button" onClick={() => replace(`/cup/${prevId}`)}>
+          <button type="button" className="btn small cup-nav-button" onClick={() => replace(`/cup/${prevId}`)}>
             <BackIcon size={18} />
             No.{number - 1}
           </button>
@@ -103,7 +103,7 @@ export function CupScreen({ recordId }: { recordId: string }) {
           <span />
         )}
         {nextId ? (
-          <button type="button" className="btn cup-nav-button" onClick={() => replace(`/cup/${nextId}`)}>
+          <button type="button" className="btn small cup-nav-button" onClick={() => replace(`/cup/${nextId}`)}>
             No.{number + 1}
             <ForwardIcon size={18} />
           </button>

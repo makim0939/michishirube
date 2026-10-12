@@ -5,9 +5,9 @@ import { MAX_UPLOAD_ATTEMPTS, retryUpload, youtubeUrl } from '../data/youtube'
 import type { Media } from '../domain/types'
 import { isVideo, MediaView, useObjectUrl } from './common'
 import { usePoster } from './cupImage'
-import { useAction } from './feedback'
+import { useAction, useToast } from './feedback'
 import { ShareMediaButton } from './ShareMedia'
-import { ExternalIcon, PhotoIcon, PlayIcon, VideoIcon } from './icons'
+import { ExternalIcon, PhotoIcon, PinIcon, PlayIcon, VideoIcon } from './icons'
 
 const UPLOAD_LABEL = {
   pending: 'YouTube へのアップ待ち',
@@ -55,6 +55,7 @@ export function MediaItem({
   bare?: boolean
 }) {
   const run = useAction()
+  const toast = useToast()
   const blob = useRemotePhoto(media)
   usePoster(media)
   const video = isVideo(media)
@@ -62,7 +63,7 @@ export function MediaItem({
   const posterUrl = useObjectUrl(!blob && video ? media.poster : undefined, `${media.id}-yt-poster-${media.poster?.size ?? 0}`)
 
   return (
-    <figure className="media-item">
+    <figure className={bare ? 'media-item' : 'media-item media-card'}>
       {blob ? (
         <MediaView
           blob={blob}
@@ -90,50 +91,51 @@ export function MediaItem({
           この端末にはありません
         </div>
       )}
-      {!bare && !video && blob && (
-        <figcaption className="media-caption">
-          <span />
-          <ShareMediaButton media={media} blob={blob} />
-        </figcaption>
-      )}
-      {!bare && video && (
-        <figcaption className="media-caption">
-          {media.upload === 'failed' && (media.uploadAttempts ?? 0) >= MAX_UPLOAD_ATTEMPTS && blob ? (
+      {/* この動画・写真への操作は、すぐ下に付けたバーにまとめる（どれへの操作か分かるように） */}
+      {!bare && (blob || (video && (media.upload || media.youtubeId))) && (
+        <figcaption className="media-toolbar">
+          <span className="media-toolbar-status">
+            {video && media.upload === 'failed' && (media.uploadAttempts ?? 0) >= MAX_UPLOAD_ATTEMPTS && blob ? (
+              <button
+                type="button"
+                className="tool-button"
+                title={media.uploadError}
+                onClick={() => run(() => retryUpload(media.id))}
+              >
+                ↻ アップを再試行
+              </button>
+            ) : video && media.upload && media.upload !== 'done' ? (
+              <span className={`upload upload-${media.upload}`} title={media.uploadError}>
+                {UPLOAD_LABEL[media.upload]}
+              </span>
+            ) : video && media.youtubeId && blob ? (
+              <a className="tool-button" href={youtubeUrl(media.youtubeId)} target="_blank" rel="noopener noreferrer">
+                YouTube
+                <ExternalIcon size={15} label="（別の画面で開く）" />
+              </a>
+            ) : null}
+          </span>
+          {blob && <ShareMediaButton media={media} blob={blob} />}
+          {/* 古い動画の自動整理で、この端末から消さない印 */}
+          {video && blob && (
             <button
               type="button"
-              className="keep"
-              title={media.uploadError}
-              onClick={() => run(() => retryUpload(media.id))}
+              className={`tool-button${media.keep ? ' on' : ''}`}
+              aria-pressed={!!media.keep}
+              onClick={() =>
+                run(async () => {
+                  await setMediaKeep(media.id, !media.keep)
+                  toast.show(
+                    media.keep
+                      ? '「端末に残す」を外しました'
+                      : 'この動画は、古い動画を整理するときも端末に残します',
+                  )
+                })
+              }
             >
-              ↻ アップを再試行
+              <PinIcon size={17} filled={media.keep} />
+              端末に残す
             </button>
-          ) : media.upload && media.upload !== 'done' ? (
-            <span className={`upload upload-${media.upload}`} title={media.uploadError}>
-              {UPLOAD_LABEL[media.upload]}
-            </span>
-          ) : media.youtubeId && blob ? (
-            <a className="external-link" href={youtubeUrl(media.youtubeId)} target="_blank" rel="noopener noreferrer">
-              YouTube で見る
-              <ExternalIcon size={13} label="（別の画面で開く）" />
-            </a>
-          ) : (
-            <span />
-          )}
-          {blob && <ShareMediaButton media={media} blob={blob} />}
-          {/* 古い動画の自動整理で、この端末から消さないための切り替え */}
-          {blob && (
-            <label className="keep-switch">
-              <input
-                type="checkbox"
-                role="switch"
-                checked={!!media.keep}
-                onChange={() => run(() => setMediaKeep(media.id, !media.keep))}
-              />
-              <span className="keep-switch-text">
-                この端末に残す
-                <small>古い動画を整理するときも消さない</small>
-              </span>
-            </label>
           )}
         </figcaption>
       )}
