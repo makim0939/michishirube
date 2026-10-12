@@ -1068,6 +1068,8 @@ a.media.placeholder {
 
 .media-toolbar {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: center;
   gap: 2px;
   padding: 2px 4px;

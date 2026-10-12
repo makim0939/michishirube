@@ -92,7 +92,8 @@ export function MediaItem({
         </div>
       )}
       {/* この動画・写真への操作は、すぐ下に付けたバーにまとめる（どれへの操作か分かるように） */}
-      {!bare && (blob || (video && (media.upload || media.youtubeId))) && (
+      {/* 端末に中身があるとき、またはアップの途中・失敗を知らせるときだけ（YouTube にだけある動画は、上の枠が YouTube へのリンク） */}
+      {!bare && (blob || (video && !!media.upload && media.upload !== 'done')) && (
         <figcaption className="media-toolbar">
           <span className="media-toolbar-status">
             {video && media.upload === 'failed' && (media.uploadAttempts ?? 0) >= MAX_UPLOAD_ATTEMPTS && blob ? (
