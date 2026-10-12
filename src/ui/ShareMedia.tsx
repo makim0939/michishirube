@@ -50,7 +50,7 @@ export function ShareMediaButton({ media, blob }: { media: Media; blob: Blob }) 
       setPreparing(true)
       try {
         setPrepared(new File([await inMemory(blob)], name, { type: media.type }))
-        toast.show('準備できました。もう一度「保存・共有」を押してください')
+        toast.show('準備できました。「もう一度押す」を押してください')
       } catch {
         toast.show('共有できませんでした', 'error')
       } finally {
