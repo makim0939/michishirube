@@ -124,34 +124,9 @@ export function sortByDepth(skills: Skill[]): Skill[] {
 }
 
 /**
- * 利用者が決めた順（order の id の並び）に並べる。order に無いものは、元の並びのまま後ろに付ける
- */
-export function orderBy<T>(items: T[], order: string[] | undefined, idOf: (item: T) => string): T[] {
-  const rank = new Map((order ?? []).map((id, i) => [id, i]))
-  return items
-    .map((item, i) => ({ item, i, r: rank.get(idOf(item)) ?? Infinity }))
-    .sort((a, b) => a.r - b.r || a.i - b.i)
-    .map((x) => x.item)
-}
-
-/**
- * 練習中の型の並び。利用者が並べ替えた順（focusOrder）を優先し、決めていない型は最近練習した順。
+ * 練習中の型の並び。最近練習した型を上に（撮るときに、カードを探さずに済むように）。
  * 今日の画面と型の画面で同じ並びにする
  */
-export function practiceOrder<T>(
-  items: T[],
-  focusOrder: string[] | undefined,
-  idOf: (item: T) => string,
-  lastOf: (item: T) => number,
-): T[] {
-  const byLast = items.slice().sort((a, b) => lastOf(b) - lastOf(a))
-  return orderBy(byLast, focusOrder, idOf)
-}
-
-/** 配列の from 番目を to 番目へ動かした新しい配列 */
-export function moveItem<T>(items: T[], from: number, to: number): T[] {
-  const next = items.slice()
-  const [moved] = next.splice(from, 1)
-  next.splice(Math.max(0, Math.min(next.length, to)), 0, moved)
-  return next
+export function practiceOrder<T>(items: T[], lastOf: (item: T) => number): T[] {
+  return items.slice().sort((a, b) => lastOf(b) - lastOf(a))
 }

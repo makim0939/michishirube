@@ -1482,10 +1482,22 @@ video.media.playing {
 }
 
 .wordmark {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.wordmark-latin {
+  font-family: var(--font-latin);
+  font-size: 31px;
+  line-height: 1;
+}
+
+.wordmark-ja {
   font-family: var(--font-mincho);
-  font-weight: 600;
-  font-size: 26px;
-  letter-spacing: 0.12em;
+  font-weight: 500;
+  font-size: 10px;
+  letter-spacing: 0.5em;
   line-height: 1;
 }
 
@@ -1995,7 +2007,7 @@ a.notice {
   line-height: 1.7;
 }
 
-/* ---- 今日：練習中の型を長押しで並べ替える ---- */
+/* ---- 今日：練習中の型のカード ---- */
 
 .practice-list {
   display: flex;
@@ -2003,42 +2015,6 @@ a.notice {
   gap: 14px;
 }
 
-.practice-block {
-  /* 長押しで、リンクのプレビューや文字の選択を出さない */
-  -webkit-touch-callout: none;
-  user-select: none;
-  -webkit-user-select: none;
-}
-
-/* iPhone は、リンクや画像を長押しすると端末のドラッグ（ほかのアプリへ渡す）を始めて指の操作を取り消すので、止める */
-.practice-block a,
-.practice-block img {
-  -webkit-user-drag: none;
-}
-
-/* 画像の長押しで、画像の選択やメニューが出ないよう、触れたら下のカード（リンク）が受け取る */
-.practice-block img {
-  pointer-events: none;
-}
-
-.practice-block.compact {
-  padding: 10px 14px;
-  transition: box-shadow 0.15s;
-}
-
-.practice-block.lifted {
-  position: relative;
-  z-index: 5;
-  box-shadow: 0 16px 32px -12px rgb(42 30 23 / 45%);
-  outline: 2px solid var(--active);
-}
-
-/* 並べ替えている間は、ページのどこでも文字を選択させない */
-.reordering,
-.reordering * {
-  user-select: none;
-  -webkit-user-select: none;
-}
 
 /* ---- 記録：よくある原因 ---- */
 
