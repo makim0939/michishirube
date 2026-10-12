@@ -64,6 +64,7 @@ function Compare({ media }: { media: Media[] }) {
             <MediaItem
               media={m}
               autoLoad
+              bare
               videoRef={(el) => {
                 players.current[i] = el
               }}

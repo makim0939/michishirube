@@ -1055,10 +1055,11 @@ a.media.placeholder {
 
 .media-caption {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  gap: 4px;
-  font-size: 0.72rem;
+  gap: 8px;
+  font-size: 0.78rem;
 }
 
 .upload {
@@ -1085,19 +1086,75 @@ a.media.placeholder {
   white-space: nowrap;
 }
 
-.media-actions {
+/* 別の画面で開くリンク（YouTube） */
+.external-link {
   display: inline-flex;
-  gap: 6px;
-}
-
-.keep:disabled {
-  opacity: 0.6;
-}
-
-.keep.on {
-  border-color: var(--gold);
+  align-items: center;
+  gap: 4px;
   color: var(--text);
-  background: var(--active-soft);
+}
+
+/* 保存・共有：押せるボタンだと分かるように、枠と影を付ける */
+.btn.share-button {
+  box-shadow: 0 1px 2px rgb(42 30 23 / 10%);
+}
+
+/* この端末に残す：オン・オフの切り替え（スイッチ） */
+.keep-switch {
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.keep-switch input {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: none;
+  position: relative;
+  width: 44px;
+  height: 26px;
+  margin: 0;
+  border-radius: 999px;
+  background: var(--border);
+  transition: background 0.15s;
+  cursor: pointer;
+}
+
+.keep-switch input::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 25%);
+  transition: transform 0.15s;
+}
+
+.keep-switch input:checked {
+  background: var(--done);
+}
+
+.keep-switch input:checked::after {
+  transform: translateX(18px);
+}
+
+.keep-switch-text {
+  display: flex;
+  flex-direction: column;
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+.keep-switch-text small {
+  color: var(--muted);
+  font-size: 0.72rem;
 }
 
 
@@ -2071,9 +2128,12 @@ a.notice {
   gap: 12px;
 }
 
-.cup-nav .btn {
+/* 前後の杯へ：押せるボタンだと分かるように、枠と影を付ける */
+.cup-nav-button {
   font-family: var(--font-latin);
-  font-size: 1rem;
+  font-size: 1.05rem;
+  padding: 8px 14px;
+  box-shadow: var(--shadow);
 }
 
 /* ---- 今日：大きな写真を左右にめくる ---- */
