@@ -46,7 +46,7 @@ function Screen({ route }: { route: Route }) {
   }
 }
 
-/** 同期・YouTube へのアップ・古い動画の整理を、画面の裏で動かす */
+/** 同期・YouTube へのアップ・YouTube に上げた動画の整理を、画面の裏で動かす */
 function Background() {
   const toast = useToast()
   useEffect(() => {
@@ -54,7 +54,9 @@ function Background() {
     const stopUpload = startAutoUpload()
     tidyVideos()
       .then(({ count, bytes }) => {
-        if (count > 0) toast.show(`YouTube に上げ終えた古い動画 ${count} 本を端末から整理しました（${formatBytes(bytes)}）`)
+        if (count > 0) {
+          toast.show(`YouTube に上げた動画 ${count} 本を端末から消しました（${formatBytes(bytes)}）。アプリではこれまでどおり見られます`)
+        }
       })
       .catch(() => {
         // 整理できなくても、次に開いたときにまた試す

@@ -42,10 +42,6 @@ export async function setMaxActive(n: number) {
   await updateSettings({ maxActive: Math.min(MAX_ACTIVE_RANGE.max, Math.max(MAX_ACTIVE_RANGE.min, Math.round(n))) })
 }
 
-export async function setAutoTidy(autoTidy: boolean) {
-  await updateSettings({ autoTidy })
-}
-
 
 // ---- 初回 ----
 
@@ -425,14 +421,6 @@ export async function deleteRecord(id: string) {
     await db.records.delete(id)
     await markDirty('media', mediaIds)
     await markDirty('record', [id])
-  })
-}
-
-/** 自動整理で端末から消さない印 */
-export async function setMediaKeep(id: string, keep: boolean) {
-  await db.transaction('rw', db.media, db.outbox, async () => {
-    await db.media.update(id, { keep, updatedAt: Date.now() })
-    await markDirty('media', [id])
   })
 }
 

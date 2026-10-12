@@ -168,6 +168,26 @@ function VideoView({
   )
 }
 
+/** 見比べで、2本を同時に動かすための操作（端末の動画と YouTube の動画のどちらにも使う） */
+export interface PlayerControl {
+  playMutedFromStart(): void
+}
+
+export function videoControl(v: HTMLVideoElement): PlayerControl {
+  return {
+    playMutedFromStart: () => {
+      // iPhone は音の出る動画を1本しか同時に再生できず、後から再生した方だけが動くので、音を消して並べて再生する
+      v.muted = true
+      // 止めたら音を戻す（そのあと1本だけ再生したときに音が出るように）
+      v.addEventListener('pause', () => (v.muted = false), { once: true })
+      v.currentTime = 0
+      v.play().catch(() => {
+        // 自動再生が止められた場合は、各動画の再生ボタンで再生してもらう
+      })
+    },
+  }
+}
+
 export function MediaView({
   blob,
   type,

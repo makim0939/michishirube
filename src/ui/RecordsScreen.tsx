@@ -2,6 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useState } from 'react'
 import { db } from '../data/db'
 import { cupNumbers } from '../data/repo'
+import { getVideoStorage } from '../data/videoStorage'
 import type { Media } from '../domain/types'
 import { formatAgo, splitName } from './common'
 import { type Cup, CupGrid } from './CupGrid'
@@ -32,7 +33,9 @@ export function RecordsScreen() {
     // iPhone の Safari は、記録が0件のときに重複なしのカーソル（uniqueKeys）を開けずに落ちるので、キーを全部読んでまとめる
     const recorded = new Set((await db.records.orderBy('skillId').keys()) as string[])
     const numbers = await cupNumbers(records.slice(0, limit))
-    return { skills, domains, records, media, total, recorded, numbers }
+    // アップの失敗は、保存先が YouTube のときだけ知らせる
+    const uploads = (await getVideoStorage()) === 'youtube'
+    return { skills, domains, records, media, total, recorded, numbers, uploads }
   }, [limit, skillFilter])
 
   if (!data) return null
@@ -53,7 +56,7 @@ export function RecordsScreen() {
       media: pickCupMedia((r.mediaIds ?? []).map((id) => mediaById.get(id))),
       number: data.numbers.get(r.id) ?? 0,
       skillName: skillById.get(r.skillId)?.name,
-      failed: (r.mediaIds ?? []).some((id) => mediaById.get(id)?.upload === 'failed'),
+      failed: data.uploads && (r.mediaIds ?? []).some((id) => mediaById.get(id)?.upload === 'failed'),
     }
     if (groups.at(-1)?.label === label) groups.at(-1)!.cups.push(cup)
     else groups.push({ label, cups: [cup] })
