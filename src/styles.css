@@ -1349,9 +1349,10 @@ a.media.placeholder {
   }
 }
 
-/* 動画を正方形の枠いっぱいに広げる（はみ出した上下・左右は隠れる） */
+/* 再生中は、端末の動画と同じく全体を枠に収める（YouTube が上下・左右に黒い帯を付ける） */
 .yt-frame {
   position: absolute;
+  inset: 0;
   pointer-events: none;
 }
 
