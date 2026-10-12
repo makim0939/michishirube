@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import { inMemory, probeDuration } from '../data/mediaPrep'
 import { clampRange, startTrim, waitUntilSeekable, type TrimJob, type TrimRange } from '../data/trim'
 import { traceVideo } from '../debug'
@@ -14,8 +14,13 @@ function formatTime(sec: number) {
   return `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`
 }
 
-/** 動画から、フィルムに並べる小さなコマを作る（別の video で順に移動して描く） */
-async function makeFilmstrip(url: string, duration: number, count: number): Promise<string[]> {
+/** 動画から、フィルムに並べる小さなコマを作る（別の video で順に移動して描く）。isCancelled が true になったら止める */
+async function makeFilmstrip(
+  url: string,
+  duration: number,
+  count: number,
+  isCancelled: () => boolean,
+): Promise<string[]> {
   const video = document.createElement('video')
   video.muted = true
   video.playsInline = true
@@ -28,6 +33,8 @@ async function makeFilmstrip(url: string, duration: number, count: number): Prom
     const height = 72
     const frames: string[] = []
     for (let i = 0; i < count; i++) {
+      // 編集を閉じたら、残りのコマは作らない（裏で動画を読み続けないように）
+      if (isCancelled()) break
       const t = Math.min(duration - 0.05, ((i + 0.5) / count) * duration)
       video.currentTime = t
       await waitUntilSeekable(video, t, 3000)
@@ -110,7 +117,7 @@ export function Trimmer({
         await v.play().catch(() => {})
         v.pause()
         v.currentTime = 0
-        const film = await makeFilmstrip(url, d, FRAMES).catch(() => [])
+        const film = await makeFilmstrip(url, d, FRAMES, () => cancelled).catch(() => [])
         if (!cancelled) setFrames(film)
       })
       .catch(() => setError('動画の長さを読み取れませんでした'))
@@ -213,6 +220,22 @@ export function Trimmer({
 
   const onPointerUp = () => {
     dragging.current = null
+  }
+
+  /** 取っ手を、キーボードや読み上げ（上下のスワイプ）でも0.1秒ずつ動かせるようにする */
+  const nudge = (which: 'start' | 'end') => (e: KeyboardEvent) => {
+    const step = e.key === 'ArrowRight' || e.key === 'ArrowUp' ? 0.1 : e.key === 'ArrowLeft' || e.key === 'ArrowDown' ? -0.1 : 0
+    if (!step) return
+    e.preventDefault()
+    if (which === 'start') {
+      const start = Math.min(Math.max(0, range.start + step), range.end - MIN_LENGTH)
+      setRange(clampRange({ start, end: range.end }, duration))
+      seek(start)
+    } else {
+      const end = Math.max(Math.min(duration, range.end + step), range.start + MIN_LENGTH)
+      setRange(clampRange({ start: range.start, end }, duration))
+      seek(end)
+    }
   }
 
   const trimmed = range.start > 0.05 || range.end < duration - 0.05
@@ -334,6 +357,9 @@ export function Trimmer({
                   aria-valuemin={0}
                   aria-valuemax={duration}
                   aria-valuenow={range.start}
+                  aria-valuetext={formatTime(range.start)}
+                  tabIndex={0}
+                  onKeyDown={nudge('start')}
                   onPointerDown={onPointerDown('start')}
                   onPointerMove={onPointerMove}
                   onPointerUp={onPointerUp}
@@ -346,6 +372,9 @@ export function Trimmer({
                   aria-valuemin={0}
                   aria-valuemax={duration}
                   aria-valuenow={range.end}
+                  aria-valuetext={formatTime(range.end)}
+                  tabIndex={0}
+                  onKeyDown={nudge('end')}
                   onPointerDown={onPointerDown('end')}
                   onPointerMove={onPointerMove}
                   onPointerUp={onPointerUp}
