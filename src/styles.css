@@ -828,6 +828,8 @@ select:focus {
   font-weight: 600;
   z-index: 30;
   animation: toast-in 0.2s ease-out;
+  /* 下にあるボタンを押せなくしない（トーストの中のボタンだけは押せる） */
+  pointer-events: none;
 }
 
 .toast.error {
@@ -844,6 +846,7 @@ select:focus {
 }
 
 .toast-action {
+  pointer-events: auto;
   appearance: none;
   border: none;
   border-radius: 999px;
