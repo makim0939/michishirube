@@ -5,9 +5,7 @@ import {
   computeStates,
   descendants,
   indexById,
-  moveItem,
   newlyUnlocked,
-  orderBy,
   practiceOrder,
   sortByDepth,
   wouldCreateCycle,
@@ -97,40 +95,13 @@ describe('sortByDepth', () => {
   })
 })
 
-describe('orderBy', () => {
-  const items = [{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }]
-  const ids = (list: { id: string }[]) => list.map((x) => x.id)
-
-  it('決めた順に並べ、入っていないものは元の並びのまま後ろに付ける', () => {
-    expect(ids(orderBy(items, ['c', 'a'], (x) => x.id))).toEqual(['c', 'a', 'b', 'd'])
-  })
-
-  it('順が無ければ元の並びのまま', () => {
-    expect(ids(orderBy(items, undefined, (x) => x.id))).toEqual(['a', 'b', 'c', 'd'])
-  })
-
-  it('もう無い id は無視する', () => {
-    expect(ids(orderBy(items, ['x', 'd'], (x) => x.id))).toEqual(['d', 'a', 'b', 'c'])
-  })
-})
-
-describe('moveItem', () => {
-  it('前へも後ろへも動かせ、範囲の外は端に寄せる', () => {
-    expect(moveItem(['a', 'b', 'c'], 2, 0)).toEqual(['c', 'a', 'b'])
-    expect(moveItem(['a', 'b', 'c'], 0, 2)).toEqual(['b', 'c', 'a'])
-    expect(moveItem(['a', 'b', 'c'], 0, 9)).toEqual(['b', 'c', 'a'])
-  })
-})
-
 describe('practiceOrder', () => {
-  it('並べ替えた順を優先し、決めていないものは最近練習した順で後ろに付ける', () => {
+  it('最近練習した順に並べる', () => {
     const items = [
       { id: 'a', last: 1 },
       { id: 'b', last: 3 },
       { id: 'c', last: 2 },
     ]
-    const ids = (list: { id: string }[]) => list.map((x) => x.id)
-    expect(ids(practiceOrder(items, undefined, (x) => x.id, (x) => x.last))).toEqual(['b', 'c', 'a'])
-    expect(ids(practiceOrder(items, ['a'], (x) => x.id, (x) => x.last))).toEqual(['a', 'b', 'c'])
+    expect(practiceOrder(items, (x) => x.last).map((x) => x.id)).toEqual(['b', 'c', 'a'])
   })
 })

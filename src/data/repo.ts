@@ -46,10 +46,6 @@ export async function setAutoTidy(autoTidy: boolean) {
   await updateSettings({ autoTidy })
 }
 
-/** 今日の画面の、練習中の型の並び（型の id の並び） */
-export async function setFocusOrder(ids: string[]) {
-  await updateSettings({ focusOrder: ids })
-}
 
 // ---- 初回 ----
 
