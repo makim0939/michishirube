@@ -205,7 +205,7 @@ function Hero({ slides }: { slides: Slide[] }) {
       <div className="hero-shade" aria-hidden="true" />
       <div className="hero-top">
         {/* 題字は、写真に馴染む欧文（ラテ帳の読み）に、小さく和文を添える */}
-        <span className="wordmark" aria-label="ラテ帳">
+        <span className="wordmark" role="img" aria-label="ラテ帳">
           <span className="wordmark-latin" aria-hidden="true">
             Latte chō
           </span>
