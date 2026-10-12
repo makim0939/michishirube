@@ -382,7 +382,7 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
                     {blob && isVideo({ type }) && (
                       <button type="button" className="btn small" onClick={() => setTrimming(item.key)}>
                         <ScissorsIcon size={16} />
-                        切り取る
+                        編集（切り取り・音）
                       </button>
                     )}
                   </div>
