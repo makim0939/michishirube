@@ -123,6 +123,10 @@ export function YoutubePlayer({
   const [waiting, setWaiting] = useState(false)
   /** 最後まで見て、はじめに戻している途中 */
   const rewinding = useRef(false)
+  /** 再生を押してから、読み込み・再生が始まったか（始まらなければ、音つきの再生が止められたとみなす） */
+  const responded = useRef(false)
+  /** 見比べで音を消して再生した。止めたら音を戻す（そのあと1本だけ再生したときに音が出るように） */
+  const unmuteOnPause = useRef(false)
   const [muted, setMuted] = useState(false)
   const [slow, setSlow] = useState(false)
   const [time, setTime] = useState(0)
@@ -165,6 +169,7 @@ export function YoutubePlayer({
                 playMutedFromStart: () => {
                   setWaiting(true)
                   rewinding.current = false
+                  unmuteOnPause.current = true
                   created!.mute()
                   setMuted(true)
                   created!.seekTo(0, true)
@@ -174,6 +179,7 @@ export function YoutubePlayer({
             },
             onStateChange: (e) => {
               if (cancelled) return
+              if (e.data === STATE.playing || e.data === STATE.buffering) responded.current = true
               if (e.data === STATE.playing) {
                 // はじめに戻している途中で動き出したら、止める
                 if (rewinding.current) {
@@ -188,6 +194,11 @@ export function YoutubePlayer({
                 setPlaying(false)
                 setWaiting(false)
                 rewinding.current = false
+                if (unmuteOnPause.current) {
+                  unmuteOnPause.current = false
+                  created!.unMute()
+                  setMuted(false)
+                }
               } else if (e.data === STATE.ended) {
                 // 最後まで見たら、はじめに戻して止め、再生前の絵に戻す（YouTube のおすすめ動画を出さない）
                 rewinding.current = true
@@ -199,7 +210,12 @@ export function YoutubePlayer({
               }
             },
             onError: () => {
-              if (!cancelled) setFailed(true)
+              if (cancelled) return
+              // 再生できない動画。YouTube の画面へのリンクに切り替え、プレーヤーはすぐ片付ける
+              player.current = null
+              created?.destroy()
+              created = null
+              setFailed(true)
             },
           },
         })
@@ -230,17 +246,16 @@ export function YoutubePlayer({
     if (!p) return
     setWaiting(true)
     rewinding.current = false
+    responded.current = false
     p.playVideo()
-    // iPhone では、音つきの再生が止められることがある。始まらなければ音を消して再生する（音は右下で出せる）
+    // iPhone では、音つきの再生が止められることがある。読み込みも始まらなければ、音を消して再生する（音は右下で出せる）。
+    // 電波が遅くても、読み込みが始まっていれば（buffering）待つ
     setTimeout(() => {
-      if (player.current !== p) return
-      const state = p.getPlayerState()
-      if (state !== STATE.playing && state !== STATE.buffering) {
-        p.mute()
-        setMuted(true)
-        p.playVideo()
-      }
-    }, 1200)
+      if (player.current !== p || responded.current) return
+      p.mute()
+      setMuted(true)
+      p.playVideo()
+    }, 2000)
   }
 
   if (failed) {

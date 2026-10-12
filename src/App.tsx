@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { ensureSeeded } from './data/repo'
 import { startAutoSync } from './data/sync'
 import { tidyVideos } from './data/tidy'
-import { ensureVideoStorage } from './data/videoStorage'
 import { startAutoUpload } from './data/youtube'
 import { formatBytes } from './ui/common'
 import { CupIcon, LeafIcon, NotebookIcon, SlidersIcon } from './ui/icons'
@@ -53,8 +52,7 @@ function Background() {
   useEffect(() => {
     const stopSync = startAutoSync()
     const stopUpload = startAutoUpload()
-    ensureVideoStorage()
-      .then(() => tidyVideos())
+    tidyVideos()
       .then(({ count, bytes }) => {
         if (count > 0) {
           toast.show(`YouTube に上げた動画 ${count} 本を端末から消しました（${formatBytes(bytes)}）。アプリではこれまでどおり見られます`)

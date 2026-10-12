@@ -3,10 +3,11 @@ import { db } from './db'
 import { inMemory, makePoster } from './mediaPrep'
 import { needsLocalPoster } from './poster'
 import { getVideoStorage } from './videoStorage'
+import { youtubePlayable } from './youtube'
 
 /**
  * 保存先が YouTube のとき、YouTube に上げ終えた動画を端末から消す（YouTube には残り、アプリの中でも再生できる）。
- * 撮ってすぐは編集できるように、少し置いてから消す
+ * 撮ってすぐは編集できるように、少し置いてから消す。YouTube 側で再生できると確かめられたものだけを消す
  */
 
 /** 撮った（編集した）日から、この日数がたった動画を消す。YouTube 側の処理も、それまでに終わっている */
@@ -33,10 +34,17 @@ export function selectVideosToDrop(media: MediaInfo[], now: number, afterDays = 
 export async function tidyVideos(now = Date.now()): Promise<{ count: number; bytes: number }> {
   if ((await getVideoStorage()) !== 'youtube') return { count: 0, bytes: 0 }
   const media = await db.media.toArray()
-  const ids = selectVideosToDrop(
+  const candidates = selectVideosToDrop(
     media.map((m) => ({ ...m, hasBlob: !!m.blob })),
     now,
   )
+  // 端末の動画が唯一の手元の写しになるので、YouTube 側で再生できると確かめられたものだけを消す
+  // （非公開のまま・処理に失敗した動画を消すと、アプリで見られなくなる）
+  const ids: string[] = []
+  for (const id of candidates) {
+    const youtubeId = media.find((m) => m.id === id)?.youtubeId
+    if (youtubeId && (await youtubePlayable(youtubeId))) ids.push(id)
+  }
   // 消したあとに再生前の絵として出せるよう、先にサムネイルを作っておく。
   // サムネイルは同期でサーバーにも置かれ、入れ直した端末でも出せる
   for (const id of ids) {

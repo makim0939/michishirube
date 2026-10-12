@@ -3,10 +3,10 @@ import { exportBackup, importBackup } from './backup'
 import { db } from './db'
 import { pickRecorderMimeType } from './mediaPrep'
 import { addRecord, createDomain, createSkill, ensureSeeded } from './repo'
-import { ensureVideoStorage, getVideoStorage, setVideoStorage } from './videoStorage'
+import { getVideoStorage, setVideoStorage } from './videoStorage'
 import { applyRemote, connectSync, runSync } from './sync'
 import { selectVideosToDrop } from './tidy'
-import { uploadVideo } from './youtube'
+import { uploadVideo, youtubePlayable } from './youtube'
 
 const input = (name: string) => ({ name, description: '', criteria: '', sources: [], prereqIds: [] })
 
@@ -136,9 +136,9 @@ describe('動画の保存先', () => {
     const [m] = await db.media.toArray()
     await db.media.update(m.id, { upload: 'done', youtubeId: 'yt1' })
     expect(await getVideoStorage()).toBe('youtube')
-    // 一度覚えたら、動画が増えても変わらない
+    // 選んだら、そちらを使う
     await setVideoStorage('device')
-    expect(await ensureVideoStorage()).toBe('device')
+    expect(await getVideoStorage()).toBe('device')
   })
 })
 
@@ -166,6 +166,19 @@ describe('動画の自動整理', () => {
       video('photo', 30, { type: 'image/jpeg' }),
     ]
     expect(selectVideosToDrop(media, now).sort()).toEqual(['just', 'old'])
+  })
+
+  it('YouTube で再生できると確かめられた動画だけを消せる', async () => {
+    const reply = (status: number) => (async () => new Response(null, { status })) as unknown as typeof fetch
+    expect(await youtubePlayable('a', reply(200))).toBe(true)
+    // 非公開・処理の失敗・削除
+    expect(await youtubePlayable('a', reply(401))).toBe(false)
+    expect(await youtubePlayable('a', reply(404))).toBe(false)
+    // 電波が無い
+    const offline = (async () => {
+      throw new TypeError('Failed to fetch')
+    }) as unknown as typeof fetch
+    expect(await youtubePlayable('a', offline)).toBe(false)
   })
 })
 

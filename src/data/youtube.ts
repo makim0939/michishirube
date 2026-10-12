@@ -193,6 +193,8 @@ async function doUploads() {
       .sort((a, b) => a.createdAt - b.createdAt)
     if (targets.length === 0) return
     for (const m of targets) {
+      // 途中で保存先を端末に切り替えたら、残りは上げない
+      if ((await getVideoStorage()) !== 'youtube') return
       tried.add(m.id)
       try {
         const tokenValue = await accessToken(config)
@@ -255,6 +257,20 @@ export function startAutoUpload(): () => void {
     sub.unsubscribe()
     document.removeEventListener('visibilitychange', onVisible)
     window.removeEventListener('online', kick)
+  }
+}
+
+/**
+ * YouTube の動画を、アプリの中で再生できるか（限定公開・公開で、処理が終わっているか）。
+ * oEmbed は、再生できない動画（非公開・処理の失敗・削除）には 401・404 などを返す。
+ * 電波が無いなどで確かめられなければ false
+ */
+export async function youtubePlayable(id: string, fetchImpl: typeof fetch = fetch): Promise<boolean> {
+  try {
+    const res = await fetchImpl(`https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(youtubeUrl(id))}`)
+    return res.ok
+  } catch {
+    return false
   }
 }
 

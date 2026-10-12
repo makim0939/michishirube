@@ -5,7 +5,7 @@ import { db } from '../data/db'
 import { BUNDLED_TEMPLATES, getSettings, importTemplate, setMaxActive } from '../data/repo'
 import { TIDY_AFTER_DAYS } from '../data/tidy'
 import { getVideoStorage, setVideoStorage, type VideoStorage } from '../data/videoStorage'
-import { resumeUploads } from '../data/youtube'
+import { resumeUploads, youtubeStatus } from '../data/youtube'
 import { MAX_ACTIVE_RANGE } from '../domain/types'
 import { ConfirmButton, formatBytes, requestPersist, saveFile } from './common'
 import { useAction, useToast } from './feedback'
@@ -81,9 +81,16 @@ export function SettingsScreen({ notice }: { notice?: string }) {
   const changeStorage = async (value: VideoStorage) => {
     await setVideoStorage(value)
     if (value === 'youtube') {
-      toast.show('動画を YouTube に上げ始めます')
-      // 連携していなければ何もしない（連携すると上げ始める）
-      void resumeUploads().catch(() => {})
+      // 連携していなければ上げられないので、そのことを伝える（連携すると上げ始める）
+      const connected = await youtubeStatus()
+        .then((s) => !!s?.connected)
+        .catch(() => false)
+      if (connected) {
+        toast.show('動画を YouTube に上げ始めます')
+        void resumeUploads().catch(() => {})
+      } else {
+        toast.show('上の「YouTube」で連携すると、動画を上げ始めます')
+      }
     } else {
       toast.show('これから撮る動画は、この端末にだけ置きます')
     }
