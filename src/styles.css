@@ -1053,13 +1053,77 @@ a.media.placeholder {
   color: #faf7f2;
 }
 
-.media-caption {
+/* 動画・写真と、その操作を1枚のカードにまとめる（どれへの操作か分かるように） */
+.media-card {
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.media-card > .media {
+  border-radius: 0;
+}
+
+.media-toolbar {
   display: flex;
   flex-wrap: wrap;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
-  gap: 8px;
-  font-size: 0.78rem;
+  gap: 2px;
+  padding: 2px 4px;
+  font-size: 0.82rem;
+}
+
+.media-toolbar-status {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  padding-left: 6px;
+  color: var(--muted);
+}
+
+.media-toolbar-status .tool-button {
+  margin-left: -6px;
+}
+
+/* カードの下のバーのボタン。文字は太くせず、影も付けない（写真アプリの下のバーのように） */
+.tool-button {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 40px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 400;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.tool-button:active {
+  background: var(--surface-2);
+}
+
+.tool-button:disabled {
+  opacity: 0.5;
+}
+
+.tool-button .icon {
+  color: var(--muted);
+}
+
+/* 印を付けた（端末に残す）ときは、アイコンを塗って色を付ける */
+.tool-button.on,
+.tool-button.on .icon {
+  color: var(--active);
 }
 
 .upload {
@@ -1070,92 +1134,7 @@ a.media.placeholder {
   color: var(--danger);
 }
 
-.keep {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  appearance: none;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--muted);
-  border-radius: 999px;
-  padding: 2px 8px;
-  font: inherit;
-  font-size: 0.72rem;
-  cursor: pointer;
-  white-space: nowrap;
-}
 
-/* 別の画面で開くリンク（YouTube） */
-.external-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--text);
-}
-
-/* 保存・共有：押せるボタンだと分かるように、枠と影を付ける */
-.btn.share-button {
-  box-shadow: 0 1px 2px rgb(42 30 23 / 10%);
-}
-
-/* この端末に残す：オン・オフの切り替え（スイッチ） */
-.keep-switch {
-  flex-basis: 100%;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding-top: 8px;
-  border-top: 1px solid var(--border);
-  cursor: pointer;
-}
-
-.keep-switch input {
-  appearance: none;
-  -webkit-appearance: none;
-  flex: none;
-  position: relative;
-  width: 44px;
-  height: 26px;
-  margin: 0;
-  border-radius: 999px;
-  background: var(--border);
-  transition: background 0.15s;
-  cursor: pointer;
-}
-
-.keep-switch input::after {
-  content: '';
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 1px 3px rgb(0 0 0 / 25%);
-  transition: transform 0.15s;
-}
-
-.keep-switch input:checked {
-  background: var(--done);
-}
-
-.keep-switch input:checked::after {
-  transform: translateX(18px);
-}
-
-.keep-switch-text {
-  display: flex;
-  flex-direction: column;
-  color: var(--text);
-  font-size: 0.85rem;
-}
-
-.keep-switch-text small {
-  color: var(--muted);
-  font-size: 0.72rem;
-}
 
 
 /* ---- 参考資料 ---- */
@@ -2128,12 +2107,11 @@ a.notice {
   gap: 12px;
 }
 
-/* 前後の杯へ：押せるボタンだと分かるように、枠と影を付ける */
+/* 前後の杯へ：ほかのボタンと同じ見た目に、矢印を添える */
 .cup-nav-button {
   font-family: var(--font-latin);
-  font-size: 1.05rem;
-  padding: 8px 14px;
-  box-shadow: var(--shadow);
+  font-size: 1rem;
+  font-weight: 400;
 }
 
 /* ---- 今日：大きな写真を左右にめくる ---- */
