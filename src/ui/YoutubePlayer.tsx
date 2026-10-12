@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { youtubeUrl } from '../data/youtube'
 import { type PlayerControl, useObjectUrl } from './common'
 import { PauseIcon, PlayIcon, SpeakerIcon } from './icons'
@@ -6,7 +6,7 @@ import { PauseIcon, PlayIcon, SpeakerIcon } from './icons'
 /**
  * 端末から消えた動画を、アプリの中で YouTube から再生する（限定公開の動画を埋め込む）。
  * YouTube の操作ボタンは出さず、アプリの再生ボタン・つまみで操作する。
- * 枠は正方形で、動画を枠いっぱいに広げて真ん中を見せる（端末の動画と同じ見え方。上のタイトルや下のロゴもはみ出して隠れる）
+ * 端末の動画と同じく、再生前はサムネイルを正方形の枠いっぱいに、再生中は動画全体を枠に収めて見せる
  */
 
 interface YTPlayer {
@@ -82,24 +82,12 @@ function formatTime(seconds: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 }
 
-/** 縦横比（高さ ÷ 幅）。サムネイルから読む。無ければ iPhone を縦に持って撮った動画とみなす */
-function useAspect(posterUrl: string | undefined): number {
-  const [aspect, setAspect] = useState(16 / 9)
-  useEffect(() => {
-    if (!posterUrl) return
-    const img = new Image()
-    img.onload = () => {
-      if (img.naturalWidth && img.naturalHeight) setAspect(img.naturalHeight / img.naturalWidth)
-    }
-    img.src = posterUrl
-  }, [posterUrl])
-  return aspect
-}
-
-/** 正方形の枠に、動画を枠いっぱいに広げて真ん中に置く（object-fit: cover と同じ） */
-function coverStyle(aspect: number): CSSProperties {
-  if (aspect >= 1) return { width: '100%', height: `${aspect * 100}%`, left: 0, top: `${((1 - aspect) / 2) * 100}%` }
-  return { height: '100%', width: `${100 / aspect}%`, top: 0, left: `${((1 - 1 / aspect) / 2) * 100}%` }
+/**
+ * この端末にサムネイルが無いときに使う、YouTube のサムネイル。
+ * 縦の動画は左右に黒い帯が付いた4:3の絵なので、正方形の枠いっぱいに広げると、再生中と同じく全体が収まって見える
+ */
+function youtubeThumbnail(id: string): string {
+  return `https://i.ytimg.com/vi/${encodeURIComponent(id)}/hqdefault.jpg`
 }
 
 export function YoutubePlayer({
@@ -131,8 +119,8 @@ export function YoutubePlayer({
   const [slow, setSlow] = useState(false)
   const [time, setTime] = useState(0)
   const [duration, setDuration] = useState(0)
-  const posterUrl = useObjectUrl(poster, poster ? `${cacheKey}-yt-${poster.size}` : undefined)
-  const aspect = useAspect(posterUrl)
+  const localPoster = useObjectUrl(poster, poster ? `${cacheKey}-yt-${poster.size}` : undefined)
+  const posterUrl = localPoster ?? youtubeThumbnail(videoId)
   const latestRef = useRef(playerRef)
   latestRef.current = playerRef
 
@@ -261,8 +249,8 @@ export function YoutubePlayer({
   if (failed) {
     return (
       <a
-        className={`media placeholder${posterUrl ? ' with-poster' : ''}`}
-        style={posterUrl ? { backgroundImage: `url(${posterUrl})` } : undefined}
+        className="media placeholder with-poster"
+        style={{ backgroundImage: `url(${posterUrl})` }}
         href={youtubeUrl(videoId)}
         target="_blank"
         rel="noopener noreferrer"
@@ -276,12 +264,12 @@ export function YoutubePlayer({
 
   return (
     <div className="media yt-player">
-      <div ref={frame} className="yt-frame" style={coverStyle(aspect)} />
+      <div ref={frame} className="yt-frame" />
       {/* 動画の上を押したときは、YouTube ではなくアプリで受ける（YouTube の画面へ移ってしまわないように） */}
       <button
         type="button"
         className={`yt-surface${started ? '' : ' cover'}`}
-        style={!started && posterUrl ? { backgroundImage: `url(${posterUrl})` } : undefined}
+        style={!started ? { backgroundImage: `url(${posterUrl})` } : undefined}
         aria-label={playing ? '一時停止' : '動画を再生'}
         disabled={!ready}
         onClick={() => (playing ? player.current?.pauseVideo() : play())}
