@@ -3,10 +3,12 @@ import { useEffect, useRef, useState } from 'react'
 import { db } from '../data/db'
 import { compressPhoto, inMemory, makePoster, type Poster } from '../data/mediaPrep'
 import { addRecord, deleteRecord, lastNextAction, updateRecord, type NewMedia } from '../data/repo'
+import { getVideoStorage } from '../data/videoStorage'
+import { youtubeThumbnail } from '../data/youtube'
 import { LATTE_CAUSES } from '../domain/causes'
 import { OUTCOME_LABEL } from '../domain/format'
 import type { Media, Outcome } from '../domain/types'
-import { ConfirmButton, Empty, formatAgo, formatBytes, isVideo, MediaView, requestPersist, splitName } from './common'
+import { ConfirmButton, Empty, formatAgo, formatBytes, isVideo, MediaView, requestPersist, splitName, useObjectUrl } from './common'
 import { useAction, useToast } from './feedback'
 import { canRecordInApp, Recorder } from './Recorder'
 import { ReferenceList } from './References'
@@ -40,6 +42,19 @@ function useDraft(key: string, enabled: boolean) {
 }
 
 /** 画面に並べる動画・写真。新しく撮ったものと、保存済みの記録にあるもの */
+/** 編集で、端末に中身が無い動画・写真。YouTube にある動画は、その絵を出して編集できないことを添える */
+function NotOnDevice({ media }: { media: Media }) {
+  const poster = useObjectUrl(media.poster, media.poster ? `${media.id}-edit-${media.poster.size}` : undefined)
+  const image = poster ?? (media.youtubeId ? youtubeThumbnail(media.youtubeId) : undefined)
+  if (!image) return <div className="media placeholder">この端末にはありません</div>
+  return (
+    <div className="media placeholder with-poster" style={{ backgroundImage: `url(${image})` }}>
+      YouTube にあります
+      <small>端末に無いので、切り取りなどの編集はできません</small>
+    </div>
+  )
+}
+
 type Item =
   | { kind: 'new'; key: string; file: File; poster?: Poster; inMemory: boolean }
   | { kind: 'existing'; key: string; media: Media; replaced?: { file: File; poster?: Poster } }
@@ -68,6 +83,7 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
   const editing = !!recordId
   const run = useAction()
   const toast = useToast()
+  const storage = useLiveQuery(getVideoStorage)
   const data = useLiveQuery(async () => {
     const skill = await db.skills.get(skillId)
     return {
@@ -372,7 +388,7 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
                       autoLoad={item.kind === 'new' || !!item.replaced}
                     />
                   ) : (
-                    <div className="media placeholder">この端末にはありません</div>
+                    item.kind === 'existing' && <NotOnDevice media={item.media} />
                   )}
                   <button type="button" className="remove" aria-label="外す" onClick={() => removeItem(item)}>
                     ×
@@ -391,7 +407,7 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
             })}
           </ul>
         )}
-        {editing && items.some((i) => i.kind === 'existing' && i.replaced && i.media.youtubeId) && (
+        {editing && storage === 'youtube' && items.some((i) => i.kind === 'existing' && i.replaced && i.media.youtubeId) && (
           <p className="muted small">
             切り取った動画は YouTube に上げ直します。前の動画は YouTube に残るので、不要なら YouTube アプリで削除してください。
           </p>

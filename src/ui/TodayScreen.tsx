@@ -8,7 +8,7 @@ import type { Media, PracticeRecord, Skill } from '../domain/types'
 import { recentForm, type RecentForm } from '../domain/form'
 import { OUTCOME_MARK } from '../domain/format'
 import { formatAgo, splitName, useObjectUrl } from './common'
-import { pickCupMedia, useCupImage } from './cupImage'
+import { pickCupMedia, useCupImage, useCupImageUrl } from './cupImage'
 import { hasCupImage } from '../data/poster'
 import { useAction, useToast } from './feedback'
 import { FormDots } from './FormDots'
@@ -238,8 +238,7 @@ function RecentCup({
   /** 読み上げ用に添える型の名前（ほかの型の杯） */
   name?: string
 }) {
-  const blob = useCupImage(media)
-  const url = useObjectUrl(blob, media ? `${media.id}-thumb-${blob?.size ?? 0}` : undefined)
+  const url = useCupImageUrl(media, 'thumb')
   return (
     <li>
       {/* 押すと、その1杯の動画・写真と理由を見返せる */}

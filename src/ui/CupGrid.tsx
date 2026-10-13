@@ -1,7 +1,7 @@
 import { OUTCOME_MARK } from '../domain/format'
 import type { Media, PracticeRecord } from '../domain/types'
-import { splitName, useObjectUrl } from './common'
-import { useCupImage } from './cupImage'
+import { splitName } from './common'
+import { useCupImageUrl } from './cupImage'
 import { AlertIcon } from './icons'
 import { PatternImage } from './PatternImage'
 import { href } from './router'
@@ -21,8 +21,7 @@ export interface Cup {
 /** 1杯。押すと、その1杯の詳細（動画・写真と理由）を開く */
 export function CupTile({ cup }: { cup: Cup }) {
   // 一覧では、前の作り方のサムネイルは作り直さない（見ただけで、たくさんの動画を読み込まないように）
-  const blob = useCupImage(cup.media, { upgrade: false })
-  const url = useObjectUrl(blob, cup.media ? `${cup.media.id}-tile-${blob?.size ?? 0}` : undefined)
+  const url = useCupImageUrl(cup.media, 'tile', { upgrade: false })
   const mark = cup.record.outcome ? ` ${OUTCOME_MARK[cup.record.outcome]}` : ''
   return (
     <li>

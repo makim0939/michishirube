@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { youtubeUrl } from '../data/youtube'
+import { youtubeThumbnail, youtubeUrl } from '../data/youtube'
 import { type PlayerControl, useObjectUrl } from './common'
 import { PauseIcon, PlayIcon, SpeakerIcon } from './icons'
 
 /**
  * 端末から消えた動画を、アプリの中で YouTube から再生する（限定公開の動画を埋め込む）。
  * YouTube の操作ボタンは出さず、アプリの再生ボタン・つまみで操作する。
- * 端末の動画と同じく、再生前はサムネイルを正方形の枠いっぱいに、再生中は動画全体を枠に収めて見せる
+ * 端末の動画と同じく、再生前はサムネイルを正方形の枠いっぱいに、再生中は縦の動画全体を枠に収めて見せる
  */
 
 interface YTPlayer {
@@ -47,7 +47,7 @@ declare global {
   }
 }
 
-const STATE = { ended: 0, playing: 1, paused: 2, buffering: 3 } as const
+const STATE = { unstarted: -1, ended: 0, playing: 1, paused: 2, buffering: 3 } as const
 
 let api: Promise<YTNamespace> | undefined
 
@@ -82,14 +82,6 @@ function formatTime(seconds: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 }
 
-/**
- * この端末にサムネイルが無いときに使う、YouTube のサムネイル。
- * 縦の動画は左右に黒い帯が付いた4:3の絵なので、正方形の枠いっぱいに広げると、再生中と同じく全体が収まって見える
- */
-function youtubeThumbnail(id: string): string {
-  return `https://i.ytimg.com/vi/${encodeURIComponent(id)}/hqdefault.jpg`
-}
-
 export function YoutubePlayer({
   videoId,
   poster,
@@ -117,6 +109,14 @@ export function YoutubePlayer({
   const unmuteOnPause = useRef(false)
   const [muted, setMuted] = useState(false)
   const [slow, setSlow] = useState(false)
+  /** 再生中は、操作のバーを少しすると隠す（動画を覆わないように）。押すとまた出す */
+  const [controlsShown, setControlsShown] = useState(true)
+  /** 操作した回数。触るたびに、バーを隠すまでの時間を数え直す */
+  const [activity, setActivity] = useState(0)
+  const showControls = () => {
+    setControlsShown(true)
+    setActivity((n) => n + 1)
+  }
   const [time, setTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const localPoster = useObjectUrl(poster, poster ? `${cacheKey}-yt-${poster.size}` : undefined)
@@ -178,6 +178,9 @@ export function YoutubePlayer({
                 setPlaying(true)
                 setWaiting(false)
                 setDuration(created!.getDuration())
+              } else if (e.data === STATE.unstarted && responded.current) {
+                // 読み込みまで進んだのに、始まる前に戻った（再生が止められた）。「…」のままにせず、再生ボタンに戻す
+                setWaiting(false)
               } else if (e.data === STATE.paused) {
                 setPlaying(false)
                 setWaiting(false)
@@ -220,6 +223,13 @@ export function YoutubePlayer({
     }
   }, [videoId])
 
+  // 再生中に何も触らなければ、操作のバーを隠す（iPhone の動画と同じ）
+  useEffect(() => {
+    if (!playing || !controlsShown) return
+    const timer = setTimeout(() => setControlsShown(false), 2500)
+    return () => clearTimeout(timer)
+  }, [playing, controlsShown, activity])
+
   // 再生中は、つまみの位置を進める
   useEffect(() => {
     if (!playing) return
@@ -233,6 +243,7 @@ export function YoutubePlayer({
     const p = player.current
     if (!p) return
     setWaiting(true)
+    showControls()
     rewinding.current = false
     responded.current = false
     p.playVideo()
@@ -270,14 +281,19 @@ export function YoutubePlayer({
         type="button"
         className={`yt-surface${started ? '' : ' cover'}`}
         style={!started ? { backgroundImage: `url(${posterUrl})` } : undefined}
-        aria-label={playing ? '一時停止' : '動画を再生'}
+        aria-label={playing ? (controlsShown ? '一時停止' : '操作を表示') : '動画を再生'}
         disabled={!ready}
-        onClick={() => (playing ? player.current?.pauseVideo() : play())}
+        onClick={() => {
+          // バーを隠しているときは、まずバーを出す（いきなり止めない）
+          if (playing && !controlsShown) showControls()
+          else if (playing) player.current?.pauseVideo()
+          else play()
+        }}
       >
-        {!started && <span className="yt-play">{ready && !waiting ? <PlayIcon size={22} /> : '…'}</span>}
+        {!started && <span className="yt-play">{ready && !waiting ? <PlayIcon size={44} /> : '…'}</span>}
       </button>
-      {started && (
-        <div className="yt-controls">
+      {started && (controlsShown || !playing) && (
+        <div className="yt-controls" onPointerDown={showControls}>
           <button
             type="button"
             className="yt-control"
@@ -297,8 +313,11 @@ export function YoutubePlayer({
             onChange={(e) => {
               const t = Number(e.target.value)
               setTime(t)
-              player.current?.seekTo(t, true)
+              // 動かしている間は、読み込みを待たずに今あるところだけを見せる。離したら、その位置から読み込む
+              player.current?.seekTo(t, false)
             }}
+            onPointerUp={(e) => player.current?.seekTo(Number(e.currentTarget.value), true)}
+            onKeyUp={(e) => player.current?.seekTo(Number(e.currentTarget.value), true)}
           />
           <span className="yt-time">{formatTime(time)}</span>
           <button

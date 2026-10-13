@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { ensurePoster, needsLocalPoster, needsRemotePoster } from '../data/poster'
 import { fetchPhoto } from '../data/sync'
+import { youtubeThumbnail } from '../data/youtube'
 import type { Media } from '../domain/types'
-import { isVideo } from './common'
+import { isVideo, useObjectUrl } from './common'
 
 /** 記録の動画・写真から、カップの絵として見せる1つを選ぶ（写真があれば写真、無ければ動画） */
 export function pickCupMedia(list: (Media | undefined)[]): Media | undefined {
@@ -56,4 +57,19 @@ export function usePoster(media: Media | undefined, upgrade = true) {
     if (needs && media) ensurePoster(media)
     // 同期のたびに media は別のオブジェクトになるので、id と要否が変わったときだけ
   }, [media?.id, needs])
+}
+
+/**
+ * カップの絵の URL。端末にもサーバーにも絵が無い YouTube の動画は、YouTube のサムネイルを使う
+ * （真っ暗・見本の絵にならないように）
+ */
+export function useCupImageUrl(
+  media: Media | undefined,
+  key: string,
+  options: { upgrade?: boolean } = {},
+): string | undefined {
+  const blob = useCupImage(media, options)
+  const url = useObjectUrl(blob, media ? `${media.id}-${key}-${blob?.size ?? 0}` : undefined)
+  if (url) return url
+  return media && isVideo(media) && media.youtubeId ? youtubeThumbnail(media.youtubeId) : undefined
 }

@@ -274,6 +274,14 @@ export async function youtubePlayable(id: string, fetchImpl: typeof fetch = fetc
   }
 }
 
+/**
+ * YouTube のサムネイル。この端末にサムネイルが無い動画に使う（動画の途中のコマ）。
+ * 縦の動画は左右に帯が付いた4:3の絵なので、正方形の枠いっぱいに広げると、全体が収まって見える
+ */
+export function youtubeThumbnail(id: string): string {
+  return `https://i.ytimg.com/vi/${encodeURIComponent(id)}/hqdefault.jpg`
+}
+
 export function youtubeUrl(id: string): string {
   return `https://youtu.be/${encodeURIComponent(id)}`
 }

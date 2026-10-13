@@ -157,6 +157,21 @@ export function SkillScreen({ id }: { id: string }) {
           <div className="row wrap">
             <StateBadge state={state} />
             {skill.achievedAt && <span className="muted small">{formatDate(skill.achievedAt)} にできた</span>}
+            {/* 練習をやめるのは、状態の印の横に控えめに置く（「記録する」「できた」の並びを崩さないように） */}
+            {state === 'active' && (
+              <button
+                type="button"
+                className="quiet-button"
+                onClick={() =>
+                  run(async () => {
+                    await deactivateSkill(skill.id)
+                    toast.show('練習を中断しました。撮った記録はそのまま残ります')
+                  })
+                }
+              >
+                中断する
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -191,19 +206,6 @@ export function SkillScreen({ id }: { id: string }) {
         {(state === 'active' || notStarted) && !askingAchieve && (
           <button className="btn achieve" onClick={() => setAskingAchieve(true)}>
             できた
-          </button>
-        )}
-        {state === 'active' && (
-          <button
-            className="btn ghost"
-            onClick={() =>
-              run(async () => {
-                await deactivateSkill(skill.id)
-                toast.show('練習を中断しました。撮った記録はそのまま残ります')
-              })
-            }
-          >
-            練習を中断する
           </button>
         )}
         {state === 'done' && (
