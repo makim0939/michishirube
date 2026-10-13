@@ -478,15 +478,326 @@ ul {
 }
 
 .compare {
+  position: relative;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
 
-.compare-label {
+.compare-title {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+}
+
+/* 2杯の間（つなぎ目の上）に、何日たったかを渡す */
+.compare-span {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgb(250 247 242 / 92%);
+  color: var(--text);
+  font-size: 0.78rem;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* 杯を選んでいる間は、入れ替える側（左・右）の枠を光らせる */
+.compare-slot {
+  border-radius: 14px;
+  outline: 2px solid transparent;
+  outline-offset: 3px;
+  transition: outline-color 0.15s;
+}
+
+.compare-slot.editing {
+  outline-color: var(--text);
+}
+
+/* 片側に並べる杯を選ぶシート（画面の下から出す） */
+.picker-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: flex-end;
+  background: rgb(30 20 12 / 35%);
+  animation: fade-in 0.15s ease-out;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.picker-sheet {
+  width: 100%;
+  max-height: 72vh;
+  display: flex;
+  flex-direction: column;
+  border-radius: 20px 20px 0 0;
+  background: var(--bg);
+  padding: 14px 16px calc(env(safe-area-inset-bottom) + 16px);
+  animation: guide-in 0.2s ease-out;
+}
+
+.picker-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.picker-head h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.picker-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+}
+
+.cup-pick {
+  appearance: none;
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--surface-2);
+  cursor: pointer;
+}
+
+.cup-pick.selected {
+  border-color: var(--text);
+}
+
+/* もう片側に並んでいる杯（選べない） */
+.cup-pick:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.cup-pick img,
+.cup-pick-empty {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cup-pick-date {
+  position: absolute;
+  left: 4px;
+  bottom: 3px;
+  color: #fff;
+  font-size: 0.7rem;
+  text-shadow: 0 1px 4px rgb(0 0 0 / 70%);
+}
+
+.cup-pick-check {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--text);
+  color: #fff;
+  font-size: 0.72rem;
+}
+
+/* 型の画面から描き方ガイドを開く行 */
+.guide-row {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.guide-row-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.guide-row-title {
+  font-weight: 500;
+}
+
+.guide-row-text .small {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* 描き方ガイド（画面いっぱいのシート） */
+.guide-sheet {
+  position: fixed;
+  inset: 0;
+  /* 下のタブより手前、知らせ（トースト）より奥 */
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  animation: guide-in 0.22s ease-out;
+}
+
+@keyframes guide-in {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+}
+
+.guide-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: calc(env(safe-area-inset-top) + 12px) 16px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.guide-head h1 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.guide-body {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 16px 16px calc(env(safe-area-inset-bottom) + 32px);
+}
+
+.guide-label {
+  margin: 0 0 6px 4px;
   font-size: 0.8rem;
   color: var(--muted);
-  text-align: center;
+  font-weight: 500;
+}
+
+.guide-card {
+  margin: 0;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.guide-card h2 {
+  margin: 0 0 6px;
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.guide-card p {
+  margin: 0 0 8px;
+  line-height: 1.75;
+}
+
+.guide-card p:last-child {
+  margin-bottom: 0;
+}
+
+.guide-tips,
+.guide-links {
+  list-style: none;
+  padding: 4px 16px;
+}
+
+.guide-tips li {
+  display: flex;
+  gap: 10px;
+  padding: 10px 0;
+  line-height: 1.65;
+}
+
+.guide-tips li + li,
+.guide-links li + li {
+  border-top: 1px solid var(--border);
+}
+
+.guide-tips .icon {
+  flex: none;
+  margin-top: 3px;
+  color: var(--muted);
+}
+
+.guide-tips strong {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.guide-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 0;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.guide-link-name {
+  flex: 1;
+}
+
+.guide-link .icon {
+  color: var(--muted);
+}
+
+/* 写真の真下の「最新 ▾」。押すと、その側に並べる杯を選べる */
+.compare-label {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 100%;
+  min-height: 36px;
+  margin: 0;
+  padding: 4px 6px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
 }
 
 .media {

@@ -14,3 +14,17 @@ export function formatDateTime(ts: number): string {
   const d = new Date(ts)
   return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`
 }
+
+/** 2つの日時が、暦の上で何日離れているか（同じ日なら0。時刻は見ない） */
+export function daysBetween(a: number, b: number): number {
+  const day = (ts: number) => {
+    const d = new Date(ts)
+    return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())
+  }
+  return Math.round(Math.abs(day(a) - day(b)) / (24 * 60 * 60 * 1000))
+}
+
+/** 見比べる2杯の間の日数の言い方 */
+export function spanLabel(days: number): string {
+  return days === 0 ? '同じ日' : `${days}日`
+}
