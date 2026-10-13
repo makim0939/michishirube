@@ -522,9 +522,16 @@ ul {
   white-space: nowrap;
 }
 
-.btn.selected {
-  background: var(--accent-soft);
-  border-color: var(--text);
+/* 選び直しているときは、いま選んでいる側（左・右）の枠を光らせる */
+.compare-slot {
+  border-radius: 14px;
+  outline: 2px solid transparent;
+  outline-offset: 3px;
+  transition: outline-color 0.15s;
+}
+
+.compare-slot.editing {
+  outline-color: var(--text);
 }
 
 /* 見比べる2杯を選ぶ（横に流れる小さな写真） */
@@ -532,6 +539,17 @@ ul {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.cup-picker-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cup-picker-head p {
+  margin: 0;
 }
 
 .cup-picker ul {
@@ -595,11 +613,12 @@ ul {
   right: 4px;
   display: grid;
   place-items: center;
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   background: var(--text);
   color: #fff;
+  font-size: 0.72rem;
 }
 
 /* 型の画面から描き方ガイドを開く行 */

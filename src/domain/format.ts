@@ -15,12 +15,6 @@ export function formatDateTime(ts: number): string {
   return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-/** 2026/10/10 の形（日付だけ） */
-export function formatDay(ts: number): string {
-  const d = new Date(ts)
-  return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`
-}
-
 /** 2つの日時が、暦の上で何日離れているか（同じ日なら0。時刻は見ない） */
 export function daysBetween(a: number, b: number): number {
   const day = (ts: number) => {

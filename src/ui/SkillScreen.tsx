@@ -188,7 +188,10 @@ export function SkillScreen({ id }: { id: string }) {
         </div>
       )}
 
-      <Compare media={media} skillName={skill.name} />
+      <Compare
+        media={media}
+        numberOf={(m) => data.numbers?.get(m.recordId)}
+      />
 
       {/* やり方・コツ・参考資料・前後の型は、ガイドにまとめてシートで開く（この画面は記録と見比べを主役に） */}
       <button type="button" className="guide-row" onClick={() => setGuideOpen(true)}>

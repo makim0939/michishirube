@@ -1,51 +1,71 @@
-import { useEffect, useRef, useState } from 'react'
-import { youtubeThumbnail } from '../data/youtube'
-import { daysBetween, formatDay, spanLabel } from '../domain/format'
+import { useRef, useState } from 'react'
+import { daysBetween, spanLabel } from '../domain/format'
 import type { Media } from '../domain/types'
-import { isVideo, type PlayerControl, splitName } from './common'
-import { composeCompareImage } from './compareImage'
-import { useCupImage, useCupImageUrl } from './cupImage'
-import { useToast } from './feedback'
+import { isVideo, type PlayerControl } from './common'
+import { useCupImageUrl } from './cupImage'
 import { MediaItem } from './MediaItem'
-import { shareFile } from './ShareMedia'
-import { CheckIcon, PlayIcon, ShareIcon } from './icons'
+import { PlayIcon } from './icons'
 
 type Kind = 'video' | 'image'
+type Slot = 0 | 1
+const SLOT_NAME = ['左', '右'] as const
 
 /**
  * 2杯を並べて、上達を目で見られるようにする。はじめは最新と最初（今日の画面と同じく、新しいほうを左に）。
- * 好きな2杯を選び直すこともでき、並べた2杯を1枚の画像にして送れる
+ * 「選び直す」で、左 → 右の順に1杯ずつ選び直せる（いま選んでいる側の枠を光らせる）
  */
-export function Compare({ media, skillName }: { media: Media[]; skillName: string }) {
+export function Compare({ media, numberOf }: { media: Media[]; numberOf: (m: Media) => number | undefined }) {
   const videos = media.filter(isVideo)
   const images = media.filter((m) => !isVideo(m))
   // 2つ以上あって比べられる種類だけを選べるようにする
   const kinds: Kind[] = [...(videos.length >= 2 ? (['video'] as const) : []), ...(images.length >= 2 ? (['image'] as const) : [])]
   const [picked, setPicked] = useState<Kind>()
-  /** 選び直した2杯（無ければ最新と最初） */
-  const [chosen, setChosen] = useState<string[]>()
-  const [picking, setPicking] = useState(false)
+  /** 選び直した2杯（左・右の順）。無ければ最新と最初 */
+  const [chosen, setChosen] = useState<[string, string]>()
+  /** 選び直している側。選び直していなければ undefined */
+  const [editing, setEditing] = useState<Slot>()
+  /** 選び直す前の2杯（やめたときに戻す） */
+  const before = useRef<[string, string] | undefined>(undefined)
   const players = useRef<(PlayerControl | null)[]>([])
   const kind = picked && kinds.includes(picked) ? picked : kinds[0]
   if (!kind) return null
 
   const list = kind === 'video' ? videos : images
   const byId = new Map(list.map((m) => [m.id, m]))
-  const chosenPair = (chosen ?? []).map((id) => byId.get(id)).filter((m): m is Media => !!m)
-  const custom = chosenPair.length === 2
-  const pair: [Media, Media] = custom
-    ? (chosenPair.sort((a, b) => b.createdAt - a.createdAt) as [Media, Media])
-    : [list[list.length - 1], list[0]]
-  const labels: [string, string] = custom
-    ? [formatDay(pair[0].createdAt), formatDay(pair[1].createdAt)]
-    : [`最新 ${formatDay(pair[0].createdAt)}`, `最初 ${formatDay(pair[1].createdAt)}`]
-  const days = daysBetween(pair[0].createdAt, pair[1].createdAt)
-  const span = spanLabel(days)
+  const fallback: [Media, Media] = [list[list.length - 1], list[0]]
+  const chosenPair = chosen?.map((id) => byId.get(id))
+  const custom = !!chosenPair && chosenPair.every((m) => !!m)
+  const pair: [Media, Media] = custom ? (chosenPair as [Media, Media]) : fallback
+  const label = (m: Media, i: Slot) => {
+    if (!custom) return i === 0 ? '最新' : '最初'
+    const n = numberOf(m)
+    return n ? `No.${n}` : ''
+  }
+  const span = spanLabel(daysBetween(pair[0].createdAt, pair[1].createdAt))
 
   const switchKind = (k: Kind) => {
     setPicked(k)
     setChosen(undefined)
-    setPicking(false)
+    setEditing(undefined)
+  }
+  const startEditing = () => {
+    before.current = chosen
+    setEditing(0)
+  }
+  const cancelEditing = () => {
+    setChosen(before.current)
+    setEditing(undefined)
+  }
+  const pick = (id: string) => {
+    if (editing === undefined) return
+    const next: [string, string] = [pair[0].id, pair[1].id]
+    const other = editing === 0 ? 1 : 0
+    // 反対側に並んでいる杯を選んだら、左右を入れ替える（同じ杯を2つ並べない）
+    if (next[other] === id) next[other] = next[editing]
+    next[editing] = id
+    setChosen(next)
+    // 左を選んだら、続けて右を選ぶ
+    setEditing(editing === 0 ? 1 : undefined)
   }
 
   return (
@@ -53,7 +73,7 @@ export function Compare({ media, skillName }: { media: Media[]; skillName: strin
       <div className="section-head">
         <div className="compare-title">
           <h2>{custom ? '選んだ2杯' : '最新と最初'}</h2>
-          {custom && (
+          {custom && editing === undefined && (
             <button type="button" className="quiet-button" onClick={() => setChosen(undefined)}>
               最新と最初に戻す
             </button>
@@ -72,7 +92,7 @@ export function Compare({ media, skillName }: { media: Media[]; skillName: strin
       </div>
       <div className="compare">
         {pair.map((m, i) => (
-          <div key={m.id}>
+          <div key={`${i}-${m.id}`} className={editing === i ? 'compare-slot editing' : 'compare-slot'}>
             <MediaItem
               media={m}
               autoLoad
@@ -81,189 +101,88 @@ export function Compare({ media, skillName }: { media: Media[]; skillName: strin
                 players.current[i] = p
               }}
             />
-            <p className="compare-label">{labels[i]}</p>
+            <p className="compare-label">{label(m, i as Slot)}</p>
           </div>
         ))}
         {/* 2杯の間に、何日たったかを渡す */}
         <span className="compare-span">{span}</span>
       </div>
-      <div className="compare-actions">
-        {kind === 'video' && (
-          <button
-            type="button"
-            className="btn small"
-            onClick={() => {
-              for (const p of players.current) p?.playMutedFromStart()
-            }}
-          >
-            <PlayIcon size={16} />
-            同時に再生
+
+      {editing === undefined ? (
+        <div className="compare-actions">
+          {kind === 'video' && (
+            <button
+              type="button"
+              className="btn small"
+              onClick={() => {
+                for (const p of players.current) p?.playMutedFromStart()
+              }}
+            >
+              <PlayIcon size={16} />
+              同時に再生
+            </button>
+          )}
+          <button type="button" className="btn small" onClick={startEditing}>
+            選び直す
           </button>
-        )}
-        <button
-          type="button"
-          className={`btn small${picking ? ' selected' : ''}`}
-          aria-expanded={picking}
-          onClick={() => setPicking(!picking)}
-        >
-          {picking ? '選び終える' : '2杯を選ぶ'}
-        </button>
-        <ShareCompareButton
-          pair={pair}
-          labels={labels}
-          title={splitName(skillName).main}
-          span={days === 0 ? '同じ日の2杯' : `${days}日で`}
-        />
-      </div>
-      {picking && (
-        <CupPicker
-          // 上の2杯が変わったら（「最新と最初に戻す」など）、選んだ印もそれに合わせて作り直す
-          key={pair.map((m) => m.id).join()}
-          // 新しい順に並べる（見比べの左が新しいほう）
-          list={[...list].reverse()}
-          selected={pair.map((m) => m.id)}
-          onPick={setChosen}
-        />
+        </div>
+      ) : (
+        <div className="cup-picker">
+          <div className="cup-picker-head">
+            <p>
+              <strong>{SLOT_NAME[editing]}</strong>に並べる杯を選んでください
+            </p>
+            <button type="button" className="quiet-button" onClick={cancelEditing}>
+              やめる
+            </button>
+          </div>
+          <ul>
+            {/* 新しい順に並べる（見比べの左が新しいほう） */}
+            {[...list].reverse().map((m) => (
+              <PickerItem
+                key={m.id}
+                media={m}
+                number={numberOf(m)}
+                slot={m.id === pair[0].id ? 0 : m.id === pair[1].id ? 1 : undefined}
+                onPick={() => pick(m.id)}
+              />
+            ))}
+          </ul>
+        </div>
       )}
     </section>
   )
 }
 
-/** 見比べる2杯を選ぶ。2杯そろったところで、上の見比べを入れ替える */
-function CupPicker({ list, selected, onPick }: { list: Media[]; selected: string[]; onPick: (ids: string[]) => void }) {
-  const [sel, setSel] = useState(selected)
-  const toggle = (id: string) => {
-    // 選んである杯を押すと外す。2杯選んであるときに別の杯を押すと、先に選んだほうと入れ替える
-    const next = sel.includes(id) ? sel.filter((x) => x !== id) : [...sel, id].slice(-2)
-    setSel(next)
-    if (next.length === 2) onPick(next)
-  }
-  return (
-    <div className="cup-picker">
-      <p className="muted small">
-        {sel.length === 2 ? '押すと入れ替わります' : 'もう1杯選んでください'}
-      </p>
-      <ul>
-        {list.map((m) => (
-          <PickerItem key={m.id} media={m} selected={sel.includes(m.id)} onToggle={() => toggle(m.id)} />
-        ))}
-      </ul>
-    </div>
-  )
-}
-
-function PickerItem({ media, selected, onToggle }: { media: Media; selected: boolean; onToggle: () => void }) {
+function PickerItem({
+  media,
+  number,
+  slot,
+  onPick,
+}: {
+  media: Media
+  number?: number
+  /** いま左・右に並んでいる杯なら、その側 */
+  slot?: Slot
+  onPick: () => void
+}) {
   const url = useCupImageUrl(media, 'pick', { upgrade: false })
   return (
     <li>
       <button
         type="button"
-        className={`cup-pick${selected ? ' selected' : ''}`}
-        aria-pressed={selected}
-        aria-label={`${formatDay(media.createdAt)}の杯`}
-        onClick={onToggle}
+        className={slot === undefined ? 'cup-pick' : 'cup-pick selected'}
+        aria-label={`${number ? `No.${number}` : '杯'}${slot === undefined ? '' : `（いま${SLOT_NAME[slot]}）`}`}
+        onClick={onPick}
       >
         {url ? <img src={url} alt="" /> : <span className="cup-pick-empty" />}
-        <span className="cup-pick-date">{formatDay(media.createdAt).slice(5)}</span>
-        {selected && (
+        {!!number && <span className="cup-pick-date">No.{number}</span>}
+        {slot !== undefined && (
           <span className="cup-pick-check" aria-hidden="true">
-            <CheckIcon size={14} />
+            {SLOT_NAME[slot]}
           </span>
         )}
       </button>
     </li>
-  )
-}
-
-/** 見比べに使う絵。写真か動画のサムネイル。端末に無い YouTube の動画は、YouTube のサムネイルを取ってくる */
-function useCompareBlob(media: Media): Blob | undefined {
-  const blob = useCupImage(media, { upgrade: false })
-  const [remote, setRemote] = useState<{ id: string; blob: Blob }>()
-  const youtubeId = !blob && isVideo(media) ? media.youtubeId : undefined
-  useEffect(() => {
-    if (!youtubeId) return
-    let cancelled = false
-    fetch(youtubeThumbnail(youtubeId))
-      .then((res) => (res.ok ? res.blob() : undefined))
-      .then((b) => {
-        if (!cancelled && b) setRemote({ id: media.id, blob: b })
-      })
-      .catch(() => {
-        // 電波が無ければ、共有のボタンを出さない
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [media.id, youtubeId])
-  return blob ?? (remote?.id === media.id ? remote.blob : undefined)
-}
-
-/**
- * 並べた2杯を1枚の画像にして、写真アプリに保存したり送ったりする。
- * 共有シートを開くには押した直後である必要があるので、画像は先に作っておく
- */
-function ShareCompareButton({
-  pair,
-  labels,
-  title,
-  span,
-}: {
-  pair: [Media, Media]
-  labels: [string, string]
-  title: string
-  span: string
-}) {
-  const toast = useToast()
-  const a = useCompareBlob(pair[0])
-  const b = useCompareBlob(pair[1])
-  const key = [pair[0].id, pair[1].id, a?.size, b?.size, ...labels, title, span].join('|')
-  const [ready, setReady] = useState<{ key: string; file: File }>()
-  /** 作れなかった2杯（押したときに知らせ、「用意しています」のままにしない） */
-  const [failed, setFailed] = useState<string>()
-
-  useEffect(() => {
-    if (!a || !b) return
-    let cancelled = false
-    composeCompareImage(
-      [
-        { blob: a, label: labels[0] },
-        { blob: b, label: labels[1] },
-      ],
-      title,
-      span,
-    )
-      .then((blob) => {
-        if (!cancelled) setReady({ key, file: new File([blob], `latte-compare-${Date.now()}.jpg`, { type: 'image/jpeg' }) })
-      })
-      .catch(() => {
-        // 作れなければ、押したときに知らせる
-        if (!cancelled) setFailed(key)
-      })
-    return () => {
-      cancelled = true
-    }
-    // 2杯と見出しが同じ間は作り直さない
-  }, [key])
-
-  if (!a || !b) return null
-  const file = ready?.key === key ? ready.file : undefined
-
-  const share = async () => {
-    if (failed === key) {
-      toast.show('画像を作れませんでした', 'error')
-      return
-    }
-    if (!file) {
-      toast.show('画像を用意しています。少し待ってから押してください')
-      return
-    }
-    if (!(await shareFile(file))) toast.show('共有できませんでした', 'error')
-  }
-
-  return (
-    <button type="button" className="btn small" onClick={() => void share()}>
-      <ShareIcon size={16} />
-      共有
-    </button>
   )
 }
