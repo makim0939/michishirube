@@ -66,7 +66,8 @@ export function Recorder({
   /** video は録画（写真だけのときは無い）、photo はできあがりの写真（スキップしたら無い） */
   onDone: (video: File | undefined, photo?: File) => void
   onClose: () => void
-  onFallback: () => void
+  /** 標準のカメラに切り替える（いま選んでいる動画・写真で開く） */
+  onFallback: (mode: Mode) => void
   /** アルバムから選ぶ */
   onAlbum?: () => void
   /** 今回意識すること（前回の次の一手） */
@@ -89,12 +90,15 @@ export function Recorder({
   const [shooting, setShooting] = useState(false)
   const guide = useRef<HTMLDivElement>(null)
 
-  // カメラを開く（音の有無を切り替えたら開き直す）
+  // 写真だけのときは、マイクを使わない
+  const withAudio = audio && mode === 'video'
+
+  // カメラを開く（音の有無・動画と写真を切り替えたら開き直す）
   useEffect(() => {
     let cancelled = false
     setReady(false)
     navigator.mediaDevices
-      .getUserMedia({ video: CAMERA_CONSTRAINTS, audio })
+      .getUserMedia({ video: CAMERA_CONSTRAINTS, audio: withAudio })
       .then((s) => {
         if (cancelled) {
           s.getTracks().forEach((t) => t.stop())
@@ -118,7 +122,7 @@ export function Recorder({
       stream.current?.getTracks().forEach((t) => t.stop())
       stream.current = null
     }
-  }, [audio])
+  }, [withAudio])
 
   // できあがりを撮る画面に切り替えたら、開いているカメラをそのまま映す
   useEffect(() => {
@@ -241,7 +245,7 @@ export function Recorder({
       {error && (
         <div className="recorder-error">
           <p>{error}</p>
-          <button className="btn primary" onClick={onFallback}>
+          <button className="btn primary" onClick={() => onFallback(mode)}>
             標準のカメラで撮る
           </button>
         </div>
@@ -342,7 +346,7 @@ export function Recorder({
             />
           )}
           {!recording && !error ? (
-            <button type="button" className="recorder-side text" onClick={onFallback}>
+            <button type="button" className="recorder-side text" onClick={() => onFallback(mode)}>
               標準の
               <br />
               カメラ

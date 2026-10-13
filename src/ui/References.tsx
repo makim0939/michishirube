@@ -5,27 +5,6 @@ import type { Skill } from '../domain/types'
 import { ConfirmButton } from './common'
 import { useAction, useToast } from './feedback'
 
-/** 参考資料の一覧。リンクを押すと別のタブ（スマホではアプリ）で開く */
-export function ReferenceList({ skill, compact = false }: { skill: Skill; compact?: boolean }) {
-  if (skill.references.length === 0) return null
-  return (
-    <ul className={compact ? 'references compact' : 'references'}>
-      {skill.references.map((r) => (
-        <li key={r.id}>
-          {isWebUrl(r.url) ? (
-            <a href={r.url} target="_blank" rel="noopener noreferrer">
-              {r.title}
-            </a>
-          ) : (
-            <span>{r.title}</span>
-          )}
-          {r.note && <span className="reference-note">{r.note}</span>}
-        </li>
-      ))}
-    </ul>
-  )
-}
-
 function AddReferenceForm({ skillId, onDone }: { skillId: string; onDone: () => void }) {
   const run = useAction()
   const toast = useToast()

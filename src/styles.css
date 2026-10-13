@@ -1466,11 +1466,6 @@ a.media.placeholder {
   color: var(--muted);
 }
 
-.references.compact {
-  margin-top: 6px;
-  color: var(--text);
-}
-
 .toggle {
   display: flex;
   gap: 10px;

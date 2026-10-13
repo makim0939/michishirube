@@ -15,9 +15,9 @@ export interface Tips {
   wins: { recordId: string; text: string; at: number }[]
 }
 
-/** records は新しい順 */
+/** records は新しい順。古い記録やバックアップから戻した記録で、メモ・次の一手が無くても動くようにする */
 export function summarizeTips(records: PracticeRecord[], { window = 10, wins = 3 } = {}): Tips {
-  const hit = records.find((r) => r.nextAction.trim())
+  const hit = records.find((r) => (r.nextAction ?? '').trim())
   const recent = records.slice(0, window)
   const counts = new Map<string, number>()
   for (const r of recent) {
@@ -25,15 +25,15 @@ export function summarizeTips(records: PracticeRecord[], { window = 10, wins = 3
     for (const c of r.causes ?? []) counts.set(c, (counts.get(c) ?? 0) + 1)
   }
   return {
-    focus: hit && { text: hit.nextAction.trim(), at: hit.createdAt },
+    focus: hit && { text: (hit.nextAction ?? '').trim(), at: hit.createdAt },
     stumbles: [...counts]
       .map(([cause, count]) => ({ cause, count }))
       // 同じ回数なら、名前の順にして並びを安定させる
       .sort((a, b) => b.count - a.count || a.cause.localeCompare(b.cause, 'ja')),
     window: recent.length,
     wins: records
-      .filter((r) => r.outcome === 'good' && r.reason.trim())
+      .filter((r) => r.outcome === 'good' && (r.reason ?? '').trim())
       .slice(0, wins)
-      .map((r) => ({ recordId: r.id, text: r.reason.trim(), at: r.createdAt })),
+      .map((r) => ({ recordId: r.id, text: (r.reason ?? '').trim(), at: r.createdAt })),
   }
 }

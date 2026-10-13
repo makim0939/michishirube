@@ -555,16 +555,18 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
           }}
           onClose={() => {
             setRecording(false)
-            // 何も撮らずに閉じたら、記録をやめて戻る
-            if (!editing && items.length === 0) goBack(fallback)
+            // 何も撮らず、何も付けずに閉じたら、記録をやめて戻る（結果や次の一手を付けていたら、この画面に残る）
+            const blank =
+              items.length === 0 && !outcome && !draft.reason && !draft.nextAction && !(draft.causes?.length ?? 0)
+            if (!editing && blank) goBack(fallback)
           }}
           onAlbum={() => {
             setRecording(false)
             libraryInput.current?.click()
           }}
-          onFallback={() => {
+          onFallback={(mode) => {
             setRecording(false)
-            videoInput.current?.click()
+            ;(mode === 'photo' ? photoInput : videoInput).current?.click()
           }}
         />
       )}

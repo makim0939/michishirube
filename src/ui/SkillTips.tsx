@@ -57,7 +57,7 @@ export function SkillTips({
                 {tips.wins.map((w) => (
                   <li key={w.recordId}>
                     <a href={href(`/cup/${w.recordId}`)}>
-                      <span className="win-no">No.{numbers?.get(w.recordId) ?? ''}</span>
+                      {numbers?.has(w.recordId) && <span className="win-no">No.{numbers.get(w.recordId)}</span>}
                       <span className="win-text">{w.text}</span>
                       <ForwardIcon size={14} />
                     </a>
