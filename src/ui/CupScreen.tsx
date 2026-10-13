@@ -72,25 +72,33 @@ export function CupScreen({ recordId }: { recordId: string }) {
         <p className="muted">動画・写真はありません。</p>
       )}
 
-      <section className="cup-notes">
-        <div>
-          <h2>なぜそうなった？</h2>
+      {/* 書いたものだけを出す（メモは書きたいときだけ書くので、無くても「まだ」とは言わない） */}
+      {((record.causes?.length ?? 0) > 0 || record.reason || record.nextAction) && (
+        <section className="cup-notes">
           {(record.causes?.length ?? 0) > 0 && (
-            <ul className="cause-tags">
-              {record.causes!.map((c) => (
-                <li key={c}>{c}</li>
-              ))}
-            </ul>
+            <div>
+              <h2>原因</h2>
+              <ul className="cause-tags">
+                {record.causes!.map((c) => (
+                  <li key={c}>{c}</li>
+                ))}
+              </ul>
+            </div>
           )}
-          {(record.reason || !record.causes?.length) && (
-            <p className={record.reason ? '' : 'muted'}>{record.reason || 'まだ書いていません'}</p>
+          {record.reason && (
+            <div>
+              <h2>メモ</h2>
+              <p>{record.reason}</p>
+            </div>
           )}
-        </div>
-        <div>
-          <h2>次の一手</h2>
-          <p className={record.nextAction ? '' : 'muted'}>{record.nextAction || 'まだ書いていません'}</p>
-        </div>
-      </section>
+          {record.nextAction && (
+            <div>
+              <h2>次の一手</h2>
+              <p>{record.nextAction}</p>
+            </div>
+          )}
+        </section>
+      )}
 
       {/* 前後の杯へ（戻るで何杯もさかのぼらないよう、履歴は積まない） */}
       <nav className="cup-nav" aria-label="前後の杯">
@@ -114,7 +122,7 @@ export function CupScreen({ recordId }: { recordId: string }) {
 
       {skill && (
         <a className="sub-link" href={href(`/skill/${skill.id}`)}>
-          「{name}」の記録とやり方を見る
+          「{name}」の記録とコツを見る
         </a>
       )}
     </div>

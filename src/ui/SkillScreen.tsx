@@ -21,8 +21,8 @@ import { CupGrid } from './CupGrid'
 import { pickCupMedia } from './cupImage'
 import { useAction, useCelebrate, useToast } from './feedback'
 import { backHandler, href } from './router'
-import { BackIcon, BookIcon, ForwardIcon } from './icons'
-import { SkillGuide } from './SkillGuide'
+import { BackIcon } from './icons'
+import { AboutSkill, SkillTips } from './SkillTips'
 
 /** 記録は写真の格子で、まず新しいものを数段だけ出し、少しずつ足す（3列なので3の倍数） */
 const RECORDS_FIRST = 9
@@ -35,7 +35,6 @@ export function SkillScreen({ id }: { id: string }) {
   const celebrate = useCelebrate()
   const [askingAchieve, setAskingAchieve] = useState(false)
   const [shown, setShown] = useState(RECORDS_FIRST)
-  const [guideOpen, setGuideOpen] = useState(false)
 
   const data = useLiveQuery(async () => {
     const skill = await db.skills.get(id)
@@ -67,7 +66,6 @@ export function SkillScreen({ id }: { id: string }) {
   const check = canActivate(skill, allSkills, settings.maxActive)
   // 前提はおすすめの順。まだの型でも自由に始められ、「できた」にもできる
   const notStarted = state === 'available' || state === 'locked'
-  const pendingPrereqs = prereqs.filter((p) => p.status !== 'done')
   const form = recentForm(records)
   const mediaById = new Map(media.map((m) => [m.id, m]))
 
@@ -193,21 +191,8 @@ export function SkillScreen({ id }: { id: string }) {
         numberOf={(m) => data.numbers?.get(m.recordId)}
       />
 
-      {/* やり方・コツ・参考資料・前後の型は、ガイドにまとめてシートで開く（この画面は記録と見比べを主役に） */}
-      <button type="button" className="guide-row" onClick={() => setGuideOpen(true)}>
-        <BookIcon size={20} />
-        <span className="guide-row-text">
-          <span className="guide-row-title">描き方ガイド</span>
-          <span className="muted small">
-            {pendingPrereqs.length > 0 && state !== 'done'
-              ? `先に「${splitName(pendingPrereqs[0].name).main}」がおすすめ`
-              : skill.references.length > 0
-                ? `やり方・コツ・参考資料 ${skill.references.length}件`
-                : 'やり方・コツ・参考資料'}
-          </span>
-        </span>
-        <ForwardIcon size={18} />
-      </button>
+      {/* 注ぐ前に読み返したい、自分の記録から作ったコツと手本の動画 */}
+      <SkillTips skill={skill} records={records} numbers={data.numbers} />
 
       <section className="section">
         <div className="section-head">
@@ -233,9 +218,7 @@ export function SkillScreen({ id }: { id: string }) {
         )}
       </section>
 
-      {guideOpen && (
-        <SkillGuide skill={skill} prereqs={prereqs} leadsTo={leadsTo} states={states} onClose={() => setGuideOpen(false)} />
-      )}
+      <AboutSkill skill={skill} prereqs={prereqs} leadsTo={leadsTo} states={states} />
     </div>
   )
 }

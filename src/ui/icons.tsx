@@ -164,22 +164,6 @@ export const ExternalIcon = (p: P) => (
   </Icon>
 )
 
-/** 描き方ガイド（開いた本） */
-export const BookIcon = (p: P) => (
-  <Icon {...p}>
-    <path d="M12 6.5c-1.8-1.3-4.3-1.8-8-1.5v13c3.7-.3 6.2.2 8 1.5 1.8-1.3 4.3-1.8 8-1.5V5c-3.7-.3-6.2.2-8 1.5z" />
-    <path d="M12 6.5V19.5" />
-  </Icon>
-)
-
-/** コツ（電球） */
-export const BulbIcon = (p: P) => (
-  <Icon {...p}>
-    <path d="M9 17.5h6M10 20.5h4" />
-    <path d="M12 3.5a5.5 5.5 0 0 0-3.2 10c.7.5 1.2 1.3 1.2 2.2v.3h4v-.3c0-.9.5-1.7 1.2-2.2A5.5 5.5 0 0 0 12 3.5z" />
-  </Icon>
-)
-
 /** 下向きの山（押すと選べる） */
 export const ChevronDownIcon = (p: P) => (
   <Icon {...p}>
