@@ -4,11 +4,11 @@ import { db } from '../data/db'
 import { compressPhoto, inMemory, makePoster, type Poster } from '../data/mediaPrep'
 import { addRecord, deleteRecord, lastNextAction, updateRecord, type NewMedia } from '../data/repo'
 import { getVideoStorage } from '../data/videoStorage'
-import { youtubeThumbnail } from '../data/youtube'
 import { LATTE_CAUSES } from '../domain/causes'
 import { OUTCOME_LABEL } from '../domain/format'
 import type { Media, Outcome } from '../domain/types'
-import { ConfirmButton, Empty, formatAgo, formatBytes, isVideo, MediaView, requestPersist, splitName, useObjectUrl } from './common'
+import { ConfirmButton, Empty, formatAgo, formatBytes, isVideo, MediaView, requestPersist, splitName } from './common'
+import { useCupImageUrl } from './cupImage'
 import { useAction, useToast } from './feedback'
 import { canRecordInApp, Recorder } from './Recorder'
 import { ReferenceList } from './References'
@@ -42,14 +42,14 @@ function useDraft(key: string, enabled: boolean) {
 }
 
 /** 画面に並べる動画・写真。新しく撮ったものと、保存済みの記録にあるもの */
-/** 編集で、端末に中身が無い動画・写真。YouTube にある動画は、その絵を出して編集できないことを添える */
+/** 編集で、端末に中身が無い動画・写真。写真はサーバーから取り、YouTube にある動画はその絵と、編集できないことを出す */
 function NotOnDevice({ media }: { media: Media }) {
-  const poster = useObjectUrl(media.poster, media.poster ? `${media.id}-edit-${media.poster.size}` : undefined)
-  const image = poster ?? (media.youtubeId ? youtubeThumbnail(media.youtubeId) : undefined)
-  if (!image) return <div className="media placeholder">この端末にはありません</div>
+  const url = useCupImageUrl(media, 'edit')
+  if (!url) return <div className="media placeholder">この端末にはありません</div>
+  if (!isVideo(media)) return <img className="media" src={url} alt="" />
   return (
-    <div className="media placeholder with-poster" style={{ backgroundImage: `url(${image})` }}>
-      YouTube にあります
+    <div className="media placeholder with-poster" style={{ backgroundImage: `url(${url})` }}>
+      {media.youtubeId ? 'YouTube にあります' : 'この端末にはありません'}
       <small>端末に無いので、切り取りなどの編集はできません</small>
     </div>
   )

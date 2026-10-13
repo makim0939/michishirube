@@ -117,6 +117,11 @@ export function YoutubePlayer({
     setControlsShown(true)
     setActivity((n) => n + 1)
   }
+  /** バーを押さえている（つまみを動かしている）間は隠さない */
+  const [holding, setHolding] = useState(false)
+  const controls = useRef<HTMLDivElement>(null)
+  /** つまみを動かし終えたら、その位置から読み込む */
+  const seekTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const [time, setTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const localPoster = useObjectUrl(poster, poster ? `${cacheKey}-yt-${poster.size}` : undefined)
@@ -225,10 +230,15 @@ export function YoutubePlayer({
 
   // 再生中に何も触らなければ、操作のバーを隠す（iPhone の動画と同じ）
   useEffect(() => {
-    if (!playing || !controlsShown) return
-    const timer = setTimeout(() => setControlsShown(false), 2500)
+    if (!playing || !controlsShown || holding) return
+    const timer = setTimeout(() => {
+      // バーの中のボタンを選んでいる（キーボード・読み上げ）ときは隠さない
+      if (!controls.current?.contains(document.activeElement)) setControlsShown(false)
+    }, 2500)
     return () => clearTimeout(timer)
-  }, [playing, controlsShown, activity])
+  }, [playing, controlsShown, holding, activity])
+
+  useEffect(() => () => clearTimeout(seekTimer.current), [])
 
   // 再生中は、つまみの位置を進める
   useEffect(() => {
@@ -293,7 +303,16 @@ export function YoutubePlayer({
         {!started && <span className="yt-play">{ready && !waiting ? <PlayIcon size={44} /> : '…'}</span>}
       </button>
       {started && (controlsShown || !playing) && (
-        <div className="yt-controls" onPointerDown={showControls}>
+        <div
+          ref={controls}
+          className="yt-controls"
+          onPointerDown={() => {
+            showControls()
+            setHolding(true)
+          }}
+          onPointerUp={() => setHolding(false)}
+          onPointerCancel={() => setHolding(false)}
+        >
           <button
             type="button"
             className="yt-control"
@@ -313,11 +332,12 @@ export function YoutubePlayer({
             onChange={(e) => {
               const t = Number(e.target.value)
               setTime(t)
-              // 動かしている間は、読み込みを待たずに今あるところだけを見せる。離したら、その位置から読み込む
+              // 動かしている間は、読み込みを待たずに今あるところだけを見せる。
+              // 止めたら（指を離した・スクロールに変わった・キーで動かした、のどれでも）、その位置から読み込む
               player.current?.seekTo(t, false)
+              clearTimeout(seekTimer.current)
+              seekTimer.current = setTimeout(() => player.current?.seekTo(t, true), 300)
             }}
-            onPointerUp={(e) => player.current?.seekTo(Number(e.currentTarget.value), true)}
-            onKeyUp={(e) => player.current?.seekTo(Number(e.currentTarget.value), true)}
           />
           <span className="yt-time">{formatTime(time)}</span>
           <button
