@@ -2103,6 +2103,8 @@ video.media.playing {
   /* カードの端まで使ってスクロールする */
   margin: 0 -14px;
   padding: 2px 14px 6px;
+  /* 杯の端にそろえるとき、余白のぶん内側でそろえる（最初の杯がカードの端に貼り付かないように） */
+  scroll-padding-inline: 14px;
 }
 
 .recent-cups::-webkit-scrollbar {
@@ -2117,6 +2119,7 @@ video.media.playing {
 .section > .recent-cups {
   margin: 0 -22px;
   padding: 2px 22px 6px;
+  scroll-padding-inline: 22px;
 }
 
 .recent-cup {
