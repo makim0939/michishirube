@@ -148,7 +148,7 @@ function VideoView({
           setRequested(true)
         }}
       >
-        <span aria-hidden="true">{requested ? '…' : <PlayIcon size={22} />}</span>
+        <span aria-hidden="true">{requested ? '…' : <PlayIcon size={44} />}</span>
       </button>
     )
   }

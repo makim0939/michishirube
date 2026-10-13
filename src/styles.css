@@ -226,10 +226,27 @@ ul {
   width: 100%;
 }
 
+/* 主な操作は、同じ幅で1行に並べる */
 .actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   gap: 8px;
+}
+
+/* 文字だけの控えめなボタン（状態の印の横など） */
+.quiet-button {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 4px 6px;
+  min-height: 32px;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.85rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
 }
 
 .pill {
@@ -1322,13 +1339,17 @@ a.media.placeholder {
   background-position: center;
 }
 
-.video-thumb span {
-  width: 48px;
-  height: 48px;
+/* 再生ボタン。端末の動画（iPhone の再生ボタン）と YouTube の動画で、同じ見た目にする */
+.video-thumb span,
+.yt-play {
+  width: 60px;
+  height: 60px;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: rgb(0 0 0 / 55%);
+  background: rgb(40 40 40 / 45%);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
   color: #fff;
   font-size: 1.2rem;
 }
@@ -1349,10 +1370,16 @@ a.media.placeholder {
   }
 }
 
-/* 再生中は、端末の動画と同じく全体を枠に収める（YouTube が上下・左右に黒い帯を付ける） */
+/*
+ * YouTube は、縦長・正方形の枠に縦の短い動画を埋め込むと、ショート動画用の画面（高く評価・共有などのボタン）にして動画を覆う。
+ * そのため横長（16:9）の枠に埋め込み、はみ出した左右（黒い帯だけ）を隠す。縦の動画は、端末の動画の再生中と同じく全体が枠に収まる
+ */
 .yt-frame {
   position: absolute;
-  inset: 0;
+  top: 0;
+  bottom: 0;
+  width: 177.78%;
+  left: -38.89%;
   pointer-events: none;
 }
 
@@ -1382,16 +1409,6 @@ a.media.placeholder {
   background-position: center;
 }
 
-.yt-play {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: rgb(0 0 0 / 55%);
-  color: #fff;
-  font-size: 1.2rem;
-}
 
 .yt-controls {
   position: absolute;
