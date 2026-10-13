@@ -32,7 +32,9 @@ function drawCover(ctx: CanvasRenderingContext2D, img: ImageBitmap, x: number, y
   const sy = (img.height - side) / 2
   ctx.save()
   ctx.beginPath()
-  ctx.roundRect(x, y, size, size, 24)
+  // 角丸が描けない古い iPhone（iOS 15 まで）では、四角のまま描く
+  if ('roundRect' in ctx) ctx.roundRect(x, y, size, size, 24)
+  else (ctx as CanvasRenderingContext2D).rect(x, y, size, size)
   ctx.clip()
   ctx.drawImage(img, sx, sy, side, side, x, y, size, size)
   ctx.restore()
@@ -51,7 +53,8 @@ export async function composeCompareImage(sides: [CompareSide, CompareSide], tit
   ctx.fillStyle = '#2b1d14'
   ctx.textBaseline = 'alphabetic'
   ctx.font = `600 48px ${FONT}`
-  ctx.fillText(title, MARGIN, 76)
+  // 長い名前でも、右の日数に重ならないように縮める
+  ctx.fillText(title, MARGIN, 76, WIDTH - MARGIN * 2 - 280)
   ctx.font = `500 30px ${FONT}`
   ctx.fillStyle = '#8a6a4f'
   ctx.textAlign = 'right'

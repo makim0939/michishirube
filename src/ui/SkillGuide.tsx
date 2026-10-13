@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { parseGuide } from '../domain/guide'
 import { isWebUrl } from '../domain/template'
 import type { Skill, SkillState } from '../domain/types'
@@ -26,12 +26,25 @@ export function SkillGuide({
 }) {
   const guide = parseGuide(skill.description)
 
-  // 開いている間は、後ろの画面をスクロールさせない
+  const done = useRef<HTMLButtonElement>(null)
+  const latestClose = useRef(onClose)
+  latestClose.current = onClose
+
+  // 開いている間は、後ろの画面をスクロールさせない。選んでいる場所はシートに移し、閉じたら元に戻す。
+  // Esc でも閉じる（PC のキーボード）
   useEffect(() => {
     const previous = document.body.style.overflow
+    const opener = document.activeElement as HTMLElement | null
     document.body.style.overflow = 'hidden'
+    done.current?.focus()
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') latestClose.current()
+    }
+    document.addEventListener('keydown', onKey)
     return () => {
       document.body.style.overflow = previous
+      document.removeEventListener('keydown', onKey)
+      opener?.focus?.()
     }
   }, [])
 
@@ -49,7 +62,7 @@ export function SkillGuide({
     <div className="guide-sheet" role="dialog" aria-modal="true" aria-labelledby="guide-title">
       <header className="guide-head">
         <h1 id="guide-title">{splitName(skill.name).main}</h1>
-        <button type="button" className="btn small" onClick={onClose}>
+        <button ref={done} type="button" className="btn small" onClick={onClose}>
           完了
         </button>
       </header>

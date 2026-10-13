@@ -21,6 +21,25 @@ function fileNameFor(media: Media): string {
 }
 
 /**
+ * ファイルを共有シートで送る（写真アプリへの保存も共有シートから）。PC など共有シートが無ければ、ファイルとして保存する。
+ * 押した直後に呼ぶこと（共有シートを開くには、直前のタップが要る）。送れなかったら false
+ */
+export async function shareFile(file: File): Promise<boolean> {
+  const touch = window.matchMedia('(pointer: coarse)').matches
+  if (!touch || !navigator.canShare?.({ files: [file] })) {
+    await saveFile(file, file.name)
+    return true
+  }
+  try {
+    await navigator.share({ files: [file] })
+    return true
+  } catch (e) {
+    // 共有シートを閉じただけなら、失敗ではない
+    return e instanceof DOMException && e.name === 'AbortError'
+  }
+}
+
+/**
  * 動画・写真を、端末の写真アプリに保存したり、ほかのアプリで共有したりする（iPhone の共有シート）。
  *
  * iPhone は、端末の保存場所（IndexedDB）にある動画をそのまま共有シートに渡すと、読めずに何も起きないことがある。
@@ -69,18 +88,7 @@ export function ShareMediaButton({ media, blob }: { media: Media; blob: Blob }) 
       }
       return
     }
-    const touch = window.matchMedia('(pointer: coarse)').matches
-    if (!touch || !navigator.canShare?.({ files: [file] })) {
-      // PC など：ファイルとして保存する
-      await saveFile(file, name)
-      return
-    }
-    try {
-      await navigator.share({ files: [file] })
-    } catch (e) {
-      if (e instanceof DOMException && e.name === 'AbortError') return
-      toast.show('共有できませんでした', 'error')
-    }
+    if (!(await shareFile(file))) toast.show('共有できませんでした', 'error')
   }
 
   return (

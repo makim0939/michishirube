@@ -2,11 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import { youtubeThumbnail } from '../data/youtube'
 import { daysBetween, formatDay, spanLabel } from '../domain/format'
 import type { Media } from '../domain/types'
-import { isVideo, type PlayerControl, saveFile, splitName } from './common'
+import { isVideo, type PlayerControl, splitName } from './common'
 import { composeCompareImage } from './compareImage'
 import { useCupImage, useCupImageUrl } from './cupImage'
 import { useToast } from './feedback'
 import { MediaItem } from './MediaItem'
+import { shareFile } from './ShareMedia'
 import { CheckIcon, PlayIcon, ShareIcon } from './icons'
 
 type Kind = 'video' | 'image'
@@ -116,6 +117,8 @@ export function Compare({ media, skillName }: { media: Media[]; skillName: strin
       </div>
       {picking && (
         <CupPicker
+          // 上の2杯が変わったら（「最新と最初に戻す」など）、選んだ印もそれに合わせて作り直す
+          key={pair.map((m) => m.id).join()}
           // 新しい順に並べる（見比べの左が新しいほう）
           list={[...list].reverse()}
           selected={pair.map((m) => m.id)}
@@ -215,6 +218,8 @@ function ShareCompareButton({
   const b = useCompareBlob(pair[1])
   const key = [pair[0].id, pair[1].id, a?.size, b?.size, ...labels, title, span].join('|')
   const [ready, setReady] = useState<{ key: string; file: File }>()
+  /** 作れなかった2杯（押したときに知らせ、「用意しています」のままにしない） */
+  const [failed, setFailed] = useState<string>()
 
   useEffect(() => {
     if (!a || !b) return
@@ -232,6 +237,7 @@ function ShareCompareButton({
       })
       .catch(() => {
         // 作れなければ、押したときに知らせる
+        if (!cancelled) setFailed(key)
       })
     return () => {
       cancelled = true
@@ -243,21 +249,15 @@ function ShareCompareButton({
   const file = ready?.key === key ? ready.file : undefined
 
   const share = async () => {
+    if (failed === key) {
+      toast.show('画像を作れませんでした', 'error')
+      return
+    }
     if (!file) {
       toast.show('画像を用意しています。少し待ってから押してください')
       return
     }
-    const touch = window.matchMedia('(pointer: coarse)').matches
-    if (!touch || !navigator.canShare?.({ files: [file] })) {
-      await saveFile(file, file.name)
-      return
-    }
-    try {
-      await navigator.share({ files: [file] })
-    } catch (e) {
-      if (e instanceof DOMException && e.name === 'AbortError') return
-      toast.show('共有できませんでした', 'error')
-    }
+    if (!(await shareFile(file))) toast.show('共有できませんでした', 'error')
   }
 
   return (
