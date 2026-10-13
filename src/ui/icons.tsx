@@ -179,3 +179,10 @@ export const BulbIcon = (p: P) => (
     <path d="M12 3.5a5.5 5.5 0 0 0-3.2 10c.7.5 1.2 1.3 1.2 2.2v.3h4v-.3c0-.9.5-1.7 1.2-2.2A5.5 5.5 0 0 0 12 3.5z" />
   </Icon>
 )
+
+/** 下向きの山（押すと選べる） */
+export const ChevronDownIcon = (p: P) => (
+  <Icon {...p}>
+    <path d="M6.5 9.5l5.5 5.5 5.5-5.5" />
+  </Icon>
+)

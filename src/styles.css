@@ -507,22 +507,7 @@ ul {
   z-index: 1;
 }
 
-.compare-actions {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(0, 1fr);
-  gap: 8px;
-}
-
-.compare-actions .btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  white-space: nowrap;
-}
-
-/* 選び直しているときは、いま選んでいる側（左・右）の枠を光らせる */
+/* 杯を選んでいる間は、入れ替える側（左・右）の枠を光らせる */
 .compare-slot {
   border-radius: 14px;
   outline: 2px solid transparent;
@@ -534,50 +519,63 @@ ul {
   outline-color: var(--text);
 }
 
-/* 見比べる2杯を選ぶ（横に流れる小さな写真） */
-.cup-picker {
+/* 片側に並べる杯を選ぶシート（画面の下から出す） */
+.picker-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: flex-end;
+  background: rgb(30 20 12 / 35%);
+  animation: fade-in 0.15s ease-out;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.picker-sheet {
+  width: 100%;
+  max-height: 72vh;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  border-radius: 20px 20px 0 0;
+  background: var(--bg);
+  padding: 14px 16px calc(env(safe-area-inset-bottom) + 16px);
+  animation: guide-in 0.2s ease-out;
 }
 
-.cup-picker-head {
+.picker-head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 8px;
+  margin-bottom: 12px;
 }
 
-.cup-picker-head p {
+.picker-head h2 {
   margin: 0;
+  font-size: 1rem;
 }
 
-.cup-picker ul {
-  display: flex;
+.picker-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
-  margin: 0 -16px;
-  padding: 2px 16px 6px;
+  margin: 0;
+  padding: 0;
   list-style: none;
-  overflow-x: auto;
-  scroll-snap-type: x proximity;
-  scrollbar-width: none;
-}
-
-.cup-picker ul::-webkit-scrollbar {
-  display: none;
-}
-
-.cup-picker li {
-  flex: none;
-  scroll-snap-align: start;
+  overflow-y: auto;
 }
 
 .cup-pick {
   appearance: none;
   position: relative;
   display: block;
-  width: 76px;
-  height: 76px;
+  width: 100%;
+  aspect-ratio: 1;
   padding: 0;
   border: 2px solid transparent;
   border-radius: 12px;
@@ -613,9 +611,10 @@ ul {
   right: 4px;
   display: grid;
   place-items: center;
-  width: 22px;
+  min-width: 22px;
   height: 22px;
-  border-radius: 50%;
+  padding: 0 6px;
+  border-radius: 999px;
   background: var(--text);
   color: #fff;
   font-size: 0.72rem;
@@ -777,10 +776,23 @@ ul {
   color: var(--muted);
 }
 
+/* 写真の真下の「最新 ▾」。押すと、その側に並べる杯を選べる */
 .compare-label {
-  font-size: 0.8rem;
+  appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 100%;
+  min-height: 36px;
+  margin: 0;
+  padding: 4px 6px;
+  border: none;
+  background: transparent;
   color: var(--muted);
-  text-align: center;
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
 }
 
 .media {

@@ -1,10 +1,10 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { daysBetween, spanLabel } from '../domain/format'
 import type { Media } from '../domain/types'
 import { isVideo, type PlayerControl } from './common'
 import { useCupImageUrl } from './cupImage'
 import { MediaItem } from './MediaItem'
-import { PlayIcon } from './icons'
+import { ChevronDownIcon, PlayIcon } from './icons'
 
 type Kind = 'video' | 'image'
 type Slot = 0 | 1
@@ -12,7 +12,7 @@ const SLOT_NAME = ['左', '右'] as const
 
 /**
  * 2杯を並べて、上達を目で見られるようにする。はじめは最新と最初（今日の画面と同じく、新しいほうを左に）。
- * 「選び直す」で、左 → 右の順に1杯ずつ選び直せる（いま選んでいる側の枠を光らせる）
+ * 比較写真のアプリと同じく、入れ替えたい側の下（「最新 ▾」など）を押すと、その側に並べる杯を選べる
  */
 export function Compare({ media, numberOf }: { media: Media[]; numberOf: (m: Media) => number | undefined }) {
   const videos = media.filter(isVideo)
@@ -22,10 +22,8 @@ export function Compare({ media, numberOf }: { media: Media[]; numberOf: (m: Med
   const [picked, setPicked] = useState<Kind>()
   /** 選び直した2杯（左・右の順）。無ければ最新と最初 */
   const [chosen, setChosen] = useState<[string, string]>()
-  /** 選び直している側。選び直していなければ undefined */
+  /** 入れ替える杯を選んでいる側。選んでいなければ undefined */
   const [editing, setEditing] = useState<Slot>()
-  /** 選び直す前の2杯（やめたときに戻す） */
-  const before = useRef<[string, string] | undefined>(undefined)
   const players = useRef<(PlayerControl | null)[]>([])
   const kind = picked && kinds.includes(picked) ? picked : kinds[0]
   if (!kind) return null
@@ -48,14 +46,6 @@ export function Compare({ media, numberOf }: { media: Media[]; numberOf: (m: Med
     setChosen(undefined)
     setEditing(undefined)
   }
-  const startEditing = () => {
-    before.current = chosen
-    setEditing(0)
-  }
-  const cancelEditing = () => {
-    setChosen(before.current)
-    setEditing(undefined)
-  }
   const pick = (id: string) => {
     if (editing === undefined) return
     const next: [string, string] = [pair[0].id, pair[1].id]
@@ -64,8 +54,7 @@ export function Compare({ media, numberOf }: { media: Media[]; numberOf: (m: Med
     if (next[other] === id) next[other] = next[editing]
     next[editing] = id
     setChosen(next)
-    // 左を選んだら、続けて右を選ぶ
-    setEditing(editing === 0 ? 1 : undefined)
+    setEditing(undefined)
   }
 
   return (
@@ -73,7 +62,7 @@ export function Compare({ media, numberOf }: { media: Media[]; numberOf: (m: Med
       <div className="section-head">
         <div className="compare-title">
           <h2>{custom ? '選んだ2杯' : '最新と最初'}</h2>
-          {custom && editing === undefined && (
+          {custom && (
             <button type="button" className="quiet-button" onClick={() => setChosen(undefined)}>
               最新と最初に戻す
             </button>
@@ -101,69 +90,125 @@ export function Compare({ media, numberOf }: { media: Media[]; numberOf: (m: Med
                 players.current[i] = p
               }}
             />
-            <p className="compare-label">{label(m, i as Slot)}</p>
+            {/* この側に並べる杯を選び直す（写真の真下に付けて、どちらを入れ替えるか分かるように） */}
+            <button
+              type="button"
+              className="compare-label"
+              aria-label={`${SLOT_NAME[i]}に並べる杯を選ぶ（いま${label(m, i as Slot) || '選んだ杯'}）`}
+              onClick={() => setEditing(i as Slot)}
+            >
+              {label(m, i as Slot)}
+              <ChevronDownIcon size={14} />
+            </button>
           </div>
         ))}
         {/* 2杯の間に、何日たったかを渡す */}
         <span className="compare-span">{span}</span>
       </div>
 
-      {editing === undefined ? (
-        <div className="compare-actions">
-          {kind === 'video' && (
-            <button
-              type="button"
-              className="btn small"
-              onClick={() => {
-                for (const p of players.current) p?.playMutedFromStart()
-              }}
-            >
-              <PlayIcon size={16} />
-              同時に再生
-            </button>
-          )}
-          <button type="button" className="btn small" onClick={startEditing}>
-            選び直す
-          </button>
-        </div>
-      ) : (
-        <div className="cup-picker">
-          <div className="cup-picker-head">
-            <p>
-              <strong>{SLOT_NAME[editing]}</strong>に並べる杯を選んでください
-            </p>
-            <button type="button" className="quiet-button" onClick={cancelEditing}>
-              やめる
-            </button>
-          </div>
-          <ul>
-            {/* 新しい順に並べる（見比べの左が新しいほう） */}
-            {[...list].reverse().map((m) => (
-              <PickerItem
-                key={m.id}
-                media={m}
-                number={numberOf(m)}
-                slot={m.id === pair[0].id ? 0 : m.id === pair[1].id ? 1 : undefined}
-                onPick={() => pick(m.id)}
-              />
-            ))}
-          </ul>
-        </div>
+      {kind === 'video' && (
+        <button
+          type="button"
+          className="btn small block"
+          onClick={() => {
+            for (const p of players.current) p?.playMutedFromStart()
+          }}
+        >
+          <PlayIcon size={16} />
+          同時に再生（音なし）
+        </button>
+      )}
+
+      {editing !== undefined && (
+        <CupPickerSheet
+          title={`${SLOT_NAME[editing]}に並べる杯`}
+          // 新しい順に並べる（見比べの左が新しいほう）
+          list={[...list].reverse()}
+          current={pair[editing].id}
+          other={{ id: pair[editing === 0 ? 1 : 0].id, name: SLOT_NAME[editing === 0 ? 1 : 0] }}
+          numberOf={numberOf}
+          onPick={pick}
+          onClose={() => setEditing(undefined)}
+        />
       )}
     </section>
+  )
+}
+
+/** 片側に並べる杯を選ぶシート。いま並んでいる杯と、反対側の杯に印を付ける */
+function CupPickerSheet({
+  title,
+  list,
+  current,
+  other,
+  numberOf,
+  onPick,
+  onClose,
+}: {
+  title: string
+  list: Media[]
+  current: string
+  other: { id: string; name: string }
+  numberOf: (m: Media) => number | undefined
+  onPick: (id: string) => void
+  onClose: () => void
+}) {
+  const latestClose = useRef(onClose)
+  latestClose.current = onClose
+  // Esc でも閉じる（PC のキーボード）。閉じたら、押した「最新 ▾」にキーボードの位置を戻す
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') latestClose.current()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      opener?.focus?.()
+    }
+  }, [])
+
+  return (
+    <div className="picker-backdrop" onClick={onClose}>
+      <div
+        className="picker-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="picker-head">
+          <h2>{title}</h2>
+          <button type="button" className="btn small" autoFocus onClick={onClose}>
+            閉じる
+          </button>
+        </div>
+        <ul className="picker-grid">
+          {list.map((m) => (
+            <PickerItem
+              key={m.id}
+              media={m}
+              number={numberOf(m)}
+              mark={m.id === current ? 'いま' : m.id === other.id ? other.name : undefined}
+              onPick={() => onPick(m.id)}
+            />
+          ))}
+        </ul>
+      </div>
+    </div>
   )
 }
 
 function PickerItem({
   media,
   number,
-  slot,
+  mark,
   onPick,
 }: {
   media: Media
   number?: number
-  /** いま左・右に並んでいる杯なら、その側 */
-  slot?: Slot
+  /** いま並んでいる杯なら「いま」、反対側に並んでいる杯ならその側（左・右） */
+  mark?: string
   onPick: () => void
 }) {
   const url = useCupImageUrl(media, 'pick', { upgrade: false })
@@ -171,15 +216,15 @@ function PickerItem({
     <li>
       <button
         type="button"
-        className={slot === undefined ? 'cup-pick' : 'cup-pick selected'}
-        aria-label={`${number ? `No.${number}` : '杯'}${slot === undefined ? '' : `（いま${SLOT_NAME[slot]}）`}`}
+        className={mark === 'いま' ? 'cup-pick selected' : 'cup-pick'}
+        aria-label={`${number ? `No.${number}` : '杯'}${mark ? `（${mark === 'いま' ? 'いま並んでいる杯' : `${mark}に並んでいる杯`}）` : ''}`}
         onClick={onPick}
       >
         {url ? <img src={url} alt="" /> : <span className="cup-pick-empty" />}
         {!!number && <span className="cup-pick-date">No.{number}</span>}
-        {slot !== undefined && (
+        {mark && (
           <span className="cup-pick-check" aria-hidden="true">
-            {SLOT_NAME[slot]}
+            {mark}
           </span>
         )}
       </button>
