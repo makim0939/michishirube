@@ -6,10 +6,15 @@ import {
   pickRecorderMimeType,
   RECORDER_BITRATE,
 } from '../data/mediaPrep'
+import { isWebUrl } from '../domain/template'
+import type { Reference } from '../domain/types'
 import { readStorage, writeStorage } from './storage'
-import { MicIcon } from './icons'
+import { MicIcon, PhotoIcon } from './icons'
 
 const AUDIO_KEY = 'michishirube:recorder-audio'
+const MODE_KEY = 'michishirube:recorder-mode'
+
+type Mode = 'video' | 'photo'
 
 function formatElapsed(ms: number) {
   const s = Math.floor(ms / 1000)
@@ -46,23 +51,35 @@ function guideToSource(video: HTMLVideoElement, guide: HTMLElement | null) {
 }
 
 /**
- * アプリの中で、画質を抑えて録画する（スマホ標準のカメラより数分の1の大きさ）。
+ * アプリの中のカメラ。注ぐところを画質を抑えて録画し（スマホ標準のカメラより数分の1の大きさ）、続けてできあがりを1枚撮る。
+ * 写真だけにもでき、アルバムからも選べる。注ぐ前に見たい「今回意識すること」と手本の動画を、カメラの上に出す。
  * 使えないときや許可されなかったときは、onFallback で標準のカメラに切り替える
  */
 export function Recorder({
   onDone,
   onClose,
   onFallback,
+  onAlbum,
+  focus,
+  references = [],
 }: {
-  /** photo は、録画のあとに撮った「できあがり」の写真（スキップしたら無い） */
-  onDone: (file: File, photo?: File) => void
+  /** video は録画（写真だけのときは無い）、photo はできあがりの写真（スキップしたら無い） */
+  onDone: (video: File | undefined, photo?: File) => void
   onClose: () => void
   onFallback: () => void
+  /** アルバムから選ぶ */
+  onAlbum?: () => void
+  /** 今回意識すること（前回の次の一手） */
+  focus?: string
+  /** 手本の動画・記事 */
+  references?: Reference[]
 }) {
   const preview = useRef<HTMLVideoElement>(null)
   const stream = useRef<MediaStream | null>(null)
   const recorder = useRef<MediaRecorder | null>(null)
   const [audio, setAudio] = useState(() => readStorage('local', AUDIO_KEY) !== 'off')
+  const [mode, setMode] = useState<Mode>(() => (readStorage('local', MODE_KEY) === 'photo' ? 'photo' : 'video'))
+  const [showRefs, setShowRefs] = useState(false)
   const [error, setError] = useState<string>()
   const [ready, setReady] = useState(false)
   const [startedAt, setStartedAt] = useState<number>()
@@ -165,8 +182,8 @@ export function Recorder({
   /** いま映っているコマから、枠の中を写真にする（開いているカメラのまま、1回押すだけ） */
   const shoot = async () => {
     const video = preview.current
-    // 2回押しても、二重に記録に入れない
-    if (!finished || shooting) return
+    // 2回押しても、二重に記録に入れない（写真だけのときは、録画が無くても撮れる）
+    if ((!finished && mode !== 'photo') || shooting) return
     setShooting(true)
     let photo: File | undefined
     if (video && video.videoWidth && video.videoHeight) {
@@ -177,9 +194,19 @@ export function Recorder({
       canvas.height = size
       canvas.getContext('2d')!.drawImage(video, sx, sy, side, side, 0, 0, size, size)
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.85))
-      if (blob) photo = new File([blob], finished.name.replace(/\.[^.]+$/, '') + '-cup.jpg', { type: 'image/jpeg' })
+      const base = finished ? finished.name.replace(/\.[^.]+$/, '') : `photo-${new Date().toISOString().replace(/[-:]/g, '').slice(0, 15)}`
+      if (blob) photo = new File([blob], `${base}-cup.jpg`, { type: 'image/jpeg' })
+    }
+    if (!finished && !photo) {
+      setShooting(false)
+      return
     }
     onDone(finished, photo)
+  }
+
+  const switchMode = (next: Mode) => {
+    writeStorage('local', MODE_KEY, next)
+    setMode(next)
   }
 
   if (finished) {
@@ -203,9 +230,13 @@ export function Recorder({
     )
   }
 
+  const photoMode = mode === 'photo'
+
   return (
-    <div className="recorder" role="dialog" aria-modal="true" aria-label="録画">
+    <div className="recorder" role="dialog" aria-modal="true" aria-label={photoMode ? '写真を撮る' : '録画'}>
       <video ref={preview} className="recorder-preview" autoPlay playsInline muted />
+      {/* 写真だけのときは、できあがりと同じ枠の中を撮る */}
+      {photoMode && <div className="finish-guide" ref={guide} aria-hidden="true" />}
       {!ready && !error && <p className="recorder-status">カメラを準備しています…</p>}
       {error && (
         <div className="recorder-error">
@@ -216,37 +247,110 @@ export function Recorder({
         </div>
       )}
       <div className="recorder-top">
-        <button className="btn small" onClick={onClose} disabled={recording}>
-          閉じる
-        </button>
-        {recording ? (
-          <span className="recorder-time">● {formatElapsed(now - startedAt)}</span>
-        ) : (
-          <button
-            className="btn small"
-            disabled={!ready}
-            onClick={() => {
-              writeStorage('local', AUDIO_KEY, audio ? 'off' : 'on')
-              setAudio(!audio)
-            }}
-          >
-            <MicIcon size={18} off={!audio} />
-            {audio ? '音あり' : '音なし'}
+        <div className="recorder-top-row">
+          <button className="btn small" onClick={onClose} disabled={recording}>
+            閉じる
           </button>
+          {recording ? (
+            <span className="recorder-time">● {formatElapsed(now - startedAt)}</span>
+          ) : (
+            <div className="row">
+              {references.length > 0 && (
+                <button className={`btn small${showRefs ? ' on' : ''}`} onClick={() => setShowRefs(!showRefs)}>
+                  手本
+                </button>
+              )}
+              {!photoMode && (
+                <button
+                  className="btn small"
+                  disabled={!ready}
+                  onClick={() => {
+                    writeStorage('local', AUDIO_KEY, audio ? 'off' : 'on')
+                    setAudio(!audio)
+                  }}
+                >
+                  <MicIcon size={18} off={!audio} />
+                  {audio ? '音あり' : '音なし'}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+        {/* 注ぐ直前に見たい、今回意識すること */}
+        {focus && (
+          <p className="recorder-focus">
+            <span>今回</span>
+            {focus}
+          </p>
+        )}
+        {showRefs && !recording && (
+          <ul className="recorder-refs">
+            {references.map((r) => (
+              <li key={r.id}>
+                {isWebUrl(r.url) ? (
+                  <a href={r.url} target="_blank" rel="noopener noreferrer">
+                    {r.title}
+                  </a>
+                ) : (
+                  <span>{r.title}</span>
+                )}
+                {r.note && <small>{r.note}</small>}
+              </li>
+            ))}
+          </ul>
         )}
       </div>
       <div className="recorder-bottom">
-        <button
-          className={`record-button ${recording ? 'recording' : ''}`}
-          disabled={!ready}
-          aria-label={recording ? '録画を止める' : '録画を始める'}
-          onClick={() => (recording ? recorder.current?.stop() : start())}
-        />
+        {/* 動画と写真の切り替え（iPhone のカメラと同じく、シャッターの上に） */}
         {!recording && !error && (
-          <button className="btn small ghost recorder-native" onClick={onFallback}>
-            標準のカメラ
-          </button>
+          <div className="recorder-modes" role="radiogroup" aria-label="撮るもの">
+            {(['video', 'photo'] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                role="radio"
+                aria-checked={mode === m}
+                className={mode === m ? 'selected' : ''}
+                onClick={() => switchMode(m)}
+              >
+                {m === 'video' ? '動画' : '写真'}
+              </button>
+            ))}
+          </div>
         )}
+        <div className="recorder-controls">
+          {!recording && onAlbum ? (
+            <button type="button" className="recorder-side" aria-label="アルバムから選ぶ" onClick={onAlbum}>
+              <PhotoIcon size={24} />
+            </button>
+          ) : (
+            <span className="recorder-side" aria-hidden="true" />
+          )}
+          {photoMode ? (
+            <button
+              className="shutter-button"
+              aria-label="写真を撮る"
+              disabled={!ready || shooting}
+              onClick={() => void shoot()}
+            />
+          ) : (
+            <button
+              className={`record-button ${recording ? 'recording' : ''}`}
+              disabled={!ready}
+              aria-label={recording ? '録画を止める' : '録画を始める'}
+              onClick={() => (recording ? recorder.current?.stop() : start())}
+            />
+          )}
+          {!recording && !error ? (
+            <button type="button" className="recorder-side text" onClick={onFallback}>
+              標準の
+              <br />
+              カメラ
+            </button>
+          ) : (
+            <span className="recorder-side" aria-hidden="true" />
+          )}
+        </div>
       </div>
     </div>
   )

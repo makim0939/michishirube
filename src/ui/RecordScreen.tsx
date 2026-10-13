@@ -4,19 +4,18 @@ import { db } from '../data/db'
 import { compressPhoto, inMemory, makePoster, type Poster } from '../data/mediaPrep'
 import { addRecord, deleteRecord, lastNextAction, updateRecord, type NewMedia } from '../data/repo'
 import { getVideoStorage } from '../data/videoStorage'
-import { LATTE_CAUSES } from '../domain/causes'
+import { causeTip, LATTE_CAUSES } from '../domain/causes'
 import { OUTCOME_LABEL } from '../domain/format'
 import type { Media, Outcome } from '../domain/types'
-import { ConfirmButton, Empty, formatAgo, formatBytes, isVideo, MediaView, requestPersist, splitName } from './common'
+import { ConfirmButton, Empty, formatBytes, isVideo, MediaView, requestPersist, splitName } from './common'
 import { useCupImageUrl } from './cupImage'
 import { useAction, useToast } from './feedback'
 import { canRecordInApp, Recorder } from './Recorder'
-import { ReferenceList } from './References'
 import { backHandler, go, goBack, href } from './router'
 import { readStorage, removeStorage, writeStorage } from './storage'
 import { Trimmer } from './Trimmer'
 import { patternFor } from './world'
-import { BackIcon, CameraIcon, PhotoIcon, ScissorsIcon, VideoIcon } from './icons'
+import { BackIcon, CameraIcon, PhotoIcon, PlusIcon, ScissorsIcon, VideoIcon } from './icons'
 
 const OUTCOMES: { value: Outcome; label: string }[] = (['good', 'meh', 'bad'] as const).map((value) => ({
   value,
@@ -41,7 +40,6 @@ function useDraft(key: string, enabled: boolean) {
   return [draft, setDraft, () => removeStorage('session', key)] as const
 }
 
-/** 画面に並べる動画・写真。新しく撮ったものと、保存済みの記録にあるもの */
 /** 編集で、端末に中身が無い動画・写真。写真はサーバーから取り、YouTube にある動画はその絵と、編集できないことを出す */
 function NotOnDevice({ media }: { media: Media }) {
   const url = useCupImageUrl(media, 'edit')
@@ -55,6 +53,7 @@ function NotOnDevice({ media }: { media: Media }) {
   )
 }
 
+/** 画面に並べる動画・写真。新しく撮ったものと、保存済みの記録にあるもの */
 type Item =
   | { kind: 'new'; key: string; file: File; poster?: Poster; inMemory: boolean }
   | { kind: 'existing'; key: string; media: Media; replaced?: { file: File; poster?: Poster } }
@@ -108,6 +107,16 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
   const videoInput = useRef<HTMLInputElement>(null)
   const photoInput = useRef<HTMLInputElement>(null)
   const libraryInput = useRef<HTMLInputElement>(null)
+  /** 理由のメモ欄を開いている（書いてあれば最初から開く） */
+  const [memoOpen, setMemoOpen] = useState(false)
+  const autoOpened = useRef(false)
+
+  // 新しく記録するときは、すぐカメラを開く（撮ってから結果を付ける。注ぐ前に見たい「次の一手」はカメラの上に出す）
+  useEffect(() => {
+    if (editing || autoOpened.current || !data?.skill) return
+    autoOpened.current = true
+    if (canRecordInApp()) setRecording(true)
+  }, [editing, data?.skill])
 
   // 直すときは、保存した内容を一度だけ読み込む（同期で書き換わっても、入力中の内容を上書きしない）
   useEffect(() => {
@@ -196,7 +205,8 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
     attachPoster(key, file)
   }
 
-  const save = () =>
+  /** more：保存したら、続けて次の杯を撮る */
+  const save = (more = false) =>
     run(async () => {
       setSaving(true)
       try {
@@ -236,8 +246,19 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
         } else {
           await addRecord({ skillId, outcome, reason, causes, nextAction, files: added })
           clearDraft()
-          // 続けて淹れるときは、そのまま次の杯を記録できるように
           const total = await db.records.count()
+          if (more) {
+            // 続けて淹れる：この画面のまま中身を空にして、すぐカメラを開く
+            toast.show(`No.${total} を記録しました`)
+            setItems([])
+            setOutcome(undefined)
+            setDraft({})
+            setMemoOpen(false)
+            window.scrollTo(0, 0)
+            if (canRecordInApp()) setRecording(true)
+            if (hasNewMedia) void requestPersist()
+            return
+          }
           toast.show(`No.${total} を記録しました`, 'ok', { label: 'もう1杯', onClick: () => go(`/record/${skillId}`) })
         }
         if (hasNewMedia) void requestPersist()
@@ -249,6 +270,17 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
 
   const trimItem = items.find((i) => i.key === trimming)
   const trimBlob = trimItem && itemBlob(trimItem)
+
+  // 次の一手の候補：前回と同じ、選んだ原因の直し方（押すだけで入る）
+  const suggestions = [
+    ...(next && !editing ? [{ prefix: '前回', text: next.text }] : []),
+    ...(draft.causes ?? []).flatMap((c) => {
+      const tip = causeTip(c)
+      return tip ? [{ prefix: c, text: tip }] : []
+    }),
+  ].filter((sgt, i, all) => all.findIndex((x) => x.text === sgt.text) === i && sgt.text !== draft.nextAction)
+  const showMemo = memoOpen || !!draft.reason
+  const openCamera = () => (canRecordInApp() ? setRecording(true) : videoInput.current?.click())
 
   return (
     <div className="screen record-screen">
@@ -270,7 +302,7 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
           <BackIcon size={26} />
         </a>
         <div className="title-block">
-          {editing && <span className="muted">記録を編集</span>}
+          {editing ? <span className="muted">記録を編集</span> : <span className="muted">{count + 1}杯目</span>}
           <h1>{splitName(skill.name).main}</h1>
         </div>
       </header>
@@ -296,82 +328,32 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
         </div>
       )}
 
-      {!editing && (
-        <>
-          <div className={`next-action big ${next ? '' : 'none'}`}>
-            <span className="next-label">前回の次の一手{next && `（${formatAgo(next.at)}）`}</span>
-            <span className="next-text">{next ? next.text : 'まだありません'}</span>
-          </div>
-          {count > 0 && (
-            <a
-              className="link-row"
-              href={href(`/skill/${skillId}`)}
-              onClick={(e) => {
-                if (!unsaved) return
-                e.preventDefault()
-                setConfirmLeave({ to: `/skill/${skillId}` })
-              }}
-            >
-              過去の記録を見る（{count}件）→
-            </a>
-          )}
-        </>
-      )}
-
-      {skill.references.length > 0 && (
-        <details className="criteria-details" open={!editing}>
-          <summary>参考資料</summary>
-          <ReferenceList skill={skill} compact />
-        </details>
-      )}
-
-      {skill.criteria && (
-        <details className="criteria-details">
-          <summary>参考の目安</summary>
-          <p>{skill.criteria}</p>
-        </details>
-      )}
-
       <section className="section">
-        <div className="capture-buttons">
-          <button
-            type="button"
-            className="btn capture"
-            onClick={() => (canRecordInApp() ? setRecording(true) : videoInput.current?.click())}
-          >
-            <VideoIcon size={28} />
-            動画を撮る
-          </button>
-          <button type="button" className="btn capture" onClick={() => photoInput.current?.click()}>
-            <CameraIcon size={28} />
-            写真を撮る
-          </button>
-          <button type="button" className="btn capture" onClick={() => libraryInput.current?.click()}>
-            <PhotoIcon size={28} />
-            アルバム
-          </button>
-        </div>
-        <p className="muted small">写真は、カップが真ん中に来るように撮ってください。中央を正方形に切り取って残します。</p>
-        {[
-          { ref: videoInput, accept: 'video/*', capture: true, multiple: false },
-          { ref: photoInput, accept: 'image/*', capture: true, multiple: false },
-          { ref: libraryInput, accept: 'image/*,video/*', capture: false, multiple: true },
-        ].map((input) => (
-          <input
-            key={input.accept + String(input.capture)}
-            ref={input.ref}
-            hidden
-            type="file"
-            accept={input.accept}
-            {...(input.capture ? { capture: 'environment' as const } : {})}
-            multiple={input.multiple}
-            onChange={(e) => {
-              void addFiles(e.target.files)
-              e.target.value = ''
-            }}
-          />
-        ))}
-        {items.length > 0 && (
+        {items.length === 0 ? (
+          // まだ撮っていない（カメラを閉じた・アプリのカメラが使えない）
+          <>
+            <div className="capture-buttons">
+              <button type="button" className="btn capture" onClick={openCamera}>
+                <VideoIcon size={28} />
+                動画を撮る
+              </button>
+              <button type="button" className="btn capture" onClick={() => photoInput.current?.click()}>
+                <CameraIcon size={28} />
+                写真を撮る
+              </button>
+              <button type="button" className="btn capture" onClick={() => libraryInput.current?.click()}>
+                <PhotoIcon size={28} />
+                アルバム
+              </button>
+            </div>
+            {next && !editing && (
+              <p className="next-line">
+                <span className="next-label">今回</span>
+                <span className="next-text">{next.text}</span>
+              </p>
+            )}
+          </>
+        ) : (
           <ul className="previews">
             {items.map((item) => {
               const blob = itemBlob(item)
@@ -398,15 +380,40 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
                     {blob && isVideo({ type }) && (
                       <button type="button" className="btn small" onClick={() => setTrimming(item.key)}>
                         <ScissorsIcon size={16} />
-                        編集（切り取り・音）
+                        編集
                       </button>
                     )}
                   </div>
                 </li>
               )
             })}
+            {/* 撮り足す（アプリのカメラ。アルバムもカメラの中から選べる） */}
+            <li>
+              <button type="button" className="media add-media" aria-label="撮り足す" onClick={openCamera}>
+                <PlusIcon size={26} />
+              </button>
+            </li>
           </ul>
         )}
+        {[
+          { ref: videoInput, accept: 'video/*', capture: true, multiple: false },
+          { ref: photoInput, accept: 'image/*', capture: true, multiple: false },
+          { ref: libraryInput, accept: 'image/*,video/*', capture: false, multiple: true },
+        ].map((input) => (
+          <input
+            key={input.accept + String(input.capture)}
+            ref={input.ref}
+            hidden
+            type="file"
+            accept={input.accept}
+            {...(input.capture ? { capture: 'environment' as const } : {})}
+            multiple={input.multiple}
+            onChange={(e) => {
+              void addFiles(e.target.files)
+              e.target.value = ''
+            }}
+          />
+        ))}
         {editing && storage === 'youtube' && items.some((i) => i.kind === 'existing' && i.replaced && i.media.youtubeId) && (
           <p className="muted small">
             切り取った動画は YouTube に上げ直します。前の動画は YouTube に残るので、不要なら YouTube アプリで削除してください。
@@ -414,8 +421,8 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
         )}
       </section>
 
-      <section className="section">
-        <div className="segmented" role="radiogroup" aria-label="結果">
+      <section className="section reflect">
+        <div className="segmented outcome-picker" role="radiogroup" aria-label="結果">
           {OUTCOMES.map((o) => (
             <button
               key={o.value}
@@ -461,30 +468,57 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
           </div>
         )}
 
-        <label className="field">
-          <span>なぜそうなった？</span>
+        <div className="field">
+          <label htmlFor="next-action">次の一手</label>
+          {/* 押すだけで入る候補。前回と同じことを続けるときや、選んだ原因の直し方 */}
+          {suggestions.length > 0 && (
+            <div className="suggest-chips">
+              {suggestions.map((sgt) => (
+                <button
+                  key={sgt.text}
+                  type="button"
+                  onClick={() => {
+                    setDraft((d) => ({ ...d, nextAction: sgt.text }))
+                    change()
+                  }}
+                >
+                  <span className="suggest-prefix">{sgt.prefix}</span>
+                  {sgt.text}
+                </button>
+              ))}
+            </div>
+          )}
           <textarea
-            rows={2}
-            value={draft.reason ?? ''}
-            onChange={(e) => {
-              setDraft((d) => ({ ...d, reason: e.target.value }))
-              change()
-            }}
-            placeholder="例：ミルクが熱すぎて泡が粗くなった（キーボードのマイクで音声入力できます）"
-          />
-        </label>
-        <label className="field">
-          <span>次の一手</span>
-          <textarea
+            id="next-action"
             rows={2}
             value={draft.nextAction ?? ''}
             onChange={(e) => {
               setDraft((d) => ({ ...d, nextAction: e.target.value }))
               change()
             }}
-            placeholder="例：60℃で止める。次回の記録画面の一番上に出ます"
+            placeholder="次の杯で試すこと（次に記録するとき、カメラの上に出ます）"
           />
-        </label>
+        </div>
+
+        {showMemo ? (
+          <label className="field">
+            <span>メモ</span>
+            <textarea
+              rows={2}
+              autoFocus={memoOpen && !draft.reason}
+              value={draft.reason ?? ''}
+              onChange={(e) => {
+                setDraft((d) => ({ ...d, reason: e.target.value }))
+                change()
+              }}
+              placeholder="気づいたこと・うまくいった理由など（キーボードのマイクで音声入力できます）"
+            />
+          </label>
+        ) : (
+          <button type="button" className="quiet-button memo-toggle" onClick={() => setMemoOpen(true)}>
+            ＋ メモを足す
+          </button>
+        )}
       </section>
 
       {editing && (
@@ -511,12 +545,23 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
 
       {recording && (
         <Recorder
-          onDone={(file, photo) => {
+          focus={editing ? undefined : next?.text}
+          references={skill.references}
+          onDone={(video, photo) => {
             setRecording(false)
             // できあがりの写真も撮ったら、動画と一緒に記録に入れる（カップの絵には写真を使う）
-            void addFiles(photo ? [file, photo] : [file], true)
+            const files = [video, photo].filter((f): f is File => !!f)
+            void addFiles(files, true)
           }}
-          onClose={() => setRecording(false)}
+          onClose={() => {
+            setRecording(false)
+            // 何も撮らずに閉じたら、記録をやめて戻る
+            if (!editing && items.length === 0) goBack(fallback)
+          }}
+          onAlbum={() => {
+            setRecording(false)
+            libraryInput.current?.click()
+          }}
           onFallback={() => {
             setRecording(false)
             videoInput.current?.click()
@@ -534,9 +579,21 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
       )}
 
       <div className="sticky-actions">
-        <button className="btn primary block" disabled={saving || (editing && !dirty)} onClick={save}>
-          {saving ? '保存中…' : '保存する'}
-        </button>
+        {editing ? (
+          <button className="btn primary block" disabled={saving || !dirty} onClick={() => save()}>
+            {saving ? '保存中…' : '保存する'}
+          </button>
+        ) : (
+          // 続けて淹れるときは「もう1杯」（保存してすぐカメラへ）。終わるときは「保存」
+          <div className="save-pair">
+            <button className="btn" disabled={saving} onClick={() => save(true)}>
+              保存してもう1杯
+            </button>
+            <button className="btn primary" disabled={saving} onClick={() => save()}>
+              {saving ? '保存中…' : '保存'}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

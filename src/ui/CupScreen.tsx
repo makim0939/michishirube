@@ -74,7 +74,7 @@ export function CupScreen({ recordId }: { recordId: string }) {
 
       <section className="cup-notes">
         <div>
-          <h2>なぜそうなった？</h2>
+          <h2>メモ</h2>
           {(record.causes?.length ?? 0) > 0 && (
             <ul className="cause-tags">
               {record.causes!.map((c) => (
@@ -114,7 +114,7 @@ export function CupScreen({ recordId }: { recordId: string }) {
 
       {skill && (
         <a className="sub-link" href={href(`/skill/${skill.id}`)}>
-          「{name}」の記録とやり方を見る
+          「{name}」の記録とコツを見る
         </a>
       )}
     </div>

@@ -208,7 +208,7 @@ export function MapScreen({ domainId }: { domainId?: string }) {
           <Suspense fallback={<div className="graph" aria-busy="true" />}>
             <RoadmapGraph key={current.id} skills={skills} />
           </Suspense>
-          <p className="muted small">型を押すと、やり方と記録が見られます。指で動かしたり、広げたりできます。</p>
+          <p className="muted small">型を押すと、記録とコツが見られます。指で動かしたり、広げたりできます。</p>
         </>
       )}
 
@@ -237,7 +237,7 @@ export function MapScreen({ domainId }: { domainId?: string }) {
                       <span className="type-name">{splitName(s.name).main}</span>
                       <span className="muted small">{st?.count ?? 0}杯</span>
                       {st && <FormDots form={st.form} />}
-                      <span className="type-card-link">記録とやり方を見る</span>
+                      <span className="type-card-link">記録とコツを見る</span>
                     </span>
                   </a>
                 </li>
