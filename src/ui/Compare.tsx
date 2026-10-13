@@ -4,11 +4,10 @@ import type { Media } from '../domain/types'
 import { isVideo, type PlayerControl } from './common'
 import { useCupImageUrl } from './cupImage'
 import { MediaItem } from './MediaItem'
-import { ChevronDownIcon, PlayIcon } from './icons'
+import { CheckIcon, ChevronDownIcon, PlayIcon } from './icons'
 
 type Kind = 'video' | 'image'
 type Slot = 0 | 1
-const SLOT_NAME = ['左', '右'] as const
 
 /**
  * 2杯を並べて、上達を目で見られるようにする。はじめは最新と最初（今日の画面と同じく、新しいほうを左に）。
@@ -49,9 +48,6 @@ export function Compare({ media, numberOf }: { media: Media[]; numberOf: (m: Med
   const pick = (id: string) => {
     if (editing === undefined) return
     const next: [string, string] = [pair[0].id, pair[1].id]
-    const other = editing === 0 ? 1 : 0
-    // 反対側に並んでいる杯を選んだら、左右を入れ替える（同じ杯を2つ並べない）
-    if (next[other] === id) next[other] = next[editing]
     next[editing] = id
     setChosen(next)
     setEditing(undefined)
@@ -94,7 +90,7 @@ export function Compare({ media, numberOf }: { media: Media[]; numberOf: (m: Med
             <button
               type="button"
               className="compare-label"
-              aria-label={`${SLOT_NAME[i]}に並べる杯を選ぶ（いま${label(m, i as Slot) || '選んだ杯'}）`}
+              aria-label={`「${label(m, i as Slot) || '選んだ杯'}」をほかの杯と入れ替える`}
               onClick={() => setEditing(i as Slot)}
             >
               {label(m, i as Slot)}
@@ -121,11 +117,12 @@ export function Compare({ media, numberOf }: { media: Media[]; numberOf: (m: Med
 
       {editing !== undefined && (
         <CupPickerSheet
-          title={`${SLOT_NAME[editing]}に並べる杯`}
+          // 押した「最新 ▾」と同じ言葉で、どちらを入れ替えるのかを示す
+          title={`「${label(pair[editing], editing) || '選んだ杯'}」と入れ替える杯`}
           // 新しい順に並べる（見比べの左が新しいほう）
           list={[...list].reverse()}
           current={pair[editing].id}
-          other={{ id: pair[editing === 0 ? 1 : 0].id, name: SLOT_NAME[editing === 0 ? 1 : 0] }}
+          other={pair[editing === 0 ? 1 : 0].id}
           numberOf={numberOf}
           onPick={pick}
           onClose={() => setEditing(undefined)}
@@ -135,7 +132,7 @@ export function Compare({ media, numberOf }: { media: Media[]; numberOf: (m: Med
   )
 }
 
-/** 片側に並べる杯を選ぶシート。いま並んでいる杯と、反対側の杯に印を付ける */
+/** 片側に並べる杯を選ぶシート。いま選んでいる杯にはチェックを付け、もう片側に並んでいる杯は選べなくする */
 function CupPickerSheet({
   title,
   list,
@@ -148,7 +145,8 @@ function CupPickerSheet({
   title: string
   list: Media[]
   current: string
-  other: { id: string; name: string }
+  /** もう片側に並んでいる杯（同じ杯を2つ並べないよう、選べなくする） */
+  other: string
   numberOf: (m: Media) => number | undefined
   onPick: (id: string) => void
   onClose: () => void
@@ -189,7 +187,8 @@ function CupPickerSheet({
               key={m.id}
               media={m}
               number={numberOf(m)}
-              mark={m.id === current ? 'いま' : m.id === other.id ? other.name : undefined}
+              selected={m.id === current}
+              disabled={m.id === other}
               onPick={() => onPick(m.id)}
             />
           ))}
@@ -202,13 +201,14 @@ function CupPickerSheet({
 function PickerItem({
   media,
   number,
-  mark,
+  selected,
+  disabled,
   onPick,
 }: {
   media: Media
   number?: number
-  /** いま並んでいる杯なら「いま」、反対側に並んでいる杯ならその側（左・右） */
-  mark?: string
+  selected: boolean
+  disabled: boolean
   onPick: () => void
 }) {
   const url = useCupImageUrl(media, 'pick', { upgrade: false })
@@ -216,15 +216,17 @@ function PickerItem({
     <li>
       <button
         type="button"
-        className={mark === 'いま' ? 'cup-pick selected' : 'cup-pick'}
-        aria-label={`${number ? `No.${number}` : '杯'}${mark ? `（${mark === 'いま' ? 'いま並んでいる杯' : `${mark}に並んでいる杯`}）` : ''}`}
+        className={selected ? 'cup-pick selected' : 'cup-pick'}
+        aria-label={number ? `No.${number}` : '杯'}
+        aria-pressed={selected}
+        disabled={disabled}
         onClick={onPick}
       >
         {url ? <img src={url} alt="" /> : <span className="cup-pick-empty" />}
         {!!number && <span className="cup-pick-date">No.{number}</span>}
-        {mark && (
+        {selected && (
           <span className="cup-pick-check" aria-hidden="true">
-            {mark}
+            <CheckIcon size={14} />
           </span>
         )}
       </button>

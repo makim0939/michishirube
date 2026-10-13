@@ -588,6 +588,12 @@ ul {
   border-color: var(--text);
 }
 
+/* もう片側に並んでいる杯（選べない） */
+.cup-pick:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
 .cup-pick img,
 .cup-pick-empty {
   display: block;
@@ -611,10 +617,9 @@ ul {
   right: 4px;
   display: grid;
   place-items: center;
-  min-width: 22px;
+  width: 22px;
   height: 22px;
-  padding: 0 6px;
-  border-radius: 999px;
+  border-radius: 50%;
   background: var(--text);
   color: #fff;
   font-size: 0.72rem;
