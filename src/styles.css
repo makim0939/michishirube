@@ -3178,3 +3178,11 @@ div.notice > a {
   color: inherit;
   text-decoration: none;
 }
+
+/* 今日の画面：しばらく練習していない型（小さくまとめる） */
+.resting h3 {
+  margin: 4px 0 0;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--muted);
+}

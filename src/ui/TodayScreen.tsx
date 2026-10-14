@@ -1,7 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useRef, useState } from 'react'
 import { db } from '../data/db'
-import { activateSkill, cupNumbers, recordsOf } from '../data/repo'
+import { activateSkill, cupNumbers, deactivateSkill, recordsOf } from '../data/repo'
 import { getSyncConfig, getSyncStatus } from '../data/sync'
 import { computeStates, indexById, practiceOrder, prereqsDone, sortByDepth } from '../domain/logic'
 import type { Media, PracticeRecord, Skill } from '../domain/types'
@@ -29,6 +29,8 @@ const HERO_SLIDES = 6
 const RECENT = 12
 /** 次のおすすめは、数を絞って出す（全部は型の画面で） */
 const RECOMMEND = 3
+/** この日数より前から練習していない型は、大きなカードではなく下に小さくまとめる（試しに1杯だけ撮った型などで、今日の画面が長くならないように） */
+const RESTING_DAYS = 21
 
 const WEEKDAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
 
@@ -277,6 +279,8 @@ type Practice = {
   next?: string
   /** その型の新しい杯（通し番号つき） */
   recent: { record: PracticeRecord; media?: Media; number: number }[]
+  /** 最後に練習した日時（記録が無ければ練習中にした日時） */
+  last: number
 }
 
 /** 練習中の型1つ分。次の一手・記録する・その型の最近の杯を、この型の中にまとめる */
@@ -394,6 +398,9 @@ export function TodayScreen() {
   })
 
   if (!data) return null
+  const restingSince = Date.now() - RESTING_DAYS * 24 * 60 * 60 * 1000
+  const current = data.practices.filter((p) => p.last >= restingSince)
+  const resting = data.practices.filter((p) => p.last < restingSince)
 
   return (
     <div className="screen today">
@@ -412,10 +419,41 @@ export function TodayScreen() {
               </span>
             </div>
             <div className="practice-list">
-              {data.practices.map((p) => (
+              {current.map((p) => (
                 <PracticeBlock key={p.skill.id} practice={p} />
               ))}
             </div>
+            {resting.length > 0 && (
+              <section className="section resting">
+                <h3>しばらく練習していない型</h3>
+                <ul className="type-rows">
+                  {resting.map((p) => (
+                    <li key={p.skill.id} className="type-row">
+                      <a href={href(`/skill/${p.skill.id}`)} className="type-row-main">
+                        <PatternImage name={p.skill.name} className="small" />
+                        <span className="type-row-text">
+                          <span className="type-name">{splitName(p.skill.name).main}</span>
+                          <span className="muted small">
+                            {p.count > 0 ? `最後に練習 ${formatAgo(p.last)}` : 'まだ記録がありません'}
+                          </span>
+                        </span>
+                      </a>
+                      <button
+                        className="quiet-button"
+                        onClick={() =>
+                          run(async () => {
+                            await deactivateSkill(p.skill.id)
+                            toast.show('練習中から外しました（記録は残ります）')
+                          })
+                        }
+                      >
+                        外す
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
           </>
         ) : data.skillCount > 0 ? (
           <div className="sheet-empty">
