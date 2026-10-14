@@ -2,6 +2,7 @@ import { liveQuery } from 'dexie'
 import type { EntityChange, EntityKind, SyncResponse } from '../../shared/protocol'
 import { PHOTO_MAX_BYTES, posterPhotoId, SYNC_LIMITS } from '../../shared/protocol'
 import { DEFAULT_SETTINGS, type Media, type Settings } from '../domain/types'
+import { contentBlob, hasContent, moveContentsToFiles } from './content'
 import { db } from './db'
 
 /**
@@ -84,8 +85,8 @@ async function readLocal(kind: EntityKind, id: string): Promise<{ updatedAt: num
 
 function toWire(kind: EntityKind, row: Record<string, unknown>): Record<string, unknown> {
   if (kind !== 'media') return row
-  // 動画・写真の中身とサムネイルは送らない（動画は YouTube、写真とサムネイルは別の API）
-  const { blob: _blob, poster: _poster, posterEnd: _posterEnd, ...rest } = row
+  // 動画・写真の中身（とアプリのファイルの場所）とサムネイルは送らない（動画は YouTube、写真とサムネイルは別の API）
+  const { blob: _blob, file: _file, poster: _poster, posterEnd: _posterEnd, ...rest } = row
   return rest
 }
 
@@ -118,6 +119,8 @@ function mergeMedia(remote: Media, local: Media | undefined): { row: Media; repa
   const localAt = local.contentAt ?? 0
   if (remoteAt > localAt) return { row, repaired: false }
   if (local.blob) row.blob = local.blob
+  // アプリでは中身がファイルにある。行を置き換えても、ファイルの場所を失わないようにする
+  if (local.file) row.file = local.file
   if (local.poster) {
     row.poster = local.poster
     row.posterEnd = local.posterEnd
@@ -246,14 +249,16 @@ async function doSync() {
 async function uploadPhotos(config: SyncConfig) {
   // 縮小できなかった大きい写真はサーバーに置かない（この端末にだけ残る）
   const targets = await db.media
-    .filter((m) => m.type.startsWith('image/') && !!m.blob && !m.cloudPhoto && m.blob.size <= PHOTO_MAX_BYTES)
+    .filter((m) => m.type.startsWith('image/') && hasContent(m) && !m.cloudPhoto && m.size <= PHOTO_MAX_BYTES)
     .toArray()
   for (const m of targets) {
     try {
+      const body = await contentBlob(m)
+      if (!body) continue
       await api(config, `/api/photos/${encodeURIComponent(m.id)}`, {
         method: 'PUT',
         headers: { 'Content-Type': m.type },
-        body: m.blob,
+        body,
       })
     } catch (e) {
       // 電波が無いときは同期ごと止める。サーバーが受け付けない写真は飛ばして、ほかの同期を続ける
@@ -315,8 +320,9 @@ export async function fetchPhoto(media: Media): Promise<Blob | undefined> {
   const config = await getSyncConfig()
   if (!config || !media.cloudPhoto) return undefined
   const blob = await (await api(config, `/api/photos/${encodeURIComponent(media.id)}`)).blob()
-  // 写真は小さいので、次からは端末から出す（同期の対象にはしない）
+  // 写真は小さいので、次からは端末から出す（同期の対象にはしない）。アプリではファイルに移す
   await db.media.update(media.id, { blob })
+  void moveContentsToFiles([media.id])
   return blob
 }
 

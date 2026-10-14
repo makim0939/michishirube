@@ -1,11 +1,9 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useEffect, useState } from 'react'
-import { fetchPhoto } from '../data/sync'
 import { getVideoStorage } from '../data/videoStorage'
 import { MAX_UPLOAD_ATTEMPTS, retryUpload, youtubeUrl } from '../data/youtube'
 import type { Media } from '../domain/types'
 import { isVideo, MediaView, type PlayerControl, videoControl } from './common'
-import { usePoster } from './cupImage'
+import { useContent, usePoster } from './cupImage'
 import { useAction } from './feedback'
 import { ShareLinkButton, ShareMediaButton } from './ShareMedia'
 import { ExternalIcon, PhotoIcon, VideoIcon } from './icons'
@@ -16,28 +14,6 @@ const UPLOAD_LABEL = {
   uploading: 'YouTube へアップ中…',
   failed: 'YouTube へのアップに失敗',
 } as const
-
-/** この端末に写真の中身が無ければ、サーバーから取ってくる */
-function useRemotePhoto(media: Media): Blob | undefined {
-  const [blob, setBlob] = useState<Blob>()
-  const needsFetch = !media.blob && !isVideo(media) && !!media.cloudPhoto
-  useEffect(() => {
-    if (!needsFetch) return
-    let cancelled = false
-    fetchPhoto(media)
-      .then((b) => {
-        if (!cancelled) setBlob(b)
-      })
-      .catch(() => {
-        // 電波が無いなどで取れなければ、空のまま
-      })
-    return () => {
-      cancelled = true
-    }
-    // 同期のたびに media は別のオブジェクトになるので、id が変わったときだけ取り直す
-  }, [media.id, needsFetch])
-  return media.blob ?? blob
-}
 
 /**
  * 記録の動画・写真1つ。端末に中身があれば再生し、無ければ YouTube（アプリの中で再生）やサーバーから見る。
@@ -59,7 +35,7 @@ export function MediaItem({
 }) {
   const run = useAction()
   const storage = useLiveQuery(getVideoStorage)
-  const blob = useRemotePhoto(media)
+  const blob = useContent(media)
   usePoster(media)
   const video = isVideo(media)
   // 保存先が端末なら上げないので、アップ待ちは出さない
