@@ -4,7 +4,7 @@ import { formatDateTime, OUTCOME_LABEL } from '../domain/format'
 import type { Media } from '../domain/types'
 import { ContentUnavailableError, contentBlob, hasContent } from './content'
 import { db, markDirty, mediaByIndex } from './db'
-import { isNativeApp } from '../platform'
+import { isNativeApp, SITE_URL } from '../platform'
 import { api, getSyncConfig, SyncError, type SyncConfig } from './sync'
 import { getVideoStorage } from './videoStorage'
 
@@ -30,9 +30,8 @@ export async function youtubeStatus(): Promise<YoutubeStatus | undefined> {
   return (await (await api(config, '/api/youtube/status')).json()) as YoutubeStatus
 }
 
-/** Google の画面へ移動して連携する。終わるとサーバーがアプリの設定画面へ戻す */
-/** アプリでは、連携が終わったあとの「戻る」リンクの行き先に Web 版を使う（アプリの画面の場所は https でないので使えない） */
-const WEB_APP_URL = 'https://makim0939.github.io/michishirube/'
+/** アプリの中の Safari で連携画面を開いている（続けて押されても、二重に開かない） */
+let authSheetOpen = false
 
 /**
  * Google の連携画面を開く。Web 版は画面ごと移り、終わったら戻ってくる。
@@ -40,7 +39,9 @@ const WEB_APP_URL = 'https://makim0939.github.io/michishirube/'
  */
 export async function startYoutubeAuth(onClosed?: () => void) {
   const config = await requireConfig()
-  const returnTo = isNativeApp ? WEB_APP_URL : window.location.href.split('#')[0]
+  if (isNativeApp && authSheetOpen) return
+  // アプリでは、連携が終わったあとの「戻る」リンクの行き先に Web 版を使う（アプリの画面の場所は https でないので使えない）
+  const returnTo = isNativeApp ? SITE_URL : window.location.href.split('#')[0]
   const { url } = (await (
     await api(config, '/api/youtube/auth-url', {
       method: 'POST',
@@ -52,11 +53,19 @@ export async function startYoutubeAuth(onClosed?: () => void) {
     window.location.href = url
     return
   }
+  authSheetOpen = true
   const listener = await Browser.addListener('browserFinished', () => {
+    authSheetOpen = false
     void listener.remove()
     onClosed?.()
   })
-  await Browser.open({ url, presentationStyle: 'popover' })
+  try {
+    await Browser.open({ url, presentationStyle: 'popover' })
+  } catch (e) {
+    authSheetOpen = false
+    await listener.remove()
+    throw e
+  }
 }
 
 export async function disconnectYoutube() {

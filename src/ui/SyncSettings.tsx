@@ -1,5 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { db } from '../data/db'
 import { getVideoStorage } from '../data/videoStorage'
 import { connectSync, disconnectSync, getSyncConfig, getSyncStatus, runSync } from '../data/sync'
@@ -84,15 +84,20 @@ function YoutubeSection({ notice }: { notice?: string }) {
     (await getVideoStorage()) === 'youtube' ? db.media.where('upload').anyOf('pending', 'uploading', 'failed').count() : 0,
   )
 
+  /** 前に確かめたときに連携していたか（まだ確かめていなければ undefined） */
+  const wasConnected = useRef<boolean | undefined>(undefined)
   const refresh = useCallback(() => {
     youtubeStatus()
       .then((s) => {
+        // アプリの中の Safari で連携して戻ってきたとき（Web 版は戻ってきた画面で知らせる）
+        if (wasConnected.current === false && s?.connected) toast.show('YouTube と連携しました')
+        wasConnected.current = s?.connected
         setStatus(s ?? null)
         // 連携できていれば、止めていたアップロードをすぐ再開する
         if (s?.connected) void resumeUploads()
       })
       .catch(() => setStatus(null))
-  }, [])
+  }, [toast])
 
   // iPhone のホーム画面アプリでは、Google の画面が別のシートで開く。閉じて戻ってきたときに状態を取り直す
   useEffect(() => {
