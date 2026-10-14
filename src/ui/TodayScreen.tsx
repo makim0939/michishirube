@@ -365,7 +365,7 @@ export function TodayScreen() {
       form: recentForm(records),
       next: records.find((r) => r.nextAction)?.nextAction,
       recent: recentOf[i].map((record) => ({ record, media: cupOf(record), number: numbers.get(record.id) ?? 0 })),
-      last: records[0]?.createdAt ?? skill.activatedAt ?? 0,
+      last: records[0]?.createdAt ?? 0,
     }))
     // 最近練習した型を上に（撮るときに、カードを探さずに済むように）
     const practices: Practice[] = practiceOrder(unordered, (p) => p.last)

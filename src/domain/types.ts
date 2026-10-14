@@ -22,7 +22,10 @@ export interface Reference {
   note?: string
 }
 
-/** 保存する状態。locked / available は前提条件から導出するので保存しない */
+/**
+ * 保存する状態。練習中・locked・available は、記録と前提条件から導出するので保存しない。
+ * 'active' は、前に「はじめる」で練習中にしていたころの値。今は書かず、読んでも使わない（同期で届く古いデータのために残す）
+ */
 export type SkillStatus = 'idle' | 'active' | 'done'
 
 /** 画面に出す状態 */
@@ -39,6 +42,7 @@ export interface Skill {
   references: Reference[]
   prereqIds: string[]
   status: SkillStatus
+  /** 前に「はじめる」で練習中にした日時。今は使わない（古いデータのために残す） */
   activatedAt?: number
   achievedAt?: number
   createdAt: number

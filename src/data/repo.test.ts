@@ -55,6 +55,8 @@ describe('挑戦と達成', () => {
     const { a, b } = await chain()
     expect([...(await practicingSkillIds())]).toEqual([])
     await addRecord({ skillId: a, outcome: 'good', reason: '', nextAction: '', files: [] })
+    // 同じ時刻にならないよう、少し待ってから記録する（どちらが最後かを決めるため）
+    await new Promise((r) => setTimeout(r, 5))
     await addRecord({ skillId: b, outcome: 'good', reason: '', nextAction: '', files: [] })
     expect([...(await practicingSkillIds())].sort()).toEqual([a, b].sort())
     // 30日たつと、最後に記録した型（b）だけが練習中に残る
