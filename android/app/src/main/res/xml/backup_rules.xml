@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 11 まで の Google ドライブへのバックアップ。Android は、アプリのデータが 25MB を超えるとまるごとバックアップしない。
+  動画を入れるとすぐ超えるので、記録の写し（snapshot.json）だけを残し、動画・写真の中身と画面の保存場所（WebView）は入れない
+-->
+<full-backup-content>
+    <exclude domain="file" path="lattecho/media" />
+    <exclude domain="root" path="app_webview" />
+</full-backup-content>

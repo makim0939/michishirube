@@ -1,5 +1,5 @@
 import { dlog, traceVideo } from '../debug'
-import { extensionFor, pickRecorderMimeType, RECORDER_BITRATE } from './mediaPrep'
+import { extensionFor, pickRecorderMimeType, RECORDER_BITRATE, recorderSupports } from './mediaPrep'
 
 /**
  * 動画を切り取る・音を消す。指定した範囲を再生しながら、映像はキャンバス、音声は Web Audio 経由で録り直す
@@ -56,7 +56,7 @@ export function startTrim(
   fileName: string,
   { muted = false }: { muted?: boolean } = {},
 ): TrimJob {
-  const mimeType = pickRecorderMimeType((t) => MediaRecorder.isTypeSupported(t), !muted)
+  const mimeType = pickRecorderMimeType(recorderSupports, !muted)
   if (!mimeType) {
     return { done: Promise.reject(new Error('この端末では動画を作り直せません')), cancel: () => {} }
   }

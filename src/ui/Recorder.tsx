@@ -3,8 +3,10 @@ import {
   CAMERA_CONSTRAINTS,
   extensionFor,
   MAX_RECORDING_MS,
+  markRecorderTypeBroken,
   pickRecorderMimeType,
   RECORDER_BITRATE,
+  recorderSupports,
 } from '../data/mediaPrep'
 import { isWebUrl } from '../domain/template'
 import type { Reference } from '../domain/types'
@@ -13,25 +15,6 @@ import { MicIcon, PhotoIcon } from './icons'
 
 const AUDIO_KEY = 'michishirube:recorder-audio'
 const MODE_KEY = 'michishirube:recorder-mode'
-/** この端末で録画に失敗した形式（video/mp4 など）。次からはほかの形式で撮る */
-const BROKEN_KEY = 'michishirube:recorder-broken'
-
-function brokenTypes(): string[] {
-  try {
-    const list: unknown = JSON.parse(readStorage('local', BROKEN_KEY) ?? '[]')
-    return Array.isArray(list) ? list.filter((t): t is string => typeof t === 'string') : []
-  } catch {
-    return []
-  }
-}
-
-/**
- * この端末で録画に使える形式か。Android では、MP4（H.264）を「使える」と答えても、
- * H.264 を作る部品（ハードウェア）が無い端末では録画が空になるので、失敗した形式は外す
- */
-function recorderSupports(type: string): boolean {
-  return MediaRecorder.isTypeSupported(type) && !brokenTypes().some((b) => type.startsWith(b))
-}
 
 type Mode = 'video' | 'photo'
 
@@ -189,7 +172,7 @@ export function Recorder({
         const container = mimeType.split(';')[0]
         const others = !!pickRecorderMimeType((t) => recorderSupports(t) && !t.startsWith(container), audio)
         if (others) {
-          writeStorage('local', BROKEN_KEY, JSON.stringify([...brokenTypes(), container]))
+          markRecorderTypeBroken(mimeType)
           setNotice('この端末に合う録画の形式に切り替えました。もう一度撮ってください')
         } else {
           setError('録画できませんでした。もう一度試すか、標準のカメラを使ってください。')
