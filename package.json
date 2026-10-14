@@ -7,8 +7,9 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "app:build": "tsc --noEmit && CAPACITOR=1 vite build && cap sync ios",
+    "app:build": "tsc --noEmit && CAPACITOR=1 vite build && cap sync",
     "app:ios": "pnpm app:build && cap open ios",
+    "app:android": "pnpm app:build && cap open android",
     "test": "vitest run",
     "typecheck": "tsc --noEmit && tsc --noEmit -p worker",
     "worker:dev": "wrangler dev --config worker/wrangler.jsonc --port 8787",
@@ -16,6 +17,8 @@
     "worker:deploy": "wrangler deploy --config worker/wrangler.jsonc"
   },
   "dependencies": {
+    "@capacitor/android": "8.5.2",
+    "@capacitor/app": "8.1.1",
     "@capacitor/browser": "8.0.4",
     "@capacitor/core": "8.5.2",
     "@capacitor/filesystem": "8.1.3",

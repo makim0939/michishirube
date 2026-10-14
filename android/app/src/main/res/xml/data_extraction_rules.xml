@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12 から のバックアップ・機種変更。内容は backup_rules.xml と同じ（記録の写しだけを残す） -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="file" path="lattecho/media" />
+        <exclude domain="root" path="app_webview" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" path="app_webview" />
+    </device-transfer>
+</data-extraction-rules>

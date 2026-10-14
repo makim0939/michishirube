@@ -24,6 +24,39 @@ const WITH_AUDIO = ['video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4', 'vide
 const VIDEO_ONLY = ['video/mp4;codecs=avc1.42E01E', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm']
 
 /** 音を録らないときに音声コーデックを指定すると、録画を始められないブラウザがあるので分ける */
+/**
+ * この端末で録画に失敗した形式（video/mp4 など）。Android では、MP4（H.264）を「使える」と答えても、
+ * H.264 を作る部品（ハードウェア）が無い端末では中身が空になるので、失敗した形式は外して次の形式で撮る。
+ * 画面の仕組み（WebView）が更新されたら直っているかもしれないので、そのときはもう一度試す
+ */
+const BROKEN_KEY = 'michishirube:recorder-broken'
+
+function brokenTypes(): string[] {
+  try {
+    const saved = JSON.parse(localStorage.getItem(BROKEN_KEY) ?? 'null') as { ua?: unknown; types?: unknown } | null
+    if (!saved || saved.ua !== navigator.userAgent || !Array.isArray(saved.types)) return []
+    return saved.types.filter((t): t is string => typeof t === 'string')
+  } catch {
+    return []
+  }
+}
+
+/** 録画が空になった形式を覚える（この端末・この WebView の間だけ） */
+export function markRecorderTypeBroken(mimeType: string) {
+  const container = mimeType.split(';')[0]
+  try {
+    const types = [...new Set([...brokenTypes(), container])]
+    localStorage.setItem(BROKEN_KEY, JSON.stringify({ ua: navigator.userAgent, types }))
+  } catch {
+    // 保存できなければ、次もこの形式を試す
+  }
+}
+
+/** この端末で録画に使える形式か（使えると答えても、空になった形式は外す） */
+export function recorderSupports(type: string): boolean {
+  return MediaRecorder.isTypeSupported(type) && !brokenTypes().some((b) => type.startsWith(b))
+}
+
 export function pickRecorderMimeType(isSupported: (type: string) => boolean, withAudio = true): string | undefined {
   return (withAudio ? WITH_AUDIO : VIDEO_ONLY).find((t) => isSupported(t))
 }
