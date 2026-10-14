@@ -2,6 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useCallback, useEffect, useState } from 'react'
 import { db } from '../data/db'
 import { getVideoStorage } from '../data/videoStorage'
+import { isNativeApp } from '../platform'
 import { connectSync, disconnectSync, getSyncConfig, getSyncStatus, runSync } from '../data/sync'
 import {
   disconnectYoutube,
@@ -158,6 +159,9 @@ function YoutubeSection({ notice }: { notice?: string }) {
             連携を解除
           </ConfirmButton>
         </div>
+      ) : isNativeApp ? (
+        // アプリからの Google ログインはまだ作っていない（Safari に移ったまま、アプリへ戻れないため）
+        <p className="muted small">アプリからの連携は準備中です。Web 版のラテ帳で連携すると、アプリでも上げられます。</p>
       ) : (
         <button className="btn primary" onClick={() => run(() => startYoutubeAuth())}>
           Google でログインして連携

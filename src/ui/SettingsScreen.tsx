@@ -11,6 +11,7 @@ import { useAction, useToast } from './feedback'
 import { RoadmapSettings } from './RoadmapSettings'
 import { backHandler, go, href, type SettingsSection } from './router'
 import { SyncSettings } from './SyncSettings'
+import { isNativeApp } from '../platform'
 import { AlertIcon, BackIcon, CheckIcon, ForwardIcon } from './icons'
 
 function StorageStatus() {
@@ -32,13 +33,16 @@ function StorageStatus() {
           {info.quota ? ` / 上限の目安 ${formatBytes(info.quota)}` : ''}
         </p>
       )}
-      <p className="status-line">
-        {info.persisted ? <CheckIcon size={16} /> : <AlertIcon size={16} />}
-        {info.persisted
-          ? '容量が足りなくなっても、ブラウザが自動で消さない設定になっています。'
-          : '容量が足りなくなると、ブラウザが自動で消す可能性があります。'}
-      </p>
-      {!info.persisted && (
+      {/* ブラウザに保存を頼むのは Web 版だけ（アプリはアプリの保存場所を使う） */}
+      {!isNativeApp && (
+        <p className="status-line">
+          {info.persisted ? <CheckIcon size={16} /> : <AlertIcon size={16} />}
+          {info.persisted
+            ? '容量が足りなくなっても、ブラウザが自動で消さない設定になっています。'
+            : '容量が足りなくなると、ブラウザが自動で消す可能性があります。'}
+        </p>
+      )}
+      {!isNativeApp && !info.persisted && (
         <button
           className="btn small"
           onClick={async () => {
@@ -52,6 +56,14 @@ function StorageStatus() {
     </div>
   )
 }
+
+/**
+ * プライバシーポリシー。アプリの中では、公開しているページを Safari で開く
+ * （アプリに入れたファイルを別の窓で開くと、アプリの画面が置き換わってしまうため）
+ */
+const PRIVACY_URL = isNativeApp
+  ? 'https://makim0939.github.io/michishirube/privacy.html'
+  : `${import.meta.env.BASE_URL}privacy.html`
 
 const STORAGE_CHOICES: { value: VideoStorage; label: string }[] = [
   { value: 'device', label: 'この端末' },
@@ -141,7 +153,7 @@ function SettingsHome() {
           <li>
             <a
               className="settings-row"
-              href={`${import.meta.env.BASE_URL}privacy.html`}
+              href={PRIVACY_URL}
               target="_blank"
               rel="noopener noreferrer"
             >

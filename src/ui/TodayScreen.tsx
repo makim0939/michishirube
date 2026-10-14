@@ -17,6 +17,7 @@ import { readStorage, writeStorage } from './storage'
 import { PatternImage } from './PatternImage'
 import { recommendLabel } from './skillLabels'
 import { LIGHT_LABEL, lightFor, lightUrl, type Light } from './world'
+import { isNativeApp } from '../platform'
 
 const HINT_KEY = 'michishirube:install-hint-dismissed'
 const SYNC_HINT_KEY = 'michishirube:sync-hint-dismissed'
@@ -96,7 +97,8 @@ function Notice() {
       </a>
     )
   }
-  if (!hintHidden && isIos() && !isStandalone()) {
+  // アプリ（ストアから入れたもの）では、ホーム画面に追加する必要はない
+  if (!hintHidden && !isNativeApp && isIos() && !isStandalone()) {
     return (
       <div className="notice">
         <AlertIcon size={18} />
