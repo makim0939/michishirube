@@ -16,7 +16,6 @@ import {
   recordsOf,
   removeReference,
   revertAchievement,
-  setMaxActive,
   updateRecord,
   updateSkill,
 } from './repo'
@@ -57,13 +56,14 @@ describe('挑戦と達成', () => {
     expect((await db.skills.get(c))!.status).toBe('active')
   })
 
-  it('挑戦中の上限を超えられない', async () => {
+  it('記録した型は練習中に入る。「できた」の型はそのまま', async () => {
     const domainId = await createDomain('ギター')
-    const ids = await Promise.all(['A', 'B', 'C'].map((n) => createSkill(domainId, input(n))))
-    await setMaxActive(2)
-    await activateSkill(ids[0])
-    await activateSkill(ids[1])
-    await expect(activateSkill(ids[2])).rejects.toThrow(/上限/)
+    const [a, b] = await Promise.all(['A', 'B'].map((n) => createSkill(domainId, input(n))))
+    await addRecord({ skillId: a, outcome: 'good', reason: '', nextAction: '', files: [] })
+    expect((await db.skills.get(a))!.status).toBe('active')
+    await achieveSkill(b)
+    await addRecord({ skillId: b, outcome: 'good', reason: '', nextAction: '', files: [] })
+    expect((await db.skills.get(b))!.status).toBe('done')
   })
 
   it('循環する前提には変更できない', async () => {
@@ -105,7 +105,6 @@ describe('記録', () => {
 describe('バックアップ', () => {
   it('書き出して読み込むと、動画を含めて元に戻る', async () => {
     const { a, domainId } = await chain()
-    await setMaxActive(4)
     await addRecord({
       skillId: a,
       outcome: 'good',
@@ -125,7 +124,6 @@ describe('バックアップ', () => {
     const [m] = await db.media.toArray()
     expect(m.type).toBe('video/quicktime')
     expect(await m.blob!.text()).toBe('movie-bytes')
-    expect((await db.meta.get('settings'))?.value).toMatchObject({ maxActive: 4 })
   })
 
   it('メディアを含めない書き出しでは、中身のないメディアとして戻す（YouTube やサーバーの写真は見られる）', async () => {

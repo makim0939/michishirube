@@ -54,17 +54,11 @@ describe('computeStates', () => {
 })
 
 describe('canActivate', () => {
-  it('上限は全分野の合計で数える', () => {
-    const skills = [skill('a', [], 'active'), { ...skill('b', [], 'active'), domainId: 'other' }, skill('c')]
-    expect(canActivate(skills[2], skills, 2)).toEqual({ ok: false, reason: 'limit' })
-    expect(canActivate(skills[2], skills, 3)).toEqual({ ok: true })
-  })
-
-  it('達成済み・練習中は練習中にできない。前提がまだでも始められる', () => {
-    const skills = [skill('a', [], 'done'), skill('b', ['x']), skill('c', [], 'active')]
-    expect(canActivate(skills[0], skills, 3)).toEqual({ ok: false, reason: 'done' })
-    expect(canActivate(skills[1], skills, 3)).toEqual({ ok: true })
-    expect(canActivate(skills[2], skills, 3)).toEqual({ ok: false, reason: 'already' })
+  it('達成済み・練習中は練習中にできない。前提がまだでも、いくつでも始められる', () => {
+    const skills = [skill('a', [], 'done'), skill('b', ['x']), skill('c', [], 'active'), skill('d', [], 'active')]
+    expect(canActivate(skills[0], skills)).toEqual({ ok: false, reason: 'done' })
+    expect(canActivate(skills[1], skills)).toEqual({ ok: true })
+    expect(canActivate(skills[2], skills)).toEqual({ ok: false, reason: 'already' })
   })
 })
 
