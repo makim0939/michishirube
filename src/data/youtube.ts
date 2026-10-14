@@ -1,6 +1,7 @@
 import { liveQuery } from 'dexie'
 import { formatDateTime, OUTCOME_LABEL } from '../domain/format'
 import type { Media } from '../domain/types'
+import { ContentUnavailableError, contentBlob, hasContent } from './content'
 import { db, markDirty, mediaByIndex } from './db'
 import { api, getSyncConfig, SyncError, type SyncConfig } from './sync'
 import { getVideoStorage } from './videoStorage'
@@ -188,7 +189,7 @@ async function doUploads() {
   // 上げている間に撮った動画も、続けて上げる。失敗したものは、次に動いたときに上げ直す
   for (;;) {
     const targets = (await mediaByIndex(db.media.where('upload').anyOf('pending', 'uploading', 'failed')))
-      .filter((m) => !!m.blob && (m.upload !== 'failed' || (m.uploadAttempts ?? 0) < MAX_UPLOAD_ATTEMPTS))
+      .filter((m) => hasContent(m) && (m.upload !== 'failed' || (m.uploadAttempts ?? 0) < MAX_UPLOAD_ATTEMPTS))
       .filter((m) => !tried.has(m.id))
       .sort((a, b) => a.createdAt - b.createdAt)
     if (targets.length === 0) return
@@ -199,7 +200,10 @@ async function doUploads() {
       try {
         const tokenValue = await accessToken(config)
         await db.media.update(m.id, { upload: 'uploading' })
-        const youtubeId = await uploadVideo(m.blob!, await videoMeta(m), tokenValue)
+        // ファイルが無いときは「失敗」にする（電波の失敗と分け、ほかの動画を先に上げる）
+        const content = await contentBlob(m)
+        if (!content) throw new ContentUnavailableError()
+        const youtubeId = await uploadVideo(content, await videoMeta(m), tokenValue)
         await setUpload(m.id, { upload: 'done', youtubeId, uploadError: undefined, uploadAttempts: undefined })
       } catch (e) {
         if (e instanceof SyncError && (e.status === 409 || e.status === 400)) {

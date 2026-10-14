@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react'
+import { moveContentsToFiles, tidyContentFiles, watchContentFiles } from './data/content'
+import { initFiles } from './data/files'
 import { ensureSeeded } from './data/repo'
+import { restoreSnapshotIfEmpty, watchSnapshot } from './data/snapshot'
 import { startAutoSync } from './data/sync'
 import { tidyVideos } from './data/tidy'
 import { startAutoUpload } from './data/youtube'
@@ -87,8 +90,18 @@ export function App() {
   const [error, setError] = useState<string>()
 
   useEffect(() => {
-    ensureSeeded()
-      .then(() => setReady(true))
+    // アプリでは、ファイルの置き場所を用意し、画面の中の保存場所が消えていたら写しから戻してから始める
+    initFiles()
+      .then(() => restoreSnapshotIfEmpty())
+      .then(() => ensureSeeded())
+      .then(() => {
+        watchContentFiles()
+        watchSnapshot()
+        // 画面の中の保存場所に残っている動画・写真があれば、ファイルへ移し、使われていないファイルを片付ける
+        void moveContentsToFiles()
+        void tidyContentFiles()
+        setReady(true)
+      })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
   }, [])
 

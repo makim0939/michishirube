@@ -1,5 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useRef, useState } from 'react'
+import { contentBlob } from '../data/content'
 import { db } from '../data/db'
 import { compressPhoto, inMemory, makePoster, type Poster } from '../data/mediaPrep'
 import { addRecord, deleteRecord, lastNextAction, updateRecord, type NewMedia } from '../data/repo'
@@ -129,7 +130,11 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
         setMissing(true)
         return
       }
-      const media = (await db.media.bulkGet(record.mediaIds)).filter((m): m is Media => !!m)
+      const rows = (await db.media.bulkGet(record.mediaIds)).filter((m): m is Media => !!m)
+      // アプリでは中身がファイルにあるので、切り取りなどで使えるよう読み込んでおく（保存はしない）
+      const media = await Promise.all(
+        rows.map(async (m) => (m.file && !m.blob ? { ...m, blob: await contentBlob(m).catch(() => undefined) } : m)),
+      )
       if (cancelled) return
       setOutcome(record.outcome)
       setDraft({ reason: record.reason, nextAction: record.nextAction, causes: record.causes })

@@ -1,4 +1,5 @@
 import type { Media } from '../domain/types'
+import { contentBlob, hasContent } from './content'
 import { db } from './db'
 import { inMemory, makePoster } from './mediaPrep'
 import { needsLocalPoster } from './poster'
@@ -35,7 +36,7 @@ export async function tidyVideos(now = Date.now()): Promise<{ count: number; byt
   if ((await getVideoStorage()) !== 'youtube') return { count: 0, bytes: 0 }
   const media = await db.media.toArray()
   const candidates = selectVideosToDrop(
-    media.map((m) => ({ ...m, hasBlob: !!m.blob })),
+    media.map((m) => ({ ...m, hasBlob: hasContent(m) })),
     now,
   )
   // 端末の動画が唯一の手元の写しになるので、YouTube 側で再生できると確かめられたものだけを消す
@@ -51,7 +52,9 @@ export async function tidyVideos(now = Date.now()): Promise<{ count: number; byt
     const m = await db.media.get(id)
     if (!m || !needsLocalPoster(m)) continue
     try {
-      const poster = await makePoster(await inMemory(m.blob!))
+      const content = await contentBlob(m)
+      if (!content) continue
+      const poster = await makePoster(await inMemory(content))
       if (poster && (poster.end || !m.poster)) await db.media.update(id, { poster: poster.blob, posterEnd: poster.end })
     } catch {
       // 作れなくても、整理は続ける
@@ -61,9 +64,10 @@ export async function tidyVideos(now = Date.now()): Promise<{ count: number; byt
   await db.transaction('rw', db.media, async () => {
     for (const id of ids) {
       const m = await db.media.get(id)
-      bytes += m?.blob?.size ?? 0
-      // 中身はこの端末だけのものなので、同期の対象にしない（updatedAt も変えない）
-      await db.media.update(id, { blob: undefined })
+      bytes += m?.blob?.size ?? (m?.file ? m.size : 0)
+      // 中身はこの端末だけのものなので、同期の対象にしない（updatedAt も変えない）。
+      // アプリのファイルは、行から外すと watchContentFiles が消す
+      await db.media.update(id, { blob: undefined, file: undefined })
     }
   })
   return { count: ids.length, bytes }

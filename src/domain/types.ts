@@ -74,6 +74,11 @@ export interface Media {
   skillId: string
   /** 中身。この端末にだけある（同期しない）。整理したり別の端末だったりすると無い */
   blob?: Blob
+  /**
+   * アプリ（iOS・Android）では、中身を blob ではなくアプリのファイルに置き、その場所を持つ（同期しない）。
+   * どちらにあるかは hasContent()、中身は contentBlob() で扱う
+   */
+  file?: string
   /** 動画のサムネイル（JPEG）。この端末にだけある */
   poster?: Blob
   /** poster が動画の最後のコマ（できあがりのカップ）か。この端末にだけある（同期しない） */

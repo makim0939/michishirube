@@ -1,12 +1,13 @@
 import { useLiveQuery } from 'dexie-react-hooks'
+import { useEffect } from 'react'
 import { db } from '../data/db'
 import { OUTCOME_LABEL } from '../domain/format'
 import type { Media } from '../domain/types'
-import { Empty, formatDate, splitName } from './common'
+import { formatDate, splitName } from './common'
 import { BackIcon, ForwardIcon } from './icons'
 import { MediaItem } from './MediaItem'
 import { PatternImage } from './PatternImage'
-import { backHandler, href, replace } from './router'
+import { backHandler, goBack, href, replace } from './router'
 
 /** 1杯（記録1件）の詳細。今日の「最近の杯」から開き、動画・写真と理由・次の一手を見返す */
 export function CupScreen({ recordId }: { recordId: string }) {
@@ -31,9 +32,14 @@ export function CupScreen({ recordId }: { recordId: string }) {
     }
   }, [recordId])
 
-  if (!data) return null
+  // 編集で削除したあと・別の端末で消されたときは、無くなった杯の画面に留まらず、来た画面へ戻る
+  const missing = !!data && !data.record
+  useEffect(() => {
+    if (missing) goBack('/')
+  }, [missing])
+
+  if (!data?.record) return null
   const { record } = data
-  if (!record) return <Empty>この記録は見つかりません。</Empty>
   const { skill, media, number, prevId, nextId } = data
   const name = skill ? splitName(skill.name).main : ''
 

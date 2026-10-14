@@ -11,6 +11,7 @@ import {
   type Source,
 } from '../domain/types'
 import latteArt from '../roadmaps/latte-art.json'
+import { moveContentsToFiles } from './content'
 import { db, markDirty, newId } from './db'
 
 export const BUNDLED_TEMPLATES: RoadmapTemplate[] = [parseTemplate(latteArt)]
@@ -339,6 +340,9 @@ export async function addRecord(input: RecordInput): Promise<string> {
     )
     await markDirty('record', [recordId])
   })
+  // アプリでは、動画・写真をアプリのファイルに移す（画面の中の保存場所は OS に消されることがあるため）。
+  // 移し終わるのは待たない（起動時の移しが続いていても、保存はすぐ終える）
+  void moveContentsToFiles(media.map((m) => m.id))
   return recordId
 }
 
@@ -360,6 +364,7 @@ export interface RecordUpdate {
 export async function updateRecord(input: RecordUpdate) {
   const reason = input.reason.trim()
   const nextAction = input.nextAction.trim()
+  let changed: string[] = []
   await db.transaction('rw', db.records, db.media, db.outbox, async () => {
     const record = await db.records.get(input.recordId)
     if (!record) throw new RepoError('記録が見つかりません')
@@ -387,7 +392,10 @@ export async function updateRecord(input: RecordUpdate) {
     })
     await markDirty('media', [...removed, ...added.map((m) => m.id), ...input.replace.map((r) => r.id)])
     await markDirty('record', [record.id])
+    changed = [...added.map((m) => m.id), ...input.replace.map((r) => r.id).filter((id) => !removed.has(id))]
   })
+  // 足した・差し替えた動画・写真を、アプリのファイルに移す（アプリだけ。移し終わるのは待たない）
+  void moveContentsToFiles(changed)
 }
 
 export async function deleteRecord(id: string) {

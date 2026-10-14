@@ -1,5 +1,6 @@
 import { Unzip, UnzipInflate, Zip, ZipPassThrough, strFromU8, strToU8 } from 'fflate'
 import type { Domain, Media, PracticeRecord, Skill } from '../domain/types'
+import { contentBlob, hasContent, resetContentFiles } from './content'
 import { db, markDirty, type Meta } from './db'
 
 /**
@@ -91,7 +92,7 @@ export async function estimateBackupSize(includeMedia: boolean): Promise<number>
   if (!includeMedia) return 0
   let total = 0
   await db.media.each((m) => {
-    total += m.blob?.size ?? 0
+    if (hasContent(m)) total += m.blob?.size ?? m.size
   })
   return total
 }
@@ -155,9 +156,10 @@ export async function exportBackup(opts: {
     // 同期の接続先やトークンは、この端末だけの設定なのでバックアップに入れない
     db.meta.filter((m) => !isLocalMeta(m.key)).toArray(),
   ])
-  const rows: BackupMedia[] = media.map(({ blob, poster: _poster, posterEnd: _posterEnd, ...rest }) => ({
+  // アプリのファイルの場所は、この端末だけのものなので入れない
+  const rows: BackupMedia[] = media.map(({ blob, file, poster: _poster, posterEnd: _posterEnd, ...rest }) => ({
     ...rest,
-    path: opts.includeMedia && blob ? `media/${rest.id}${extension(rest)}` : null,
+    path: opts.includeMedia && hasContent({ blob, file }) ? `media/${rest.id}${extension(rest)}` : null,
   }))
   const data: BackupData = {
     format: FORMAT,
@@ -176,7 +178,8 @@ export async function exportBackup(opts: {
   writer.addText('data.json', JSON.stringify(data, null, 2))
   for (let i = 0; i < media.length; i++) {
     const path = rows[i].path
-    const blob = media[i].blob
+    // ファイルが無い・読めないものは入れない（戻すときに「見つからない動画・写真」として数える）
+    const blob = path ? await contentBlob(media[i]).catch(() => undefined) : undefined
     if (!path || !blob) continue
     if (writer.mediaCount > 0 && writer.size + media[i].size > partLimit) {
       blobs.push(writer.finish())
@@ -300,12 +303,14 @@ export async function importBackup(zips: Blob[]): Promise<ImportSummary> {
     // 同期していれば、次の同期でサーバーの内容を最初から受け取り直す（サーバーのほうが新しいものに揃える）
     if (await db.meta.get('sync:cursor')) await db.meta.put({ key: 'sync:cursor', value: 0 })
   })
+  // アプリでは、前の動画・写真のファイルを消し、戻した中身をファイルに移す
+  await resetContentFiles()
 
   return {
     domains: domains.length,
     skills: skills.length,
     records: records.length,
-    media: media.filter((m) => m.blob).length,
+    media: media.filter((m) => hasContent(m)).length,
     missingMedia,
   }
 }

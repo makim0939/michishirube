@@ -2,6 +2,8 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { estimateBackupSize, exportBackup, importBackup, type BackupPart } from '../data/backup'
 import { db } from '../data/db'
+import { contentFilesSize, resetContentFiles } from '../data/content'
+import { saveSnapshotNow } from '../data/snapshot'
 import { getSyncConfig, getSyncStatus } from '../data/sync'
 import { TIDY_AFTER_DAYS } from '../data/tidy'
 import { getVideoStorage, setVideoStorage, type VideoStorage } from '../data/videoStorage'
@@ -17,9 +19,17 @@ import { AlertIcon, BackIcon, CheckIcon, ForwardIcon } from './icons'
 function StorageStatus() {
   const [info, setInfo] = useState<{ usage?: number; quota?: number; persisted?: boolean }>()
   const refresh = async () => {
-    const estimate = await navigator.storage?.estimate?.()
-    const persisted = await navigator.storage?.persisted?.()
-    setInfo({ usage: estimate?.usage, quota: estimate?.quota, persisted })
+    const [estimate, persisted, files] = await Promise.all([
+      navigator.storage?.estimate?.(),
+      navigator.storage?.persisted?.(),
+      contentFilesSize(),
+    ])
+    // アプリでは動画・写真がアプリのファイルにあるので、その分を足す。画面の保存場所の上限は関係ないので出さない
+    setInfo({
+      usage: estimate?.usage === undefined && !isNativeApp ? undefined : (estimate?.usage ?? 0) + files,
+      quota: isNativeApp ? undefined : estimate?.quota,
+      persisted,
+    })
   }
   useEffect(() => {
     void refresh()
@@ -368,6 +378,9 @@ function DataPage() {
                 await Promise.all([db.meta.clear(), db.outbox.clear()])
                 await db.meta.put({ key: 'seeded', value: true })
               })
+              // アプリでは、動画・写真のファイルも消し、記録の写しも空にする（次に開いたときに戻らないように）
+              await resetContentFiles()
+              await saveSnapshotNow()
               toast.show('すべて削除しました')
               go('/')
             })
