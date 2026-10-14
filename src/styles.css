@@ -1690,8 +1690,10 @@ span.recorder-side {
   top: 45%;
   left: 0;
   right: 0;
+  padding: 0 24px;
   text-align: center;
-  color: rgb(255 255 255 / 80%);
+  color: rgb(255 255 255 / 90%);
+  text-shadow: 0 1px 6px rgb(0 0 0 / 60%);
 }
 
 .recorder-error {

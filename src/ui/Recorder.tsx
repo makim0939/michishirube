@@ -13,6 +13,25 @@ import { MicIcon, PhotoIcon } from './icons'
 
 const AUDIO_KEY = 'michishirube:recorder-audio'
 const MODE_KEY = 'michishirube:recorder-mode'
+/** この端末で録画に失敗した形式（video/mp4 など）。次からはほかの形式で撮る */
+const BROKEN_KEY = 'michishirube:recorder-broken'
+
+function brokenTypes(): string[] {
+  try {
+    const list: unknown = JSON.parse(readStorage('local', BROKEN_KEY) ?? '[]')
+    return Array.isArray(list) ? list.filter((t): t is string => typeof t === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+/**
+ * この端末で録画に使える形式か。Android では、MP4（H.264）を「使える」と答えても、
+ * H.264 を作る部品（ハードウェア）が無い端末では録画が空になるので、失敗した形式は外す
+ */
+function recorderSupports(type: string): boolean {
+  return MediaRecorder.isTypeSupported(type) && !brokenTypes().some((b) => type.startsWith(b))
+}
 
 type Mode = 'video' | 'photo'
 
@@ -25,7 +44,7 @@ export function canRecordInApp(): boolean {
   return (
     typeof MediaRecorder !== 'undefined' &&
     !!navigator.mediaDevices?.getUserMedia &&
-    !!pickRecorderMimeType((t) => MediaRecorder.isTypeSupported(t))
+    !!pickRecorderMimeType(recorderSupports)
   )
 }
 
@@ -82,6 +101,8 @@ export function Recorder({
   const [mode, setMode] = useState<Mode>(() => (readStorage('local', MODE_KEY) === 'photo' ? 'photo' : 'video'))
   const [showRefs, setShowRefs] = useState(false)
   const [error, setError] = useState<string>()
+  /** 止めずに知らせること（もう一度撮れば撮れるとき） */
+  const [notice, setNotice] = useState<string>()
   const [ready, setReady] = useState(false)
   const [startedAt, setStartedAt] = useState<number>()
   const [now, setNow] = useState(Date.now())
@@ -141,7 +162,8 @@ export function Recorder({
 
   const start = () => {
     const s = stream.current
-    const mimeType = pickRecorderMimeType((t) => MediaRecorder.isTypeSupported(t), audio)
+    setNotice(undefined)
+    const mimeType = pickRecorderMimeType(recorderSupports, audio)
     if (!s || !mimeType) return
     const chunks: Blob[] = []
     let r: MediaRecorder
@@ -163,7 +185,15 @@ export function Recorder({
       const type = r.mimeType || mimeType
       const blob = new Blob(chunks, { type: type.split(';')[0] })
       if (blob.size === 0) {
-        setError('録画できませんでした。もう一度試すか、標準のカメラを使ってください。')
+        // この形式はこの端末では撮れない。ほかの形式があれば、次からそちらで撮る
+        const container = mimeType.split(';')[0]
+        const others = !!pickRecorderMimeType((t) => recorderSupports(t) && !t.startsWith(container), audio)
+        if (others) {
+          writeStorage('local', BROKEN_KEY, JSON.stringify([...brokenTypes(), container]))
+          setNotice('この端末に合う録画の形式に切り替えました。もう一度撮ってください')
+        } else {
+          setError('録画できませんでした。もう一度試すか、標準のカメラを使ってください。')
+        }
         return
       }
       const stamp = new Date().toISOString().replace(/[-:]/g, '').slice(0, 15)
@@ -242,6 +272,11 @@ export function Recorder({
       {/* 写真だけのときは、できあがりと同じ枠の中を撮る */}
       {photoMode && <div className="finish-guide" ref={guide} aria-hidden="true" />}
       {!ready && !error && <p className="recorder-status">カメラを準備しています…</p>}
+      {ready && !error && notice && (
+        <p className="recorder-status" role="status">
+          {notice}
+        </p>
+      )}
       {error && (
         <div className="recorder-error">
           <p>{error}</p>
