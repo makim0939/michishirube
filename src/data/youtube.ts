@@ -1,8 +1,10 @@
+import { Browser } from '@capacitor/browser'
 import { liveQuery } from 'dexie'
 import { formatDateTime, OUTCOME_LABEL } from '../domain/format'
 import type { Media } from '../domain/types'
 import { ContentUnavailableError, contentBlob, hasContent } from './content'
 import { db, markDirty, mediaByIndex } from './db'
+import { isNativeApp } from '../platform'
 import { api, getSyncConfig, SyncError, type SyncConfig } from './sync'
 import { getVideoStorage } from './videoStorage'
 
@@ -29,9 +31,16 @@ export async function youtubeStatus(): Promise<YoutubeStatus | undefined> {
 }
 
 /** Google の画面へ移動して連携する。終わるとサーバーがアプリの設定画面へ戻す */
-export async function startYoutubeAuth() {
+/** アプリでは、連携が終わったあとの「戻る」リンクの行き先に Web 版を使う（アプリの画面の場所は https でないので使えない） */
+const WEB_APP_URL = 'https://makim0939.github.io/michishirube/'
+
+/**
+ * Google の連携画面を開く。Web 版は画面ごと移り、終わったら戻ってくる。
+ * アプリでは、アプリの中の Safari（閉じるとアプリに戻る）で開き、閉じたら onClosed を呼ぶ（連携できたか確かめ直す）
+ */
+export async function startYoutubeAuth(onClosed?: () => void) {
   const config = await requireConfig()
-  const returnTo = window.location.href.split('#')[0]
+  const returnTo = isNativeApp ? WEB_APP_URL : window.location.href.split('#')[0]
   const { url } = (await (
     await api(config, '/api/youtube/auth-url', {
       method: 'POST',
@@ -39,7 +48,15 @@ export async function startYoutubeAuth() {
       body: JSON.stringify({ returnTo }),
     })
   ).json()) as { url: string }
-  window.location.href = url
+  if (!isNativeApp) {
+    window.location.href = url
+    return
+  }
+  const listener = await Browser.addListener('browserFinished', () => {
+    void listener.remove()
+    onClosed?.()
+  })
+  await Browser.open({ url, presentationStyle: 'popover' })
 }
 
 export async function disconnectYoutube() {
