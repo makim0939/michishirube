@@ -7,6 +7,8 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
+    "app:build": "tsc --noEmit && CAPACITOR=1 vite build && cap sync ios",
+    "app:ios": "pnpm app:build && cap open ios",
     "test": "vitest run",
     "typecheck": "tsc --noEmit && tsc --noEmit -p worker",
     "worker:dev": "wrangler dev --config worker/wrangler.jsonc --port 8787",
@@ -14,6 +16,8 @@
     "worker:deploy": "wrangler deploy --config worker/wrangler.jsonc"
   },
   "dependencies": {
+    "@capacitor/core": "8.5.2",
+    "@capacitor/ios": "8.5.2",
     "@dagrejs/dagre": "^3.1.1",
     "@xyflow/react": "^12.11.6",
     "dexie": "^4.4.5",
@@ -24,6 +28,7 @@
     "react-dom": "^19.2.8"
   },
   "devDependencies": {
+    "@capacitor/cli": "8.5.2",
     "@cloudflare/workers-types": "^5.20261007.1",
     "@types/node": "^24",
     "@types/react": "^19",
