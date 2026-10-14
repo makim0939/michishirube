@@ -41,7 +41,8 @@ export function MediaItem({
   // 保存先が端末なら上げないので、アップ待ちは出さない
   const uploadState = video && storage === 'youtube' && media.upload !== 'done' ? media.upload : undefined
   const onYoutube = video && !!media.youtubeId
-  const toolbar = !bare && (blob || onYoutube || !!uploadState)
+  // 読み込み中もバーを出しておく（読めたときにバーが現れて、下が動かないように）
+  const toolbar = !bare && (blob || loading || onYoutube || !!uploadState)
 
   return (
     <figure className={bare ? 'media-item' : 'media-item media-card'}>
@@ -56,7 +57,7 @@ export function MediaItem({
         />
       ) : loading ? (
         // 端末のファイルを読んでいるあいだは、YouTube や「無い」表示に切り替えない（読めたらすぐ出す）
-        <div className="media placeholder" aria-label="読み込み中" />
+        <div className="media placeholder" role="status" aria-label="読み込み中" />
       ) : onYoutube ? (
         <YoutubePlayer videoId={media.youtubeId!} poster={media.poster} cacheKey={media.id} playerRef={playerRef} />
       ) : (

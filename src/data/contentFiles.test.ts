@@ -123,23 +123,27 @@ describe('動画・写真の中身をアプリのファイルへ移す', () => {
     expect(order).toEqual(['write media/m1-1.mp4', 'wipe'])
   })
 
-  it('使われていないファイルは片付け、中身の無い行の本来のファイルはつなぎ直す', async () => {
-    await db.records.add({ id: 'r1', skillId: 's1', reason: '', nextAction: '', mediaIds: [], createdAt: 1, updatedAt: 1 })
+  it('この端末の行の使われていないファイルは片付け、中身の無い行の本来のファイルはつなぎ直す', async () => {
     await db.media.bulkAdd([
       media({ id: 'used', blob: undefined, file: 'media/used-1.mp4' }),
       media({ id: 'lost', blob: undefined }),
       media({ id: 'trimmed', blob: undefined, file: 'media/trimmed-9.mp4', contentAt: 9 }),
+      media({ id: 'partial' }),
     ])
-    files.listed = ['media/used-1.mp4', 'media/lost-1.mp4', 'media/trimmed-1.mp4', 'media/gone-1.mp4']
+    files.listed = ['media/used-1.mp4', 'media/lost-1.mp4', 'media/trimmed-1.mp4', 'media/partial-1.mp4']
     await tidyContentFiles()
     expect((await db.media.get('lost'))?.file).toBe('media/lost-1.mp4')
-    expect(files.deleted.sort()).toEqual(['media/gone-1.mp4', 'media/trimmed-1.mp4'])
+    // 差し替える前の中身と、書きかけ（まだ IndexedDB に中身がある）は消す
+    expect(files.deleted.sort()).toEqual(['media/partial-1.mp4', 'media/trimmed-1.mp4'])
   })
 
-  it('記録が1つも無い端末では、ファイルを片付けない（同期で行が戻ってくるかもしれないので）', async () => {
-    files.listed = ['media/x-1.mp4']
+  it('まだ行の無いファイルは消さない（同期などで行が戻ってきたら、つなぎ直せるように）', async () => {
+    files.listed = ['media/1b2c-3d4e-1700000000000.mp4']
     await tidyContentFiles()
     expect(files.deleted).toEqual([])
+    await db.media.add(media({ id: '1b2c-3d4e', blob: undefined, contentAt: 1700000000000 }))
+    await tidyContentFiles()
+    expect((await db.media.get('1b2c-3d4e'))?.file).toBe('media/1b2c-3d4e-1700000000000.mp4')
   })
 })
 

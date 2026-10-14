@@ -20,8 +20,8 @@ export function pickCupMedia(list: (Media | undefined)[]): Media | undefined {
 export function useContent(media: Media | undefined): { blob?: Blob; loading: boolean } {
   // 中身そのものを表す名前。置き場所が blob からファイルに移っても変わらない（差し替えると変わる）
   const id = media ? `${media.id}-${media.contentAt ?? media.createdAt}` : undefined
-  // 端末の blob を出していたら覚えておく。保存のあとファイルに移っても、読み直さずに同じ中身を出し続ける
-  //（読み終わるまで一瞬消えたり、動画が最初から読み込み直しになったりしないように）
+  // 端末の blob を出していたら覚えておく。保存のあとファイルに移っても、ファイルを読み終わるまでは同じ中身を出し続ける
+  //（読み終わるまで一瞬消えないように。IndexedDB から消した blob は読めなくなることがあるので、読めたらファイルのほうに替える）
   const shown = useRef<{ id: string; blob: Blob }>(undefined)
   if (id && media?.blob) shown.current = { id, blob: media.blob }
   const cloud = !!media && !isVideo(media) && !!media.cloudPhoto
@@ -32,7 +32,7 @@ export function useContent(media: Media | undefined): { blob?: Blob; loading: bo
   const [loaded, setLoaded] = useState<{ key: string; blob?: Blob }>()
 
   useEffect(() => {
-    if (!key || !media || shown.current?.id === id) return
+    if (!key || !media) return
     let cancelled = false
     const read = media.file
       ? contentBlob(media).catch((e: unknown) => (cloud ? fetchPhoto(media) : Promise.reject(e)))
@@ -54,9 +54,9 @@ export function useContent(media: Media | undefined): { blob?: Blob; loading: bo
   if (!media || !id) return { loading: false }
   if (media.blob) return { blob: media.blob, loading: false }
   if (!key) return { loading: false }
+  if (loaded?.key === key && loaded.blob) return { blob: loaded.blob, loading: false }
   if (shown.current?.id === id) return { blob: shown.current.blob, loading: false }
-  if (loaded?.key === key) return { blob: loaded.blob, loading: false }
-  return { loading: true }
+  return { loading: loaded?.key !== key }
 }
 
 /**

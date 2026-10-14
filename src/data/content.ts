@@ -34,6 +34,11 @@ export function contentPath(m: Pick<Media, 'id' | 'type' | 'contentAt' | 'create
   return `media/${m.id}-${m.contentAt ?? m.createdAt}.${extension(m.type)}`
 }
 
+/** contentPath の名前から、どの動画・写真のファイルかを読む */
+export function contentIdOf(path: string): string | undefined {
+  return /^media\/(.+)-\d+\.[^.]+$/.exec(path)?.[1]
+}
+
 /** アプリのファイルに置いた動画・写真の大きさの合計（設定の使用量に出す） */
 export async function contentFilesSize(): Promise<number> {
   if (!usesFiles) return 0
@@ -75,8 +80,10 @@ export function resetContentFiles(): Promise<void> {
 }
 
 /**
- * 起動時に、どの行からも使われていないファイルを片付ける（書いている途中・消す直前にアプリが止められると残る）。
- * 中身の無い行の本来のファイルなら、消さずにつなぎ直す（画面の中の保存場所が消え、同期やバックアップで行だけ戻ったとき）
+ * 起動時に、この端末の行の使われていないファイル（差し替える前の中身・書きかけ）を片付ける
+ * （書いている途中・消す直前にアプリが止められると残る）。
+ * 中身の無い行の本来のファイルなら、消さずにつなぎ直す（画面の中の保存場所が消え、同期やバックアップで行だけ戻ったとき）。
+ * まだ行の無いファイルは消さない（あとで同期などで行が戻ってきたら、つなぎ直せるように）
  */
 export function tidyContentFiles(): Promise<void> {
   if (!usesFiles) return Promise.resolve()
@@ -84,11 +91,11 @@ export function tidyContentFiles(): Promise<void> {
 }
 
 async function sweepNow() {
-  // 記録が1つも無い（入れ直した・消された直後の）端末では、同期で行が戻ってくるかもしれないので消さない
-  if ((await db.records.count()) === 0) return
+  const known = new Set<string>()
   const used = new Set<string>()
   const relinkable = new Map<string, string>()
   await db.media.each((m) => {
+    known.add(m.id)
     if (m.file) used.add(m.file)
     else if (!m.blob) relinkable.set(contentPath(m), m.id)
   })
@@ -96,7 +103,7 @@ async function sweepNow() {
     if (used.has(path)) continue
     const id = relinkable.get(path)
     if (id) await db.media.update(id, { file: path })
-    else await deleteFile(path)
+    else if (known.has(contentIdOf(path) ?? '')) await deleteFile(path)
   }
 }
 

@@ -73,13 +73,24 @@ export async function readBlobFile(path: string, type: string): Promise<Blob> {
     // iOS のアプリは、動画（mp4 など）を Range なしで頼むと HTTP でない返事をするので fetch が失敗扱いにする。
     // 全体を Range で頼むと、どの種類でも 206 で返ってくる
     res = await fetch(fileUrl(path), { headers: { Range: 'bytes=0-' } })
-  } catch {
+  } catch (e) {
+    // ファイルがあるのに読めなかった（アプリが裏に回って止められたなど）ときは、そのまま投げる（あとでまた試す）
+    if (await fileExists(path)) throw e
     throw new ContentUnavailableError()
   }
   if (!res.ok) throw new ContentUnavailableError()
   const blob = await res.blob()
   // 種類だけ付け直す（slice は中身を写さない）
   return blob.type === type ? blob : blob.slice(0, blob.size, type)
+}
+
+async function fileExists(path: string): Promise<boolean> {
+  try {
+    await Filesystem.stat({ path: fullPath(path), directory: DIR })
+    return true
+  } catch {
+    return false
+  }
 }
 
 /** 動画・写真のファイルの一覧（media/〇〇 の形） */
