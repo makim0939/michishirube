@@ -101,7 +101,9 @@ class EmbedPlayer implements YTPlayer {
 
   constructor(el: HTMLElement, options: PlayerOptions) {
     const iframe = document.createElement('iframe')
-    iframe.src = `${EMBED_PAGE}?v=${encodeURIComponent(options.videoId)}`
+    // 開発中（http://localhost:〇〇）だけ、やりとりする相手として画面の場所を伝える（アプリの場所は中継ページが知っている）
+    const app = window.location.protocol === 'http:' ? `&app=${encodeURIComponent(window.location.origin)}` : ''
+    iframe.src = `${EMBED_PAGE}?v=${encodeURIComponent(options.videoId)}${app}`
     iframe.allow = 'autoplay; encrypted-media'
     iframe.title = 'YouTube の動画'
     iframe.style.cssText = 'width:100%;height:100%;border:0'

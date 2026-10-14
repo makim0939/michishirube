@@ -30,11 +30,13 @@
       ;(function () {
         var params = new URLSearchParams(location.search)
         var videoId = params.get('v') || ''
-        // 操作を受け付けるのは、ラテ帳のアプリの画面からだけ
-        var APP_ORIGIN = /^(capacitor|https?):\/\/localhost(:\d+)?$/
+        // やりとりするのは、ラテ帳のアプリの画面（iOS は capacitor://localhost、Android は https://localhost）とだけ
+        var APP_ORIGINS = ['capacitor://localhost', 'https://localhost']
+        var extra = params.get('app')
+        if (extra && /^http:\/\/localhost:\d+$/.test(extra)) APP_ORIGINS.push(extra)
         var COMMANDS = ['playVideo', 'pauseVideo', 'seekTo', 'mute', 'unMute', 'setPlaybackRate']
         var player = null
-        var appOrigin = null
+        var ticker = null
 
         function send(message) {
           message.source = 'lattecho-yt'
@@ -42,15 +44,19 @@
             message.time = player.getCurrentTime()
             message.duration = player.getDuration()
           }
-          parent.postMessage(message, appOrigin || '*')
+          // 宛先を決めて送る（アプリ以外のページに埋め込まれても、中身を渡さない）
+          APP_ORIGINS.forEach(function (origin) {
+            parent.postMessage(message, origin)
+          })
         }
 
         window.addEventListener('message', function (e) {
-          if (e.source !== parent || !APP_ORIGIN.test(e.origin)) return
-          appOrigin = e.origin
+          if (e.source !== parent || APP_ORIGINS.indexOf(e.origin) < 0) return
           var data = e.data || {}
           if (!player || COMMANDS.indexOf(data.cmd) < 0) return
           player[data.cmd].apply(player, Array.isArray(data.args) ? data.args : [])
+          // 位置を動かしたら、止まっていてもすぐ伝える
+          if (data.cmd === 'seekTo') send({ type: 'time' })
         })
 
         window.onYouTubeIframeAPIReady = function () {
@@ -72,13 +78,16 @@
               onReady: function (e) {
                 player = e.target
                 send({ type: 'ready' })
-                // 再生中の位置を、アプリのつまみに伝える
-                setInterval(function () {
-                  send({ type: 'time' })
-                }, 200)
               },
               onStateChange: function (e) {
                 send({ type: 'state', data: e.data })
+                // 再生中だけ、位置をアプリのつまみに伝える
+                clearInterval(ticker)
+                if (e.data === 1) {
+                  ticker = setInterval(function () {
+                    send({ type: 'time' })
+                  }, 200)
+                }
               },
               onError: function (e) {
                 send({ type: 'error', data: e.data })
