@@ -57,6 +57,14 @@ function StorageStatus() {
   )
 }
 
+/**
+ * プライバシーポリシー。アプリの中では、公開しているページを Safari で開く
+ * （アプリに入れたファイルを別の窓で開くと、アプリの画面が置き換わってしまうため）
+ */
+const PRIVACY_URL = isNativeApp
+  ? 'https://makim0939.github.io/michishirube/privacy.html'
+  : `${import.meta.env.BASE_URL}privacy.html`
+
 const STORAGE_CHOICES: { value: VideoStorage; label: string }[] = [
   { value: 'device', label: 'この端末' },
   { value: 'youtube', label: 'YouTube' },
@@ -145,7 +153,7 @@ function SettingsHome() {
           <li>
             <a
               className="settings-row"
-              href={`${import.meta.env.BASE_URL}privacy.html`}
+              href={PRIVACY_URL}
               target="_blank"
               rel="noopener noreferrer"
             >
