@@ -1,7 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useRef, useState } from 'react'
 import { db } from '../data/db'
-import { activateSkill, cupNumbers, deactivateSkill, recordsOf } from '../data/repo'
+import { cupNumbers, practicingSkillIds, recordsOf } from '../data/repo'
 import { getSyncConfig, getSyncStatus } from '../data/sync'
 import { computeStates, indexById, practiceOrder, prereqsDone, sortByDepth } from '../domain/logic'
 import type { Media, PracticeRecord, Skill } from '../domain/types'
@@ -10,7 +10,6 @@ import { OUTCOME_MARK } from '../domain/format'
 import { formatAgo, splitName, useObjectUrl } from './common'
 import { pickCupMedia, useCupImage, useCupImageUrl } from './cupImage'
 import { hasCupImage } from '../data/poster'
-import { useAction, useToast } from './feedback'
 import { FormDots } from './FormDots'
 import { AlertIcon, CameraIcon } from './icons'
 import { href } from './router'
@@ -29,8 +28,6 @@ const HERO_SLIDES = 6
 const RECENT = 12
 /** 次のおすすめは、数を絞って出す（全部は型の画面で） */
 const RECOMMEND = 3
-/** この日数より前から練習していない型は、大きなカードではなく下に小さくまとめる（試しに1杯だけ撮った型などで、今日の画面が長くならないように） */
-const RESTING_DAYS = 21
 
 const WEEKDAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
 
@@ -325,14 +322,13 @@ function PracticeBlock({ practice }: { practice: Practice }) {
 }
 
 export function TodayScreen() {
-  const run = useAction()
-  const toast = useToast()
 
   const data = useLiveQuery(async () => {
-    const skills = await db.skills.toArray()
+    const [skills, practicing] = await Promise.all([db.skills.toArray(), practicingSkillIds()])
     const byId = indexById(skills)
-    const states = computeStates(skills)
-    const active = skills.filter((s) => s.status === 'active')
+    const states = computeStates(skills, practicing)
+    // 練習中＝最近記録した型（「できた」の型も、続けて練習していれば出す）
+    const active = skills.filter((s) => practicing.has(s.id))
     const perSkill = await Promise.all(active.map(async (skill) => ({ skill, records: await recordsOf(skill.id) })))
     // 新しい記録から、大きな写真でめくる杯を選ぶ。最後に「はじまりの1杯」（いちばん古い、写真のある杯）を置く
     const [latest, firstMedia] = await Promise.all([
@@ -369,14 +365,14 @@ export function TodayScreen() {
       form: recentForm(records),
       next: records.find((r) => r.nextAction)?.nextAction,
       recent: recentOf[i].map((record) => ({ record, media: cupOf(record), number: numbers.get(record.id) ?? 0 })),
-      last: records[0]?.createdAt ?? skill.activatedAt ?? 0,
+      last: records[0]?.createdAt ?? 0,
     }))
     // 最近練習した型を上に（撮るときに、カードを探さずに済むように）
     const practices: Practice[] = practiceOrder(unordered, (p) => p.last)
     const thisWeek = await db.records.where('createdAt').aboveOrEqual(startOfWeek(Date.now())).count()
     // 次のおすすめ：前提ができている「次の一歩」を先に、前提を練習中のものを後に並べる
     const available = sortByDepth(skills.filter((s) => states.get(s.id) === 'available'))
-      .map((s) => ({ ...s, parallel: !prereqsDone(s, byId), label: recommendLabel(s, byId) }))
+      .map((s) => ({ ...s, parallel: !prereqsDone(s, byId), label: recommendLabel(s, byId, practicing) }))
       .sort((a, b) => Number(a.parallel) - Number(b.parallel))
       .slice(0, RECOMMEND)
     return {
@@ -398,9 +394,6 @@ export function TodayScreen() {
   })
 
   if (!data) return null
-  const restingSince = Date.now() - RESTING_DAYS * 24 * 60 * 60 * 1000
-  const current = data.practices.filter((p) => p.last >= restingSince)
-  const resting = data.practices.filter((p) => p.last < restingSince)
 
   return (
     <div className="screen today">
@@ -419,47 +412,16 @@ export function TodayScreen() {
               </span>
             </div>
             <div className="practice-list">
-              {current.map((p) => (
+              {data.practices.map((p) => (
                 <PracticeBlock key={p.skill.id} practice={p} />
               ))}
             </div>
-            {resting.length > 0 && (
-              <section className="section resting">
-                <h3>しばらく練習していない型</h3>
-                <ul className="type-rows">
-                  {resting.map((p) => (
-                    <li key={p.skill.id} className="type-row">
-                      <a href={href(`/skill/${p.skill.id}`)} className="type-row-main">
-                        <PatternImage name={p.skill.name} className="small" />
-                        <span className="type-row-text">
-                          <span className="type-name">{splitName(p.skill.name).main}</span>
-                          <span className="muted small">
-                            {p.count > 0 ? `最後に練習 ${formatAgo(p.last)}` : 'まだ記録がありません'}
-                          </span>
-                        </span>
-                      </a>
-                      <button
-                        className="quiet-button"
-                        onClick={() =>
-                          run(async () => {
-                            await deactivateSkill(p.skill.id)
-                            toast.show('練習中から外しました（記録は残ります）')
-                          })
-                        }
-                      >
-                        外す
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            )}
           </>
         ) : data.skillCount > 0 ? (
           <div className="sheet-empty">
             <h2>練習中の型</h2>
             {data.available.length > 0 ? (
-              <p>練習中の型はありません。下の「はじめる」を押すか、型の画面から記録すると、ここに出ます。</p>
+              <p>下のおすすめか型の画面から、やってみたい型を記録すると、ここに出ます。</p>
             ) : (
               <>
                 <p>型の画面から、やってみたい型を選んで記録すると、ここに出ます。</p>
@@ -509,17 +471,10 @@ export function TodayScreen() {
                       </span>
                     </span>
                   </a>
-                  <button
-                    className="btn small"
-                    onClick={() =>
-                      run(async () => {
-                        await activateSkill(s.id)
-                        toast.show(`「${splitName(s.name).main}」の練習を始めます`)
-                      })
-                    }
-                  >
-                    はじめる
-                  </button>
+                  {/* 押すとすぐカメラが開く（記録すると練習中になり、上に出る） */}
+                  <a className="btn small" href={href(`/record/${s.id}`)}>
+                    記録する
+                  </a>
                 </li>
               ))}
             </ul>

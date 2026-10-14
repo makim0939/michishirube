@@ -13,11 +13,11 @@ function prereqsOf(skill: Skill, byId: Map<string, Skill>): Skill[] {
   return skill.prereqIds.map((id) => byId.get(id)).filter((p): p is Skill => !!p)
 }
 
-/** 次のおすすめ（前提ができている・練習中の型）に添える一言 */
-export function recommendLabel(skill: Skill, byId: Map<string, Skill>): string {
+/** 次のおすすめ（前提ができている・練習中の型）に添える一言。practicing は練習中（最近記録した）型の id */
+export function recommendLabel(skill: Skill, byId: Map<string, Skill>, practicingIds: ReadonlySet<string>): string {
   const prereqs = prereqsOf(skill, byId)
   if (prereqs.length === 0) return '最初の型'
-  const practicing = prereqs.filter((p) => p.status === 'active')
+  const practicing = prereqs.filter((p) => p.status !== 'done' && practicingIds.has(p.id))
   // 前提を練習している途中なら、並行して練習できる
   if (practicing.length > 0) return `${names(practicing)}と並行して`
   return `${names(prereqs)}のつぎ`

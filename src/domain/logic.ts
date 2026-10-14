@@ -6,20 +6,23 @@ export function prereqsDone(skill: Skill, byId: Map<string, Skill>): boolean {
 }
 
 /**
- * 前提がすべて「達成」か「挑戦中」。このときは並行して挑戦・記録できる。
+ * 練習中とみなす日数。この日数のあいだに記録した型を「練習中」にする（自分で出し入れしない）
+ */
+export const PRACTICING_DAYS = 21
+
+/**
+ * 前提がすべて「達成」か「練習中」。このときは並行して練習できる。
  * 例：スチームを練習しながら、同じミルクでドットやハートも練習する
  */
-export function prereqsStarted(skill: Skill, byId: Map<string, Skill>): boolean {
-  return skill.prereqIds.every((id) => {
-    const status = byId.get(id)?.status
-    return status === 'done' || status === 'active'
-  })
+export function prereqsStarted(skill: Skill, byId: Map<string, Skill>, practicing: ReadonlySet<string>): boolean {
+  return skill.prereqIds.every((id) => byId.get(id)?.status === 'done' || practicing.has(id))
 }
 
-export function skillState(skill: Skill, byId: Map<string, Skill>): SkillState {
+/** practicing は、最近記録した型（練習中）の id */
+export function skillState(skill: Skill, byId: Map<string, Skill>, practicing: ReadonlySet<string>): SkillState {
   if (skill.status === 'done') return 'done'
-  if (skill.status === 'active') return 'active'
-  return prereqsStarted(skill, byId) ? 'available' : 'locked'
+  if (practicing.has(skill.id)) return 'active'
+  return prereqsStarted(skill, byId, practicing) ? 'available' : 'locked'
 }
 
 export function canAchieve(skill: Skill, byId: Map<string, Skill>): boolean {
@@ -30,22 +33,19 @@ export function indexById(skills: Skill[]): Map<string, Skill> {
   return new Map(skills.map((s) => [s.id, s]))
 }
 
-export function computeStates(skills: Skill[]): Map<string, SkillState> {
+export function computeStates(skills: Skill[], practicing: ReadonlySet<string>): Map<string, SkillState> {
   const byId = indexById(skills)
-  return new Map(skills.map((s) => [s.id, skillState(s, byId)]))
+  return new Map(skills.map((s) => [s.id, skillState(s, byId, practicing)]))
 }
 
-export type ActivateCheck = { ok: true } | { ok: false; reason: 'done' | 'already' }
-
 /**
- * 練習中にできるか。前提はおすすめの順で、まだの型でも自由に始められる（やってみたい型から練習できるように）。
- * 数の上限は設けない（やりたいときに、やりたい型を練習する。今日の画面は最近練習した型が上に来る）
+ * 練習中の型：最近（PRACTICING_DAYS 日以内）に記録した型。
+ * 1つも無ければ、最後に記録した型（久しぶりに開いても、続きからすぐ記録できるように）
  */
-export function canActivate(skill: Skill, skills: Skill[]): ActivateCheck {
-  const state = skillState(skill, indexById(skills))
-  if (state === 'done') return { ok: false, reason: 'done' }
-  if (state === 'active') return { ok: false, reason: 'already' }
-  return { ok: true }
+export function practicingFrom(recent: { skillId: string }[], last: { skillId: string } | undefined): Set<string> {
+  const ids = new Set(recent.map((r) => r.skillId))
+  if (ids.size === 0 && last) ids.add(last.skillId)
+  return ids
 }
 
 /** skillId を達成したことで、達成を目指せるようになったスキル（前提がすべて達成済みになったもの） */

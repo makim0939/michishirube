@@ -4,9 +4,8 @@ import { db, mediaByIndex } from '../data/db'
 import { getVideoStorage } from '../data/videoStorage'
 import {
   achieveSkill,
-  activateSkill,
-  deactivateSkill,
   cupNumbers,
+  practicingSkillIds,
   recordsOf,
   revertAchievement,
 } from '../data/repo'
@@ -18,7 +17,7 @@ import { PatternImage } from './PatternImage'
 import { FormDots, formSummary } from './FormDots'
 import { CupGrid } from './CupGrid'
 import { pickCupMedia } from './cupImage'
-import { useAction, useCelebrate, useToast } from './feedback'
+import { useAction, useCelebrate } from './feedback'
 import { backHandler, href } from './router'
 import { BackIcon } from './icons'
 import { AboutSkill, SkillTips } from './SkillTips'
@@ -30,7 +29,6 @@ const RECORDS_PAGE = 12
 
 export function SkillScreen({ id }: { id: string }) {
   const run = useAction()
-  const toast = useToast()
   const celebrate = useCelebrate()
   const [askingAchieve, setAskingAchieve] = useState(false)
   const [shown, setShown] = useState(RECORDS_FIRST)
@@ -38,29 +36,28 @@ export function SkillScreen({ id }: { id: string }) {
   const data = useLiveQuery(async () => {
     const skill = await db.skills.get(id)
     if (!skill) return { skill: undefined }
-    const [skills, domain, records, media] = await Promise.all([
+    const [skills, domain, records, media, practicing] = await Promise.all([
       db.skills.where('domainId').equals(skill.domainId).toArray(),
       db.domains.get(skill.domainId),
       recordsOf(id),
       mediaByIndex(db.media.where('skillId').equals(id)).then((list) => list.sort((a, b) => a.createdAt - b.createdAt)),
+      practicingSkillIds(),
     ])
     // 杯の番号は、型に関係なく全部の記録の通し番号（No.）
     const numbers = await cupNumbers(records)
     // アップの失敗は、保存先が YouTube のときだけ知らせる
     const uploads = (await getVideoStorage()) === 'youtube'
-    return { skill, skills, domain, records, media, numbers, uploads }
+    return { skill, skills, domain, records, media, numbers, uploads, practicing }
   }, [id])
 
   if (!data) return null
   if (!data.skill) return <Empty>型が見つかりません。</Empty>
   const { skill, skills, domain, records, media } = data
-  const states = computeStates(skills)
+  const states = computeStates(skills, data.practicing)
   const state = states.get(skill.id)!
   const byId = indexById(skills)
   const prereqs = skill.prereqIds.map((p) => byId.get(p)).filter((s) => !!s)
   const leadsTo = skills.filter((s) => s.prereqIds.includes(skill.id))
-  // 前提はおすすめの順。まだの型でも自由に記録でき、「できた」にもできる
-  const notStarted = state === 'available' || state === 'locked'
   const form = recentForm(records)
   const mediaById = new Map(media.map((m) => [m.id, m]))
 
@@ -89,35 +86,6 @@ export function SkillScreen({ id }: { id: string }) {
           <div className="row wrap">
             <StateBadge state={state} />
             {skill.achievedAt && <span className="muted small">{formatDate(skill.achievedAt)} にできた</span>}
-            {/* 練習中にする・外すは、状態の印の横に控えめに置く（記録すると自動で練習中に入るので、押すことは少ない） */}
-            {state === 'active' && (
-              <button
-                type="button"
-                className="quiet-button"
-                onClick={() =>
-                  run(async () => {
-                    await deactivateSkill(skill.id)
-                    toast.show('練習中から外しました。今日の画面に出なくなります（記録は残ります）')
-                  })
-                }
-              >
-                外す
-              </button>
-            )}
-            {notStarted && (
-              <button
-                type="button"
-                className="quiet-button"
-                onClick={() =>
-                  run(async () => {
-                    await activateSkill(skill.id)
-                    toast.show(`「${splitName(skill.name).main}」を練習中にしました。今日の画面から記録できます`)
-                  })
-                }
-              >
-                練習中にする
-              </button>
-            )}
           </div>
         </div>
       </div>
@@ -129,7 +97,7 @@ export function SkillScreen({ id }: { id: string }) {
         <p className="muted small">{formSummary(form)}</p>
       </section>
 
-      {/* どの型でも、すぐ記録できる（記録すると練習中に入る） */}
+      {/* どの型でも、すぐ記録できる（最近記録した型が「練習中」になり、今日の画面に出る） */}
       <div className="actions">
         <a className="btn primary" href={href(`/record/${skill.id}`)}>
           記録する

@@ -30,8 +30,8 @@ function SkillNodeView({ data }: NodeProps<SkillNode>) {
 
 const nodeTypes = { skill: SkillNodeView }
 
-function layout(skills: Skill[]): { nodes: SkillNode[]; edges: Edge[]; focus: string[] } {
-  const states = computeStates(skills)
+function layout(skills: Skill[], practicing: ReadonlySet<string>): { nodes: SkillNode[]; edges: Edge[]; focus: string[] } {
+  const states = computeStates(skills, practicing)
   const g = new dagre.graphlib.Graph()
   g.setGraph({ rankdir: 'TB', nodesep: 24, ranksep: 56, marginx: 8, marginy: 8 })
   g.setDefaultEdgeLabel(() => ({}))
@@ -78,8 +78,8 @@ function frontier(skills: Skill[], states: Map<string, SkillState>): string[] {
   return [...ids]
 }
 
-export function RoadmapGraph({ skills }: { skills: Skill[] }) {
-  const { nodes, edges, focus } = useMemo(() => layout(skills), [skills])
+export function RoadmapGraph({ skills, practicing }: { skills: Skill[]; practicing: ReadonlySet<string> }) {
+  const { nodes, edges, focus } = useMemo(() => layout(skills, practicing), [skills, practicing])
   return (
     <div className="graph">
       <ReactFlow

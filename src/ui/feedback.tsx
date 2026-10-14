@@ -1,5 +1,4 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { activateSkill } from '../data/repo'
 import type { Skill } from '../domain/types'
 import { splitName } from './common'
 import { go } from './router'
@@ -57,11 +56,9 @@ const CONFETTI_COLORS = ['#c99b66', '#8a5a34', '#e8d2b0', '#4f5a3a', '#faf7f2']
 function CelebrationOverlay({
   celebration,
   onClose,
-  onError,
 }: {
   celebration: Celebration
   onClose: () => void
-  onError: (message: string) => void
 }) {
   const { unlocked } = celebration
   const pattern = patternFor(celebration.skill.name)
@@ -126,24 +123,9 @@ function CelebrationOverlay({
         )}
         <div className="celebration-actions">
           {unlocked.length === 1 && (
-            <button
-              className="btn primary"
-              autoFocus
-              onClick={async () => {
-                try {
-                  // 先取りで練習中なら、そのまま練習を続ける
-                  if (unlocked[0].status !== 'active') await activateSkill(unlocked[0].id)
-                  go('/')
-                } catch (e) {
-                  // 上限などで練習中にできなければ、型の画面で選んでもらう
-                  onError(e instanceof Error ? e.message : String(e))
-                  go(`/skill/${unlocked[0].id}`)
-                }
-              }}
-            >
-              {unlocked[0].status === 'active'
-                ? `「${splitName(unlocked[0].name).main}」の練習を続ける`
-                : `「${splitName(unlocked[0].name).main}」の練習を始める`}
+            // 次の型は、記録すればそのまま練習中になる。押すとすぐカメラが開く
+            <button className="btn primary" autoFocus onClick={() => go(`/record/${unlocked[0].id}`)}>
+              「{splitName(unlocked[0].name).main}」を記録する
             </button>
           )}
           {unlocked.length > 1 && (
@@ -206,7 +188,6 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
           <CelebrationOverlay
             celebration={celebration}
             onClose={closeCelebration}
-            onError={(message) => toastApi.show(message, 'error')}
           />
         )}
       </CelebrationContext.Provider>

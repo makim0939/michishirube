@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   canAchieve,
-  canActivate,
   computeStates,
   descendants,
   indexById,
   newlyUnlocked,
+  practicingFrom,
   practiceOrder,
   sortByDepth,
   wouldCreateCycle,
@@ -29,36 +29,38 @@ function skill(id: string, prereqIds: string[] = [], status: SkillStatus = 'idle
 }
 
 describe('computeStates', () => {
-  it('前提がすべて達成済みなら解放、そうでなければロック', () => {
-    const skills = [skill('a', [], 'done'), skill('b', ['a']), skill('c', ['a', 'b']), skill('d', [], 'active')]
-    const states = computeStates(skills)
+  it('前提がすべて達成済みならおすすめ、そうでなければその先。最近記録した型は練習中', () => {
+    const skills = [skill('a', [], 'done'), skill('b', ['a']), skill('c', ['a', 'b']), skill('d')]
+    const states = computeStates(skills, new Set(['d']))
     expect(states.get('a')).toBe('done')
     expect(states.get('b')).toBe('available')
     expect(states.get('c')).toBe('locked')
     expect(states.get('d')).toBe('active')
   })
 
-  it('前提が挑戦中なら並行して挑戦できるが、達成は前提を達成してから', () => {
-    const skills = [skill('steam', [], 'active'), skill('dot', ['steam']), skill('heart', ['dot'])]
-    const states = computeStates(skills)
+  it('前提を練習中なら並行して練習できるが、達成は前提を達成してから', () => {
+    const skills = [skill('steam'), skill('dot', ['steam']), skill('heart', ['dot'])]
+    const states = computeStates(skills, new Set(['steam']))
     expect(states.get('dot')).toBe('available')
     expect(states.get('heart')).toBe('locked')
     const byId = indexById(skills)
     expect(canAchieve(skills[1], byId)).toBe(false)
     expect(canAchieve(skills[0], byId)).toBe(true)
 
-    // ドットも挑戦中にすると、ハートも並行して練習できる
-    const next = [skills[0], { ...skills[1], status: 'active' as const }, skills[2]]
-    expect(computeStates(next).get('heart')).toBe('available')
+    // ドットも記録すると（練習中）、ハートも並行して練習できる
+    expect(computeStates(skills, new Set(['steam', 'dot'])).get('heart')).toBe('available')
+  })
+
+  it('「できた」の型は、最近記録していても「できた」', () => {
+    expect(computeStates([skill('a', [], 'done')], new Set(['a'])).get('a')).toBe('done')
   })
 })
 
-describe('canActivate', () => {
-  it('達成済み・練習中は練習中にできない。前提がまだでも、いくつでも始められる', () => {
-    const skills = [skill('a', [], 'done'), skill('b', ['x']), skill('c', [], 'active'), skill('d', [], 'active')]
-    expect(canActivate(skills[0], skills)).toEqual({ ok: false, reason: 'done' })
-    expect(canActivate(skills[1], skills)).toEqual({ ok: true })
-    expect(canActivate(skills[2], skills)).toEqual({ ok: false, reason: 'already' })
+describe('practicingFrom', () => {
+  it('最近の記録の型。無ければ、最後に記録した型', () => {
+    expect([...practicingFrom([{ skillId: 'a' }, { skillId: 'b' }, { skillId: 'a' }], undefined)]).toEqual(['a', 'b'])
+    expect([...practicingFrom([], { skillId: 'z' })]).toEqual(['z'])
+    expect([...practicingFrom([], undefined)]).toEqual([])
   })
 })
 
