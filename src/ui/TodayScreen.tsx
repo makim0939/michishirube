@@ -1,7 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useRef, useState } from 'react'
 import { db } from '../data/db'
-import { activateSkill, cupNumbers, getSettings, recordsOf } from '../data/repo'
+import { activateSkill, cupNumbers, deactivateSkill, recordsOf } from '../data/repo'
 import { getSyncConfig, getSyncStatus } from '../data/sync'
 import { computeStates, indexById, practiceOrder, prereqsDone, sortByDepth } from '../domain/logic'
 import type { Media, PracticeRecord, Skill } from '../domain/types'
@@ -16,15 +16,21 @@ import { AlertIcon, CameraIcon } from './icons'
 import { href } from './router'
 import { readStorage, writeStorage } from './storage'
 import { PatternImage } from './PatternImage'
+import { recommendLabel } from './skillLabels'
 import { LIGHT_LABEL, lightFor, lightUrl, type Light } from './world'
 
 const HINT_KEY = 'michishirube:install-hint-dismissed'
+const SYNC_HINT_KEY = 'michishirube:sync-hint-dismissed'
 /** メイン写真を探しにいく、新しい記録の数 */
 const HERO_LOOKBACK = 20
 /** 大きな写真でめくれる、最近の杯の数 */
 const HERO_SLIDES = 6
 /** 型ごとの最近の杯（横にスクロールして見る） */
 const RECENT = 12
+/** 次のおすすめは、数を絞って出す（全部は型の画面で） */
+const RECOMMEND = 3
+/** この日数より前から練習していない型は、大きなカードではなく下に小さくまとめる（試しに1杯だけ撮った型などで、今日の画面が長くならないように） */
+const RESTING_DAYS = 21
 
 const WEEKDAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
 
@@ -75,6 +81,7 @@ function isIos() {
  */
 function Notice() {
   const [hintHidden, setHintHidden] = useState(() => readStorage('local', HINT_KEY) === '1')
+  const [syncHintHidden, setSyncHintHidden] = useState(() => readStorage('local', SYNC_HINT_KEY) === '1')
   const data = useLiveQuery(async () => ({
     config: await getSyncConfig(),
     status: await getSyncStatus(),
@@ -86,7 +93,7 @@ function Notice() {
 
   if (data.config && data.status.error) {
     return (
-      <a className="notice" href={href('/settings')}>
+      <a className="notice" href={href('/settings/sync')}>
         <AlertIcon size={18} />
         <span>同期できていません。設定を確かめてください</span>
       </a>
@@ -110,12 +117,23 @@ function Notice() {
       </div>
     )
   }
-  if (!data.config && data.records > 0) {
+  // 同期を使わない人もいるので、閉じたら出さない
+  if (!data.config && data.records > 0 && !syncHintHidden) {
     return (
-      <a className="notice" href={href('/settings')}>
+      <div className="notice">
         <AlertIcon size={18} />
-        <span>記録はまだこの端末だけです。設定からクラウド同期をつなぐと、消えても戻せます</span>
-      </a>
+        <a href={href('/settings/sync')}>記録はまだこの端末だけです。設定からクラウド同期をつなぐと、消えても戻せます</a>
+        <button
+          className="notice-close"
+          aria-label="閉じる"
+          onClick={() => {
+            writeStorage('local', SYNC_HINT_KEY, '1')
+            setSyncHintHidden(true)
+          }}
+        >
+          ×
+        </button>
+      </div>
     )
   }
   if (data.failed > 0) {
@@ -261,6 +279,8 @@ type Practice = {
   next?: string
   /** その型の新しい杯（通し番号つき） */
   recent: { record: PracticeRecord; media?: Media; number: number }[]
+  /** 最後に練習した日時（記録が無ければ練習中にした日時） */
+  last: number
 }
 
 /** 練習中の型1つ分。次の一手・記録する・その型の最近の杯を、この型の中にまとめる */
@@ -309,7 +329,7 @@ export function TodayScreen() {
   const toast = useToast()
 
   const data = useLiveQuery(async () => {
-    const [skills, settings] = await Promise.all([db.skills.toArray(), getSettings()])
+    const skills = await db.skills.toArray()
     const byId = indexById(skills)
     const states = computeStates(skills)
     const active = skills.filter((s) => s.status === 'active')
@@ -356,10 +376,10 @@ export function TodayScreen() {
     const thisWeek = await db.records.where('createdAt').aboveOrEqual(startOfWeek(Date.now())).count()
     // 次のおすすめ：前提ができている「次の一歩」を先に、前提を練習中のものを後に並べる
     const available = sortByDepth(skills.filter((s) => states.get(s.id) === 'available'))
-      .map((s) => ({ ...s, parallel: !prereqsDone(s, byId) }))
+      .map((s) => ({ ...s, parallel: !prereqsDone(s, byId), label: recommendLabel(s, byId) }))
       .sort((a, b) => Number(a.parallel) - Number(b.parallel))
+      .slice(0, RECOMMEND)
     return {
-      settings,
       thisWeek,
       practices,
       others: others.map((o) => ({ ...o, number: numbers.get(o.record.id) ?? 0 })),
@@ -378,7 +398,9 @@ export function TodayScreen() {
   })
 
   if (!data) return null
-  const room = data.settings.maxActive - data.practices.length
+  const restingSince = Date.now() - RESTING_DAYS * 24 * 60 * 60 * 1000
+  const current = data.practices.filter((p) => p.last >= restingSince)
+  const resting = data.practices.filter((p) => p.last < restingSince)
 
   return (
     <div className="screen today">
@@ -397,19 +419,50 @@ export function TodayScreen() {
               </span>
             </div>
             <div className="practice-list">
-              {data.practices.map((p) => (
+              {current.map((p) => (
                 <PracticeBlock key={p.skill.id} practice={p} />
               ))}
             </div>
+            {resting.length > 0 && (
+              <section className="section resting">
+                <h3>しばらく練習していない型</h3>
+                <ul className="type-rows">
+                  {resting.map((p) => (
+                    <li key={p.skill.id} className="type-row">
+                      <a href={href(`/skill/${p.skill.id}`)} className="type-row-main">
+                        <PatternImage name={p.skill.name} className="small" />
+                        <span className="type-row-text">
+                          <span className="type-name">{splitName(p.skill.name).main}</span>
+                          <span className="muted small">
+                            {p.count > 0 ? `最後に練習 ${formatAgo(p.last)}` : 'まだ記録がありません'}
+                          </span>
+                        </span>
+                      </a>
+                      <button
+                        className="quiet-button"
+                        onClick={() =>
+                          run(async () => {
+                            await deactivateSkill(p.skill.id)
+                            toast.show('練習中から外しました（記録は残ります）')
+                          })
+                        }
+                      >
+                        外す
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
           </>
         ) : data.skillCount > 0 ? (
           <div className="sheet-empty">
             <h2>練習中の型</h2>
             {data.available.length > 0 ? (
-              <p>まだ選んでいません。下から1つ選ぶと、ここから記録できるようになります。</p>
+              <p>練習中の型はありません。下の「はじめる」を押すか、型の画面から記録すると、ここに出ます。</p>
             ) : (
               <>
-                <p>次のおすすめの型はありません。型の画面から、やってみたい型を選べます。</p>
+                <p>型の画面から、やってみたい型を選んで記録すると、ここに出ます。</p>
                 <a className="btn" href={href('/map')}>
                   型の画面を開く
                 </a>
@@ -436,7 +489,7 @@ export function TodayScreen() {
           </section>
         )}
 
-        {data.available.length > 0 && room > 0 && (
+        {data.available.length > 0 && (
           <section className="section">
             <div className="sheet-head">
               <h2>次のおすすめ</h2>
@@ -452,7 +505,7 @@ export function TodayScreen() {
                     <span className="type-row-text">
                       <span className="type-name">{splitName(s.name).main}</span>
                       <span className="muted small">
-                        {s.parallel ? '前提を練習中' : (splitName(s.name).sub ?? '')}
+                        {s.label}
                       </span>
                     </span>
                   </a>
@@ -471,12 +524,6 @@ export function TodayScreen() {
               ))}
             </ul>
           </section>
-        )}
-        {data.available.length > 0 && room <= 0 && (
-          <p className="muted small">
-            次のおすすめの型が {data.available.length} つあります。練習中は {data.settings.maxActive}{' '}
-            つまでなので、どれかを「できた」にするか練習を中断すると始められます。
-          </p>
         )}
       </div>
     </div>

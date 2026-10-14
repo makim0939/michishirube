@@ -9,7 +9,11 @@ export type Route =
   | { name: 'record'; skillId: string; recordId?: string }
   | { name: 'cup'; recordId: string }
   | { name: 'records' }
-  | { name: 'settings'; notice?: string }
+  | { name: 'settings'; section?: SettingsSection; notice?: string }
+
+/** 設定の中の画面 */
+export type SettingsSection = 'storage' | 'sync' | 'backup' | 'roadmaps' | 'data'
+const SETTINGS_SECTIONS: readonly string[] = ['storage', 'sync', 'backup', 'roadmaps', 'data']
 
 function safeDecode(part: string): string {
   try {
@@ -45,8 +49,12 @@ export function parseHash(hash: string): Route {
       if (parts[1]) return { name: 'cup', recordId: parts[1] }
       break
     case 'settings':
-      // YouTube の連携から戻ってきたときは、結果を notice で受け取る
-      return { name: 'settings', notice: parts[1] }
+      // YouTube の連携から戻ってきたとき（#/settings/youtube-connected）は、同期の画面で結果を受け取る
+      if (parts[1]?.startsWith('youtube-')) return { name: 'settings', section: 'sync', notice: parts[1] }
+      if (parts[1] && SETTINGS_SECTIONS.includes(parts[1])) {
+        return { name: 'settings', section: parts[1] as SettingsSection }
+      }
+      return { name: 'settings' }
   }
   return { name: 'today' }
 }

@@ -35,21 +35,16 @@ export function computeStates(skills: Skill[]): Map<string, SkillState> {
   return new Map(skills.map((s) => [s.id, skillState(s, byId)]))
 }
 
-export function countActive(skills: Skill[]): number {
-  return skills.filter((s) => s.status === 'active').length
-}
-
-export type ActivateCheck = { ok: true } | { ok: false; reason: 'done' | 'already' | 'limit' }
+export type ActivateCheck = { ok: true } | { ok: false; reason: 'done' | 'already' }
 
 /**
  * 練習中にできるか。前提はおすすめの順で、まだの型でも自由に始められる（やってみたい型から練習できるように）。
- * 上限は全分野の合計で数える（分散を防ぐため）
+ * 数の上限は設けない（やりたいときに、やりたい型を練習する。今日の画面は最近練習した型が上に来る）
  */
-export function canActivate(skill: Skill, skills: Skill[], maxActive: number): ActivateCheck {
+export function canActivate(skill: Skill, skills: Skill[]): ActivateCheck {
   const state = skillState(skill, indexById(skills))
   if (state === 'done') return { ok: false, reason: 'done' }
   if (state === 'active') return { ok: false, reason: 'already' }
-  if (countActive(skills) >= maxActive) return { ok: false, reason: 'limit' }
   return { ok: true }
 }
 

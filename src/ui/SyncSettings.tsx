@@ -113,7 +113,7 @@ function YoutubeSection({ notice }: { notice?: string }) {
     } else if (notice === 'youtube-failed') {
       toast.show('YouTube と連携できませんでした。もう一度試してください', 'error')
     }
-    replace('/settings')
+    replace('/settings/sync')
     refresh()
   }, [notice, toast, refresh])
 
@@ -164,7 +164,7 @@ function YoutubeSection({ notice }: { notice?: string }) {
         </button>
       )}
       <p className="muted small">
-        下の「動画の保存先」を YouTube にすると、動画を YouTube へ「限定公開」で上げます（URL を知っている人だけが見られます。URL はこのアプリの中にだけ残ります）。初回は「Google
+        設定の「動画の保存先」を YouTube にすると、動画を YouTube へ「限定公開」で上げます（URL を知っている人だけが見られます。URL はこのアプリの中にだけ残ります）。初回は「Google
         はこのアプリを確認していません」と出るので、「詳細」→「（安全ではないページ）に移動」で進んでください。最後に「連携しました」と出たら、その画面を閉じてアプリに戻ってください。
       </p>
     </div>
@@ -185,7 +185,7 @@ export function SyncSettings({ notice }: { notice?: string }) {
   return (
     <>
       <section className="section">
-        <h2>クラウド同期</h2>
+        <h2>サーバー</h2>
         {config ? (
           <div className="stack">
             <p className="status-line">
@@ -235,7 +235,7 @@ export function SyncSettings({ notice }: { notice?: string }) {
 
       {config && (
         <section className="section">
-          <h2>YouTube（動画の保存先）</h2>
+          <h2>YouTube</h2>
           <YoutubeSection notice={notice} />
         </section>
       )}

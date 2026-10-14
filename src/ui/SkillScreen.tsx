@@ -6,12 +6,11 @@ import {
   achieveSkill,
   activateSkill,
   deactivateSkill,
-  getSettings,
   cupNumbers,
   recordsOf,
   revertAchievement,
 } from '../data/repo'
-import { canActivate, computeStates, indexById } from '../domain/logic'
+import { computeStates, indexById } from '../domain/logic'
 import { recentForm } from '../domain/form'
 import { ConfirmButton, Empty, formatDate, splitName, StateBadge } from './common'
 import { Compare } from './Compare'
@@ -39,32 +38,28 @@ export function SkillScreen({ id }: { id: string }) {
   const data = useLiveQuery(async () => {
     const skill = await db.skills.get(id)
     if (!skill) return { skill: undefined }
-    const [skills, domain, records, media, settings] = await Promise.all([
+    const [skills, domain, records, media] = await Promise.all([
       db.skills.where('domainId').equals(skill.domainId).toArray(),
       db.domains.get(skill.domainId),
       recordsOf(id),
       mediaByIndex(db.media.where('skillId').equals(id)).then((list) => list.sort((a, b) => a.createdAt - b.createdAt)),
-      getSettings(),
     ])
-    // 上限は全分野の合計なので、挑戦できるかは全スキルで判定する
-    const allSkills = await db.skills.toArray()
     // 杯の番号は、型に関係なく全部の記録の通し番号（No.）
     const numbers = await cupNumbers(records)
     // アップの失敗は、保存先が YouTube のときだけ知らせる
     const uploads = (await getVideoStorage()) === 'youtube'
-    return { skill, skills, domain, records, media, settings, allSkills, numbers, uploads }
+    return { skill, skills, domain, records, media, numbers, uploads }
   }, [id])
 
   if (!data) return null
   if (!data.skill) return <Empty>型が見つかりません。</Empty>
-  const { skill, skills, domain, records, media, settings, allSkills } = data
+  const { skill, skills, domain, records, media } = data
   const states = computeStates(skills)
   const state = states.get(skill.id)!
   const byId = indexById(skills)
   const prereqs = skill.prereqIds.map((p) => byId.get(p)).filter((s) => !!s)
   const leadsTo = skills.filter((s) => s.prereqIds.includes(skill.id))
-  const check = canActivate(skill, allSkills, settings.maxActive)
-  // 前提はおすすめの順。まだの型でも自由に始められ、「できた」にもできる
+  // 前提はおすすめの順。まだの型でも自由に記録でき、「できた」にもできる
   const notStarted = state === 'available' || state === 'locked'
   const form = recentForm(records)
   const mediaById = new Map(media.map((m) => [m.id, m]))
@@ -94,7 +89,7 @@ export function SkillScreen({ id }: { id: string }) {
           <div className="row wrap">
             <StateBadge state={state} />
             {skill.achievedAt && <span className="muted small">{formatDate(skill.achievedAt)} にできた</span>}
-            {/* 練習をやめるのは、状態の印の横に控えめに置く（「記録する」「できた」の並びを崩さないように） */}
+            {/* 練習中にする・外すは、状態の印の横に控えめに置く（記録すると自動で練習中に入るので、押すことは少ない） */}
             {state === 'active' && (
               <button
                 type="button"
@@ -102,11 +97,25 @@ export function SkillScreen({ id }: { id: string }) {
                 onClick={() =>
                   run(async () => {
                     await deactivateSkill(skill.id)
-                    toast.show('練習を中断しました。撮った記録はそのまま残ります')
+                    toast.show('練習中から外しました。今日の画面に出なくなります（記録は残ります）')
                   })
                 }
               >
-                中断する
+                外す
+              </button>
+            )}
+            {notStarted && (
+              <button
+                type="button"
+                className="quiet-button"
+                onClick={() =>
+                  run(async () => {
+                    await activateSkill(skill.id)
+                    toast.show(`「${splitName(skill.name).main}」を練習中にしました。今日の画面から記録できます`)
+                  })
+                }
+              >
+                練習中にする
               </button>
             )}
           </div>
@@ -120,34 +129,19 @@ export function SkillScreen({ id }: { id: string }) {
         <p className="muted small">{formSummary(form)}</p>
       </section>
 
+      {/* どの型でも、すぐ記録できる（記録すると練習中に入る） */}
       <div className="actions">
-        {state === 'active' && (
-          <a className="btn primary" href={href(`/record/${skill.id}`)}>
-            記録する
-          </a>
-        )}
-        {notStarted && (
-          <button
-            className="btn primary"
-            disabled={!check.ok}
-            onClick={() =>
-              run(async () => {
-                await activateSkill(skill.id)
-                toast.show(`「${splitName(skill.name).main}」の練習を始めます`)
-              })
-            }
-          >
-            練習を始める
-          </button>
-        )}
-        {(state === 'active' || notStarted) && !askingAchieve && (
+        <a className="btn primary" href={href(`/record/${skill.id}`)}>
+          記録する
+        </a>
+        {state !== 'done' && !askingAchieve && (
           <button className="btn achieve" onClick={() => setAskingAchieve(true)}>
             できた
           </button>
         )}
         {state === 'done' && (
           <ConfirmButton
-            className="btn ghost"
+            className="btn"
             confirmLabel="取り消す"
             message="「できた」を取り消します。撮った記録や、ほかの型の練習はそのままです。"
             onConfirm={() => run(() => revertAchievement(skill.id))}
@@ -156,9 +150,6 @@ export function SkillScreen({ id }: { id: string }) {
           </ConfirmButton>
         )}
       </div>
-      {notStarted && !check.ok && check.reason === 'limit' && (
-        <p className="muted">練習中は {settings.maxActive} つまでです。いまの型を「できた」にするか、練習を中断すると始められます。</p>
-      )}
 
       {askingAchieve && (
         <div className="confirm achieve-confirm">

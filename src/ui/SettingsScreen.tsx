@@ -1,17 +1,17 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { estimateBackupSize, exportBackup, importBackup, type BackupPart } from '../data/backup'
 import { db } from '../data/db'
-import { BUNDLED_TEMPLATES, getSettings, importTemplate, setMaxActive } from '../data/repo'
+import { getSyncConfig, getSyncStatus } from '../data/sync'
 import { TIDY_AFTER_DAYS } from '../data/tidy'
 import { getVideoStorage, setVideoStorage, type VideoStorage } from '../data/videoStorage'
 import { resumeUploads, youtubeStatus } from '../data/youtube'
-import { MAX_ACTIVE_RANGE } from '../domain/types'
 import { ConfirmButton, formatBytes, requestPersist, saveFile } from './common'
 import { useAction, useToast } from './feedback'
-import { go } from './router'
+import { RoadmapSettings } from './RoadmapSettings'
+import { backHandler, go, href, type SettingsSection } from './router'
 import { SyncSettings } from './SyncSettings'
-import { AlertIcon, CheckIcon } from './icons'
+import { AlertIcon, BackIcon, CheckIcon, ForwardIcon } from './icons'
 
 function StorageStatus() {
   const [info, setInfo] = useState<{ usage?: number; quota?: number; persisted?: boolean }>()
@@ -58,25 +58,110 @@ const STORAGE_CHOICES: { value: VideoStorage; label: string }[] = [
   { value: 'youtube', label: 'YouTube' },
 ]
 
-export function SettingsScreen({ notice }: { notice?: string }) {
+const TITLES: Record<SettingsSection, string> = {
+  storage: '動画の保存先',
+  sync: 'クラウド同期',
+  backup: 'バックアップ',
+  roadmaps: 'ロードマップ',
+  data: 'データの削除',
+}
+
+/**
+ * 設定。はじめは項目の一覧だけを出し、押すとその項目の画面を開く（iPhone の設定と同じ形。説明を1画面に並べない）
+ */
+export function SettingsScreen({ section, notice }: { section?: SettingsSection; notice?: string }) {
+  if (!section) return <SettingsHome />
+  return (
+    <div className="screen">
+      <header className="screen-header">
+        <a className="back" href={href('/settings')} onClick={backHandler('/settings')} aria-label="設定に戻る">
+          <BackIcon size={26} />
+        </a>
+        <h1>{TITLES[section]}</h1>
+      </header>
+      {section === 'storage' && <StoragePage />}
+      {section === 'sync' && <SyncSettings notice={notice} />}
+      {section === 'backup' && <BackupPage />}
+      {section === 'roadmaps' && <RoadmapSettings />}
+      {section === 'data' && <DataPage />}
+    </div>
+  )
+}
+
+function Row({ to, label, value, warn }: { to: SettingsSection; label: string; value?: ReactNode; warn?: boolean }) {
+  return (
+    <li>
+      <a className="settings-row" href={href(`/settings/${to}`)}>
+        <span className="settings-label">{label}</span>
+        {value && <span className={`settings-value${warn ? ' warn' : ''}`}>{value}</span>}
+        <ForwardIcon size={16} />
+      </a>
+    </li>
+  )
+}
+
+function SettingsHome() {
+  const data = useLiveQuery(async () => {
+    const [storage, config, status, domains] = await Promise.all([
+      getVideoStorage(),
+      getSyncConfig(),
+      getSyncStatus(),
+      db.domains.count(),
+    ])
+    return { storage, config, status, domains }
+  })
+  if (!data) return null
+  const sync = !data.config ? '使っていません' : data.status.error ? '同期できていません' : 'つながっています'
+  return (
+    <div className="screen">
+      <header className="screen-header">
+        <h1>設定</h1>
+      </header>
+
+      <section className="section">
+        <h2>記録の保存</h2>
+        <ul className="settings-list">
+          <Row to="storage" label="動画の保存先" value={data.storage === 'device' ? 'この端末' : 'YouTube'} />
+          <Row to="sync" label="クラウド同期" value={sync} warn={!!data.config && !!data.status.error} />
+          <Row to="backup" label="バックアップ" />
+        </ul>
+      </section>
+
+      <section className="section">
+        <h2>型</h2>
+        <ul className="settings-list">
+          <Row to="roadmaps" label="ロードマップ" value={`${data.domains}つの分野`} />
+        </ul>
+      </section>
+
+      <section className="section">
+        <h2>その他</h2>
+        <ul className="settings-list">
+          <Row to="data" label="この端末のデータを削除" />
+          <li>
+            <a
+              className="settings-row"
+              href={`${import.meta.env.BASE_URL}privacy.html`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <span className="settings-label">プライバシーポリシー</span>
+              <ForwardIcon size={16} />
+            </a>
+          </li>
+        </ul>
+      </section>
+
+      <p className="muted small center">ラテ帳 v{__APP_VERSION__}</p>
+    </div>
+  )
+}
+
+function StoragePage() {
   const run = useAction()
   const toast = useToast()
-  const restoreInput = useRef<HTMLInputElement>(null)
-  const [pendingRestore, setPendingRestore] = useState<File[]>([])
-  const [busy, setBusy] = useState<string | null>(null)
-  // 書き出しに時間がかかると、共有シートを開くのに必要な「直前のタップ」が切れる。
-  // そのため、作り終えたら改めて「保存する」を押してもらう（分割されたときは1つずつ）
-  const [exported, setExported] = useState<BackupPart[]>([])
-  const [saved, setSaved] = useState<Set<string>>(new Set())
-
-  const data = useLiveQuery(async () => ({
-    settings: await getSettings(),
-    storage: await getVideoStorage(),
-    domainNames: (await db.domains.toArray()).map((d) => d.name),
-    mediaSize: await estimateBackupSize(true),
-    counts: { records: await db.records.count(), media: await db.media.count() },
-  }))
-  if (!data) return null
+  const storage = useLiveQuery(getVideoStorage)
+  if (!storage) return null
 
   const changeStorage = async (value: VideoStorage) => {
     await setVideoStorage(value)
@@ -89,12 +174,60 @@ export function SettingsScreen({ notice }: { notice?: string }) {
         toast.show('動画を YouTube に上げ始めます')
         void resumeUploads().catch(() => {})
       } else {
-        toast.show('上の「YouTube」で連携すると、動画を上げ始めます')
+        toast.show('「クラウド同期」で YouTube と連携すると、動画を上げ始めます')
       }
     } else {
       toast.show('これから撮る動画は、この端末にだけ置きます')
     }
   }
+
+  return (
+    <>
+      <section className="section">
+        <div className="segmented">
+          {STORAGE_CHOICES.map((c) => (
+            <button
+              key={c.value}
+              type="button"
+              className={storage === c.value ? 'selected' : ''}
+              aria-pressed={storage === c.value}
+              onClick={() => {
+                if (storage !== c.value) run(() => changeStorage(c.value))
+              }}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+        <p className="muted small">
+          {storage === 'device'
+            ? '動画はこの端末にだけ置きます。30秒の動画100本で、約0.5GBです。'
+            : `YouTube に限定公開で上げ、${TIDY_AFTER_DAYS}日たったら端末から消します。消えたあともアプリの中で見られますが、切り取りなどの編集はできません。YouTube との連携は「クラウド同期」から行います。`}
+        </p>
+      </section>
+      <section className="section">
+        <h2>端末の容量</h2>
+        <StorageStatus />
+      </section>
+    </>
+  )
+}
+
+function BackupPage() {
+  const run = useAction()
+  const toast = useToast()
+  const restoreInput = useRef<HTMLInputElement>(null)
+  const [pendingRestore, setPendingRestore] = useState<File[]>([])
+  const [busy, setBusy] = useState<string | null>(null)
+  // 書き出しに時間がかかると、共有シートを開くのに必要な「直前のタップ」が切れる。
+  // そのため、作り終えたら改めて「保存する」を押してもらう（分割されたときは1つずつ）
+  const [exported, setExported] = useState<BackupPart[]>([])
+  const [saved, setSaved] = useState<Set<string>>(new Set())
+  const data = useLiveQuery(async () => ({
+    mediaSize: await estimateBackupSize(true),
+    counts: { records: await db.records.count(), media: await db.media.count() },
+  }))
+  if (!data) return null
 
   const doExport = (includeMedia: boolean) =>
     run(async () => {
@@ -109,65 +242,7 @@ export function SettingsScreen({ notice }: { notice?: string }) {
     })
 
   return (
-    <div className="screen">
-      <header className="screen-header">
-        <h1>設定</h1>
-      </header>
-
-      <SyncSettings notice={notice} />
-
       <section className="section">
-        <h2>同時に練習できる数</h2>
-        <p className="muted">全分野の合計です。少ないほど、1つあたりの練習が濃くなります。</p>
-        <div className="stepper">
-          <button
-            className="btn"
-            aria-label="減らす"
-            disabled={data.settings.maxActive <= MAX_ACTIVE_RANGE.min}
-            onClick={() => run(() => setMaxActive(data.settings.maxActive - 1))}
-          >
-            −
-          </button>
-          <span className="stepper-value">{data.settings.maxActive}</span>
-          <button
-            className="btn"
-            aria-label="増やす"
-            disabled={data.settings.maxActive >= MAX_ACTIVE_RANGE.max}
-            onClick={() => run(() => setMaxActive(data.settings.maxActive + 1))}
-          >
-            ＋
-          </button>
-        </div>
-        <p className="muted small">上限を下げても、すでに練習中の型は外れません。</p>
-      </section>
-
-      <section className="section">
-        <h2>動画の保存先</h2>
-        <div className="segmented">
-          {STORAGE_CHOICES.map((c) => (
-            <button
-              key={c.value}
-              type="button"
-              className={data.storage === c.value ? 'selected' : ''}
-              aria-pressed={data.storage === c.value}
-              onClick={() => {
-                if (data.storage !== c.value) run(() => changeStorage(c.value))
-              }}
-            >
-              {c.label}
-            </button>
-          ))}
-        </div>
-        <p className="muted small">
-          {data.storage === 'device'
-            ? '動画はこの端末にだけ置きます。30秒の動画100本で、約0.5GBです。'
-            : `YouTube に限定公開で上げ、${TIDY_AFTER_DAYS}日たったら端末から消します。消えたあともアプリの中で見られますが、切り取りなどの編集はできません。`}
-        </p>
-        <StorageStatus />
-      </section>
-
-      <section className="section">
-        <h2>バックアップ</h2>
         <p className="muted">
           記録 {data.counts.records} 件・動画と写真 {data.counts.media} 件（{formatBytes(data.mediaSize)}）
         </p>
@@ -261,38 +336,15 @@ export function SettingsScreen({ notice }: { notice?: string }) {
         )}
       </section>
 
-      <section className="section">
-        <h2>用意されているロードマップ</h2>
-        <ul className="list">
-          {BUNDLED_TEMPLATES.map((t) => (
-            <li key={t.domain} className="list-row">
-              <span className="list-main">
-                <span>{t.domain}</span>
-                <span className="list-sub">型 {t.skills.length}</span>
-              </span>
-              <button
-                className="btn small"
-                onClick={async () => {
-                  const id = await run(() => importTemplate(t))
-                  if (id) {
-                    toast.show(
-                      data.domainNames.includes(t.domain)
-                        ? `「${t.domain}」をもう1つ追加しました`
-                        : `「${t.domain}」を追加しました`,
-                    )
-                    go(`/map/${id}`)
-                  }
-                }}
-              >
-                追加
-              </button>
-            </li>
-          ))}
-        </ul>
-      </section>
+  )
+}
 
+function DataPage() {
+  const run = useAction()
+  const toast = useToast()
+  return (
       <section className="section">
-        <h2>この端末のデータをすべて削除</h2>
+        <p className="muted">この端末のロードマップ・記録・動画・写真・設定をすべて削除します。</p>
         <ConfirmButton
           className="btn ghost"
           confirmLabel="すべて削除する"
@@ -313,12 +365,5 @@ export function SettingsScreen({ notice }: { notice?: string }) {
         </ConfirmButton>
       </section>
 
-      <p className="muted small center">
-        ラテ帳 v{__APP_VERSION__}・
-        <a href={`${import.meta.env.BASE_URL}privacy.html`} target="_blank" rel="noopener noreferrer">
-          プライバシーポリシー
-        </a>
-      </p>
-    </div>
   )
 }

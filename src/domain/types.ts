@@ -97,10 +97,9 @@ export interface Media {
   contentAt?: number
 }
 
+/** 端末をまたいで同期する設定。今は持つ項目が無い（練習中の上限はやめた。動画の保存先は端末ごと） */
 export interface Settings {
-  maxActive: number
   updatedAt: number
 }
 
-export const DEFAULT_SETTINGS: Settings = { maxActive: 3, updatedAt: 0 }
-export const MAX_ACTIVE_RANGE = { min: 1, max: 5 } as const
+export const DEFAULT_SETTINGS: Settings = { updatedAt: 0 }

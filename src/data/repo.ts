@@ -2,7 +2,6 @@ import { canActivate, newlyUnlocked, wouldCreateCycle } from '../domain/logic'
 import { isWebUrl, parseTemplate, templateToEntities, type RoadmapTemplate } from '../domain/template'
 import {
   DEFAULT_SETTINGS,
-  MAX_ACTIVE_RANGE,
   type Media,
   type Outcome,
   type PracticeRecord,
@@ -29,19 +28,6 @@ export async function getSettings(): Promise<Settings> {
   const row = await db.meta.get('settings')
   return { ...DEFAULT_SETTINGS, ...(row?.value as Partial<Settings> | undefined) }
 }
-
-async function updateSettings(patch: Partial<Omit<Settings, 'updatedAt'>>) {
-  await db.transaction('rw', db.meta, db.outbox, async () => {
-    const current = await getSettings()
-    await db.meta.put({ key: 'settings', value: { ...current, ...patch, updatedAt: Date.now() } })
-    await markDirty('settings', ['settings'])
-  })
-}
-
-export async function setMaxActive(n: number) {
-  await updateSettings({ maxActive: Math.min(MAX_ACTIVE_RANGE.max, Math.max(MAX_ACTIVE_RANGE.min, Math.round(n))) })
-}
-
 
 // ---- 初回 ----
 
@@ -232,7 +218,6 @@ export function defaultReferenceTitle(url: string): string {
 const ACTIVATE_MESSAGES = {
   done: 'すでにできています',
   already: 'すでに練習中です',
-  limit: '練習中の上限に達しています。どれかを「できた」にするか、練習を中断してください',
 } as const
 
 async function setSkill(id: string, patch: Partial<Skill>) {
@@ -241,11 +226,11 @@ async function setSkill(id: string, patch: Partial<Skill>) {
 }
 
 export async function activateSkill(id: string) {
-  await db.transaction('rw', [db.skills, db.meta, db.outbox], async () => {
+  await db.transaction('rw', [db.skills, db.outbox], async () => {
     const skills = await db.skills.toArray()
     const skill = skills.find((s) => s.id === id)
     if (!skill) throw new RepoError('型が見つかりません')
-    const check = canActivate(skill, skills, (await getSettings()).maxActive)
+    const check = canActivate(skill, skills)
     if (!check.ok) throw new RepoError(ACTIVATE_MESSAGES[check.reason])
     await setSkill(id, { status: 'active', activatedAt: Date.now() })
   })
@@ -354,7 +339,7 @@ export async function addRecord(input: RecordInput): Promise<string> {
     nextAction,
     mediaIds: media.map((m) => m.id),
   }
-  await db.transaction('rw', db.records, db.media, db.outbox, async () => {
+  await db.transaction('rw', [db.records, db.media, db.skills, db.outbox], async () => {
     await db.media.bulkAdd(media)
     await db.records.add(record)
     await markDirty(
@@ -362,6 +347,10 @@ export async function addRecord(input: RecordInput): Promise<string> {
       media.map((m) => m.id),
     )
     await markDirty('record', [recordId])
+    // 記録した型は練習中に入れる（「はじめる」を押さなくても、やりたい型をすぐ記録できるように）。
+    // 「できた」の型は、そのまま「できた」に残す
+    const skill = await db.skills.get(input.skillId)
+    if (skill?.status === 'idle') await setSkill(skill.id, { status: 'active', activatedAt: now })
   })
   return recordId
 }

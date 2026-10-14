@@ -42,7 +42,7 @@ function Screen({ route }: { route: Route }) {
     case 'cup':
       return <CupScreen key={route.recordId} recordId={route.recordId} />
     case 'settings':
-      return <SettingsScreen notice={route.notice} />
+      return <SettingsScreen key={route.section ?? 'top'} section={route.section} notice={route.notice} />
   }
 }
 

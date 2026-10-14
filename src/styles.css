@@ -1008,11 +1008,6 @@ select:focus {
   text-align: center;
 }
 
-.manage summary {
-  cursor: pointer;
-  color: var(--muted);
-}
-
 /* ---- ロードマップ ---- */
 
 .domain-tabs {
@@ -2308,19 +2303,6 @@ a.notice {
   line-height: 1.35;
 }
 
-.manage {
-  margin-top: 8px;
-}
-
-.manage .stack {
-  margin-top: 10px;
-}
-
-.manage .stack .btn {
-  width: 100%;
-  justify-content: flex-start;
-}
-
 /* ---- 型：ロードマップ（つながりの図） ---- */
 
 .graph {
@@ -3111,4 +3093,96 @@ a.notice {
 
 .editor-progress .progress {
   width: 100%;
+}
+
+/* ---- 設定（項目の一覧。押すとその項目の画面を開く） ---- */
+
+.settings-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.settings-list li + li {
+  border-top: 1px solid var(--border);
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+  padding: 10px 14px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.settings-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-value {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.settings-value.warn {
+  color: var(--danger);
+}
+
+.settings-row .icon {
+  flex: none;
+  color: var(--muted);
+}
+
+/* 設定の「ロードマップ」の分野（押すと、名前を変える・書き出す・消す） */
+.domain-row {
+  flex-wrap: wrap;
+}
+
+.domain-toggle {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.domain-actions {
+  width: 100%;
+  padding-bottom: 4px;
+}
+
+/* 型の画面の下の「型を追加」 */
+.add-type {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 2px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  text-decoration: none;
+}
+
+/* 閉じられるお知らせの中のリンク（文を押すと設定を開く） */
+div.notice > a {
+  flex: 1;
+  color: inherit;
+  text-decoration: none;
+}
+
+/* 今日の画面：しばらく練習していない型（小さくまとめる） */
+.resting h3 {
+  margin: 4px 0 0;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--muted);
 }
