@@ -13,7 +13,7 @@ import { useAction, useToast } from './feedback'
 import { RoadmapSettings } from './RoadmapSettings'
 import { backHandler, go, href, type SettingsSection } from './router'
 import { SyncSettings } from './SyncSettings'
-import { isNativeApp } from '../platform'
+import { isNativeApp, SITE_URL } from '../platform'
 import { AlertIcon, BackIcon, CheckIcon, ForwardIcon } from './icons'
 
 function StorageStatus() {
@@ -71,9 +71,7 @@ function StorageStatus() {
  * プライバシーポリシー。アプリの中では、公開しているページを Safari で開く
  * （アプリに入れたファイルを別の窓で開くと、アプリの画面が置き換わってしまうため）
  */
-const PRIVACY_URL = isNativeApp
-  ? 'https://makim0939.github.io/michishirube/privacy.html'
-  : `${import.meta.env.BASE_URL}privacy.html`
+const PRIVACY_URL = isNativeApp ? `${SITE_URL}privacy.html` : `${import.meta.env.BASE_URL}privacy.html`
 
 const STORAGE_CHOICES: { value: VideoStorage; label: string }[] = [
   { value: 'device', label: 'この端末' },
