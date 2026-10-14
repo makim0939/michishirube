@@ -1,7 +1,7 @@
 import { liveQuery } from 'dexie'
 import { formatDateTime, OUTCOME_LABEL } from '../domain/format'
 import type { Media } from '../domain/types'
-import { contentBlob, hasContent } from './content'
+import { ContentUnavailableError, contentBlob, hasContent } from './content'
 import { db, markDirty, mediaByIndex } from './db'
 import { api, getSyncConfig, SyncError, type SyncConfig } from './sync'
 import { getVideoStorage } from './videoStorage'
@@ -200,8 +200,9 @@ async function doUploads() {
       try {
         const tokenValue = await accessToken(config)
         await db.media.update(m.id, { upload: 'uploading' })
+        // ファイルが無いときは「失敗」にする（電波の失敗と分け、ほかの動画を先に上げる）
         const content = await contentBlob(m)
-        if (!content) continue
+        if (!content) throw new ContentUnavailableError()
         const youtubeId = await uploadVideo(content, await videoMeta(m), tokenValue)
         await setUpload(m.id, { upload: 'done', youtubeId, uploadError: undefined, uploadAttempts: undefined })
       } catch (e) {

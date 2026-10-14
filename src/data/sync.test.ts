@@ -322,3 +322,23 @@ describe('中身を差し替えたときの同期', () => {
     expect(await db.outbox.get(['media', m.id])).toBeDefined()
   })
 })
+
+describe('アプリのファイルにある中身の同期', () => {
+  it('サーバーから同じ中身の行が来ても、アプリのファイルの場所は残す（消されないように）', async () => {
+    const m = {
+      id: 'm1',
+      recordId: 'r1',
+      skillId: 's1',
+      type: 'video/mp4',
+      size: 1,
+      createdAt: 1,
+      updatedAt: 1,
+      contentAt: 1,
+      file: 'media/m1-1.mp4',
+    }
+    await db.media.add(m)
+    const { file: _file, ...remote } = m
+    await applyRemote([{ kind: 'media', id: m.id, updatedAt: 5, deleted: false, data: { ...remote, upload: 'done', youtubeId: 'yt' } }])
+    expect(await db.media.get(m.id)).toMatchObject({ file: 'media/m1-1.mp4', youtubeId: 'yt' })
+  })
+})

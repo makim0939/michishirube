@@ -6,10 +6,13 @@ import { db } from './db'
 const files = vi.hoisted(() => ({
   written: [] as string[],
   deleted: [] as string[],
+  listed: [] as string[],
   onWrite: undefined as undefined | ((path: string) => Promise<void>),
+  onWipe: undefined as undefined | (() => Promise<void>),
 }))
 vi.mock('./files', () => ({
   usesFiles: true,
+  ContentUnavailableError: class extends Error {},
   writeBlobFile: async (path: string) => {
     files.written.push(path)
     await files.onWrite?.(path)
@@ -18,9 +21,13 @@ vi.mock('./files', () => ({
   deleteFile: async (path: string) => {
     files.deleted.push(path)
   },
+  listContentFiles: async () => files.listed,
+  deleteAllContentFiles: async () => {
+    await files.onWipe?.()
+  },
 }))
 
-const { moveContentsToFiles, watchContentFiles } = await import('./content')
+const { moveContentsToFiles, resetContentFiles, tidyContentFiles, watchContentFiles } = await import('./content')
 
 function media(over: Partial<Media> = {}): Media {
   return {
@@ -43,7 +50,9 @@ describe('動画・写真の中身をアプリのファイルへ移す', () => {
   beforeEach(() => {
     files.written = []
     files.deleted = []
+    files.listed = []
     files.onWrite = undefined
+    files.onWipe = undefined
     watchContentFiles()
   })
 
@@ -90,4 +99,47 @@ describe('動画・写真の中身をアプリのファイルへ移す', () => {
     await settle()
     expect(files.deleted.sort()).toEqual(['media/a-1.mp4', 'media/b-1.mp4'])
   })
+
+  it('途中の処理が失敗しても、あとから頼んだ移しは止まらない', async () => {
+    await db.media.add(media())
+    files.onWipe = async () => {
+      throw new Error('消せない')
+    }
+    await resetContentFiles()
+    await moveContentsToFiles(['m1'])
+    expect((await db.media.get('m1'))?.file).toBe('media/m1-1.mp4')
+  })
+
+  it('全部消して移し直すのは、ほかの移しが終わってから行う', async () => {
+    await db.media.add(media())
+    const order: string[] = []
+    files.onWrite = async (path) => {
+      order.push(`write ${path}`)
+    }
+    files.onWipe = async () => {
+      order.push('wipe')
+    }
+    await Promise.all([moveContentsToFiles(['m1']), resetContentFiles()])
+    expect(order).toEqual(['write media/m1-1.mp4', 'wipe'])
+  })
+
+  it('使われていないファイルは片付け、中身の無い行の本来のファイルはつなぎ直す', async () => {
+    await db.records.add({ id: 'r1', skillId: 's1', reason: '', nextAction: '', mediaIds: [], createdAt: 1, updatedAt: 1 })
+    await db.media.bulkAdd([
+      media({ id: 'used', blob: undefined, file: 'media/used-1.mp4' }),
+      media({ id: 'lost', blob: undefined }),
+      media({ id: 'trimmed', blob: undefined, file: 'media/trimmed-9.mp4', contentAt: 9 }),
+    ])
+    files.listed = ['media/used-1.mp4', 'media/lost-1.mp4', 'media/trimmed-1.mp4', 'media/gone-1.mp4']
+    await tidyContentFiles()
+    expect((await db.media.get('lost'))?.file).toBe('media/lost-1.mp4')
+    expect(files.deleted.sort()).toEqual(['media/gone-1.mp4', 'media/trimmed-1.mp4'])
+  })
+
+  it('記録が1つも無い端末では、ファイルを片付けない（同期で行が戻ってくるかもしれないので）', async () => {
+    files.listed = ['media/x-1.mp4']
+    await tidyContentFiles()
+    expect(files.deleted).toEqual([])
+  })
 })
+

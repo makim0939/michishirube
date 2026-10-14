@@ -2,9 +2,8 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { estimateBackupSize, exportBackup, importBackup, type BackupPart } from '../data/backup'
 import { db } from '../data/db'
-import { contentFilesSize } from '../data/content'
-import { deleteAllContentFiles } from '../data/files'
-import { writeSnapshot } from '../data/snapshot'
+import { contentFilesSize, resetContentFiles } from '../data/content'
+import { saveSnapshotNow } from '../data/snapshot'
 import { getSyncConfig, getSyncStatus } from '../data/sync'
 import { TIDY_AFTER_DAYS } from '../data/tidy'
 import { getVideoStorage, setVideoStorage, type VideoStorage } from '../data/videoStorage'
@@ -380,8 +379,8 @@ function DataPage() {
                 await db.meta.put({ key: 'seeded', value: true })
               })
               // アプリでは、動画・写真のファイルも消し、記録の写しも空にする（次に開いたときに戻らないように）
-              await deleteAllContentFiles()
-              await writeSnapshot()
+              await resetContentFiles()
+              await saveSnapshotNow()
               toast.show('すべて削除しました')
               go('/')
             })

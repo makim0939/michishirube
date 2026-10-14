@@ -14,42 +14,49 @@ export function pickCupMedia(list: (Media | undefined)[]): Media | undefined {
 
 /**
  * 動画・写真の中身。端末にあればそれを、アプリでファイルにあれば読み込み、
- * 写真が端末に無ければサーバーから取ってくる（電波が無いなどで取れなければ undefined）
+ * 写真が端末に無ければ（ファイルを読めなければ）サーバーから取ってくる。
+ * loading は読んでいる途中（無いのか、まだ読めていないだけかを分ける。読み終わるまでは「無い」表示を出さない）
  */
-export function useContent(media: Media | undefined): Blob | undefined {
+export function useContent(media: Media | undefined): { blob?: Blob; loading: boolean } {
   // 中身そのものを表す名前。置き場所が blob からファイルに移っても変わらない（差し替えると変わる）
   const id = media ? `${media.id}-${media.contentAt ?? media.createdAt}` : undefined
-  // 読んだ中身と、それがどの中身か（別の杯に切り替わった直後・差し替えた直後に、前の中身を出さないように）
-  const [loaded, setLoaded] = useState<{ id: string; blob: Blob }>()
   // 端末の blob を出していたら覚えておく。保存のあとファイルに移っても、読み直さずに同じ中身を出し続ける
   //（読み終わるまで一瞬消えたり、動画が最初から読み込み直しになったりしないように）
   const shown = useRef<{ id: string; blob: Blob }>(undefined)
   if (id && media?.blob) shown.current = { id, blob: media.blob }
-  const source =
-    media && !media.blob ? (media.file ?? (!isVideo(media) && media.cloudPhoto ? `cloud:${media.id}` : undefined)) : undefined
+  const cloud = !!media && !isVideo(media) && !!media.cloudPhoto
+  const source = media && !media.blob ? (media.file ?? (cloud ? `cloud:${media.id}` : undefined)) : undefined
+  // どの中身を・どこから読んだ結果か（別の杯に切り替わった直後・差し替えた直後に、前の中身を出さないように）。
+  // blob が無ければ、読めなかった
+  const key = id && source ? `${id}|${source}` : undefined
+  const [loaded, setLoaded] = useState<{ key: string; blob?: Blob }>()
 
   useEffect(() => {
-    if (!source || !media || !id || shown.current?.id === id) return
+    if (!key || !media || shown.current?.id === id) return
     let cancelled = false
-    const read = media.file ? contentBlob(media) : fetchPhoto(media)
+    const read = media.file
+      ? contentBlob(media).catch((e: unknown) => (cloud ? fetchPhoto(media) : Promise.reject(e)))
+      : fetchPhoto(media)
     read
       .then((b) => {
-        if (!cancelled && b) setLoaded({ id, blob: b })
+        if (!cancelled) setLoaded({ key, blob: b })
       })
       .catch(() => {
         // 読めない・電波が無いなどで取れなければ、無いまま
+        if (!cancelled) setLoaded({ key })
       })
     return () => {
       cancelled = true
     }
     // 同期のたびに media は別のオブジェクトになるので、中身か場所が変わったときだけ読み直す
-  }, [id, source])
+  }, [key])
 
-  if (!media || !id) return undefined
-  if (media.blob) return media.blob
-  if (!source) return undefined
-  if (shown.current?.id === id) return shown.current.blob
-  return loaded?.id === id ? loaded.blob : undefined
+  if (!media || !id) return { loading: false }
+  if (media.blob) return { blob: media.blob, loading: false }
+  if (!key) return { loading: false }
+  if (shown.current?.id === id) return { blob: shown.current.blob, loading: false }
+  if (loaded?.key === key) return { blob: loaded.blob, loading: false }
+  return { loading: true }
 }
 
 /**
@@ -59,7 +66,7 @@ export function useContent(media: Media | undefined): Blob | undefined {
 export function useCupImage(media: Media | undefined, { upgrade = true }: { upgrade?: boolean } = {}): Blob | undefined {
   const video = !!media && isVideo(media)
   // 動画の中身は読まない（サムネイルを使う）
-  const photo = useContent(video ? undefined : media)
+  const photo = useContent(video ? undefined : media).blob
   usePoster(media, upgrade)
   if (!media) return undefined
   if (video) return media.poster

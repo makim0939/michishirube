@@ -35,7 +35,7 @@ export function MediaItem({
 }) {
   const run = useAction()
   const storage = useLiveQuery(getVideoStorage)
-  const blob = useContent(media)
+  const { blob, loading } = useContent(media)
   usePoster(media)
   const video = isVideo(media)
   // 保存先が端末なら上げないので、アップ待ちは出さない
@@ -54,6 +54,9 @@ export function MediaItem({
           autoLoad={autoLoad}
           videoRef={playerRef && ((el) => playerRef(el ? videoControl(el) : null))}
         />
+      ) : loading ? (
+        // 端末のファイルを読んでいるあいだは、YouTube や「無い」表示に切り替えない（読めたらすぐ出す）
+        <div className="media placeholder" aria-label="読み込み中" />
       ) : onYoutube ? (
         <YoutubePlayer videoId={media.youtubeId!} poster={media.poster} cacheKey={media.id} playerRef={playerRef} />
       ) : (

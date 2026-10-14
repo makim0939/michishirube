@@ -1,8 +1,7 @@
 import { Unzip, UnzipInflate, Zip, ZipPassThrough, strFromU8, strToU8 } from 'fflate'
 import type { Domain, Media, PracticeRecord, Skill } from '../domain/types'
-import { contentBlob, hasContent, moveContentsToFiles } from './content'
+import { contentBlob, hasContent, resetContentFiles } from './content'
 import { db, markDirty, type Meta } from './db'
-import { deleteAllContentFiles } from './files'
 
 /**
  * バックアップは ZIP 1つ：data.json と media/ 以下の動画・写真。
@@ -179,7 +178,8 @@ export async function exportBackup(opts: {
   writer.addText('data.json', JSON.stringify(data, null, 2))
   for (let i = 0; i < media.length; i++) {
     const path = rows[i].path
-    const blob = path ? await contentBlob(media[i]) : undefined
+    // ファイルが無い・読めないものは入れない（戻すときに「見つからない動画・写真」として数える）
+    const blob = path ? await contentBlob(media[i]).catch(() => undefined) : undefined
     if (!path || !blob) continue
     if (writer.mediaCount > 0 && writer.size + media[i].size > partLimit) {
       blobs.push(writer.finish())
@@ -304,8 +304,7 @@ export async function importBackup(zips: Blob[]): Promise<ImportSummary> {
     if (await db.meta.get('sync:cursor')) await db.meta.put({ key: 'sync:cursor', value: 0 })
   })
   // アプリでは、前の動画・写真のファイルを消し、戻した中身をファイルに移す
-  await deleteAllContentFiles()
-  await moveContentsToFiles()
+  await resetContentFiles()
 
   return {
     domains: domains.length,

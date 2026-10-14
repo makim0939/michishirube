@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { moveContentsToFiles, watchContentFiles } from './data/content'
+import { moveContentsToFiles, tidyContentFiles, watchContentFiles } from './data/content'
 import { initFiles } from './data/files'
 import { ensureSeeded } from './data/repo'
 import { restoreSnapshotIfEmpty, watchSnapshot } from './data/snapshot'
@@ -97,8 +97,9 @@ export function App() {
       .then(() => {
         watchContentFiles()
         watchSnapshot()
-        // 画面の中の保存場所に残っている動画・写真があれば、ファイルへ移す
-        void moveContentsToFiles().catch(() => {})
+        // 画面の中の保存場所に残っている動画・写真があれば、ファイルへ移し、使われていないファイルを片付ける
+        void moveContentsToFiles()
+        void tidyContentFiles()
         setReady(true)
       })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))

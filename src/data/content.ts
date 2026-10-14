@@ -1,6 +1,8 @@
 import type { Media } from '../domain/types'
 import { db } from './db'
-import { deleteFile, readBlobFile, usesFiles, writeBlobFile } from './files'
+import { deleteAllContentFiles, deleteFile, listContentFiles, readBlobFile, usesFiles, writeBlobFile } from './files'
+
+export { ContentUnavailableError } from './files'
 
 /**
  * 動画・写真の中身。Web 版では IndexedDB の blob に、アプリではアプリのファイル（file）に置く。
@@ -42,19 +44,60 @@ export async function contentFilesSize(): Promise<number> {
   return total
 }
 
-/** 移す処理は1つずつ順に行う（同じ中身を2か所から同時に書いて、ファイルが壊れないように） */
-let moving: Promise<void> = Promise.resolve()
+/**
+ * ファイルを書き換える処理は1つずつ順に行う（同じファイルを2か所から同時に書いたり、書いている途中で消したりしないように）。
+ * 失敗しても reject しない（失敗した中身は IndexedDB に残り、次に起動したときにまた試す）
+ */
+let queue: Promise<void> = Promise.resolve()
+
+function enqueue(task: () => Promise<void>): Promise<void> {
+  const run = queue.then(task).catch(() => {})
+  queue = run
+  return run
+}
 
 /**
  * アプリでは、IndexedDB に入った中身（blob）をファイルに移し、IndexedDB からは消す。
- * 記録を保存したあと・バックアップから戻したあと・起動したときに呼ぶ（ids を省くと、全部を見る）。
- * 移せなかった中身は IndexedDB に残り、次に起動したときにまた移す（失敗しても reject しない）
+ * 記録を保存したあと・起動したときに呼ぶ（ids を省くと、全部を見る）
  */
 export function moveContentsToFiles(ids?: string[]): Promise<void> {
   if (!usesFiles) return Promise.resolve()
-  const run = moving.then(() => moveNow(ids))
-  moving = run
-  return run
+  return enqueue(() => moveNow(ids))
+}
+
+/** 動画・写真のファイルを全部消してから、IndexedDB に残っている中身をファイルに移し直す（バックアップから戻した・すべて削除したとき） */
+export function resetContentFiles(): Promise<void> {
+  if (!usesFiles) return Promise.resolve()
+  return enqueue(async () => {
+    await deleteAllContentFiles()
+    await moveNow()
+  })
+}
+
+/**
+ * 起動時に、どの行からも使われていないファイルを片付ける（書いている途中・消す直前にアプリが止められると残る）。
+ * 中身の無い行の本来のファイルなら、消さずにつなぎ直す（画面の中の保存場所が消え、同期やバックアップで行だけ戻ったとき）
+ */
+export function tidyContentFiles(): Promise<void> {
+  if (!usesFiles) return Promise.resolve()
+  return enqueue(sweepNow)
+}
+
+async function sweepNow() {
+  // 記録が1つも無い（入れ直した・消された直後の）端末では、同期で行が戻ってくるかもしれないので消さない
+  if ((await db.records.count()) === 0) return
+  const used = new Set<string>()
+  const relinkable = new Map<string, string>()
+  await db.media.each((m) => {
+    if (m.file) used.add(m.file)
+    else if (!m.blob) relinkable.set(contentPath(m), m.id)
+  })
+  for (const path of await listContentFiles()) {
+    if (used.has(path)) continue
+    const id = relinkable.get(path)
+    if (id) await db.media.update(id, { file: path })
+    else await deleteFile(path)
+  }
 }
 
 async function moveNow(ids?: string[]) {
@@ -77,7 +120,7 @@ async function moveNow(ids?: string[]) {
       })
       if (!moved) await deleteFile(path)
     } catch {
-      // 空きが足りないなどで書けなければ、IndexedDB に残して次の起動でまた試す
+      // 空きが足りないなどで書けなければ、IndexedDB に残して次の起動でまた試す（書きかけのファイルは起動時に片付ける）
     }
   }
 }

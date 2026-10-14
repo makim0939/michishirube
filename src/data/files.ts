@@ -55,13 +55,37 @@ export async function writeBlobFile(path: string, blob: Blob) {
   }
 }
 
+/**
+ * 動画・写真のファイルが無い・読めない。ファイルが無いと fetch は通信の失敗と同じ TypeError になるので、
+ * 区別できるようにこの形で投げる（読む側は、その1つを飛ばしてほかを続ける）
+ */
+export class ContentUnavailableError extends Error {
+  constructor() {
+    super('端末に動画・写真のファイルがありません')
+    this.name = 'ContentUnavailableError'
+  }
+}
+
 /** ファイルを Blob として読む（YouTube に上げる・切り取る・書き出すときなど） */
 export async function readBlobFile(path: string, type: string): Promise<Blob> {
-  // iOS のアプリは、動画（mp4 など）を Range なしで頼むと HTTP でない返事をするので fetch が失敗扱いにする。
-  // 全体を Range で頼むと、どの種類でも 206 で返ってくる
-  const res = await fetch(fileUrl(path), { headers: { Range: 'bytes=0-' } })
-  if (!res.ok) throw new Error('ファイルを読めませんでした')
-  return new Blob([await res.arrayBuffer()], { type })
+  let res: Response
+  try {
+    // iOS のアプリは、動画（mp4 など）を Range なしで頼むと HTTP でない返事をするので fetch が失敗扱いにする。
+    // 全体を Range で頼むと、どの種類でも 206 で返ってくる
+    res = await fetch(fileUrl(path), { headers: { Range: 'bytes=0-' } })
+  } catch {
+    throw new ContentUnavailableError()
+  }
+  if (!res.ok) throw new ContentUnavailableError()
+  const blob = await res.blob()
+  // 種類だけ付け直す（slice は中身を写さない）
+  return blob.type === type ? blob : blob.slice(0, blob.size, type)
+}
+
+/** 動画・写真のファイルの一覧（media/〇〇 の形） */
+export async function listContentFiles(): Promise<string[]> {
+  const { files } = await Filesystem.readdir({ path: `${ROOT}/media`, directory: DIR })
+  return files.filter((f) => f.type === 'file').map((f) => `media/${f.name}`)
 }
 
 export async function deleteFile(path: string) {

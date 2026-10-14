@@ -2,7 +2,7 @@ import { liveQuery } from 'dexie'
 import type { EntityChange, EntityKind, SyncResponse } from '../../shared/protocol'
 import { PHOTO_MAX_BYTES, posterPhotoId, SYNC_LIMITS } from '../../shared/protocol'
 import { DEFAULT_SETTINGS, type Media, type Settings } from '../domain/types'
-import { contentBlob, hasContent, moveContentsToFiles } from './content'
+import { ContentUnavailableError, contentBlob, hasContent, moveContentsToFiles } from './content'
 import { db } from './db'
 
 /**
@@ -261,8 +261,8 @@ async function uploadPhotos(config: SyncConfig) {
         body,
       })
     } catch (e) {
-      // 電波が無いときは同期ごと止める。サーバーが受け付けない写真は飛ばして、ほかの同期を続ける
-      if (e instanceof SyncError && e.status === 400) continue
+      // 電波が無いときは同期ごと止める。サーバーが受け付けない写真・端末にファイルが無い写真は飛ばして、ほかの同期を続ける
+      if ((e instanceof SyncError && e.status === 400) || e instanceof ContentUnavailableError) continue
       throw e
     }
     await db.transaction('rw', db.media, db.outbox, async () => {
