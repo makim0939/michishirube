@@ -50,7 +50,7 @@
         <strong>YouTube と連携し、動画の保存先を YouTube にした場合</strong>：利用者が撮った練習の動画を、<strong>利用者自身の YouTube チャンネル</strong>に「限定公開」でアップロードします。限定公開の動画は、URL を知っている人だけが見られます（検索や一覧には出ません）。URL は本アプリの中にだけ保存します。
       </li>
       <li>
-        <strong>YouTube の動画をアプリの中で表示・再生する場合</strong>：YouTube の再生の仕組み（YouTube IFrame Player API・youtube-nocookie.com）と、動画のサムネイル（i.ytimg.com）を読み込みます。このとき、IP アドレスやブラウザの種類などの通信に必要な情報が Google に送られます。
+        <strong>YouTube の動画をアプリの中で表示・再生する場合</strong>：YouTube の再生の仕組み（YouTube IFrame Player API・youtube-nocookie.com）と、動画のサムネイル（i.ytimg.com）を読み込みます。このとき、IP アドレスやブラウザの種類などの通信に必要な情報が Google に送られます。iPhone・Android のアプリでは、YouTube の決まり（埋め込むページが https であること）のため、本アプリのサイト（GitHub Pages）にある再生用のページを挟んで再生します。このページにも、通信に必要な情報（IP アドレスなど）が送られます（GitHub が受け取ります）。動画の ID 以外の記録・写真は送りません。
       </li>
       <li>
         <strong>文字の表示（フォント）</strong>：画面の文字の形（フォント）を Google Fonts から読み込みます。このとき、IP
