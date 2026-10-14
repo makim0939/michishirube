@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>ラテ帳の動画</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #000;
+      }
+      #player {
+        width: 100%;
+        height: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="player"></div>
+    <script>
+      /*
+       * ラテ帳のアプリ（iOS・Android）から、YouTube の限定公開の動画を再生するための中継ページ。
+       * YouTube は、埋め込むページの場所（Referer）が https でないと再生しない。アプリの画面は capacitor:// などで
+       * 動いているので、このページ（https）を挟んで埋め込む。操作はアプリから postMessage で受け、状態を返す
+       */
+      ;(function () {
+        var params = new URLSearchParams(location.search)
+        var videoId = params.get('v') || ''
+        // 操作を受け付けるのは、ラテ帳のアプリの画面からだけ
+        var APP_ORIGIN = /^(capacitor|https?):\/\/localhost(:\d+)?$/
+        var COMMANDS = ['playVideo', 'pauseVideo', 'seekTo', 'mute', 'unMute', 'setPlaybackRate']
+        var player = null
+        var appOrigin = null
+
+        function send(message) {
+          message.source = 'lattecho-yt'
+          if (player && player.getCurrentTime) {
+            message.time = player.getCurrentTime()
+            message.duration = player.getDuration()
+          }
+          parent.postMessage(message, appOrigin || '*')
+        }
+
+        window.addEventListener('message', function (e) {
+          if (e.source !== parent || !APP_ORIGIN.test(e.origin)) return
+          appOrigin = e.origin
+          var data = e.data || {}
+          if (!player || COMMANDS.indexOf(data.cmd) < 0) return
+          player[data.cmd].apply(player, Array.isArray(data.args) ? data.args : [])
+        })
+
+        window.onYouTubeIframeAPIReady = function () {
+          new YT.Player('player', {
+            videoId: videoId,
+            host: 'https://www.youtube-nocookie.com',
+            width: '100%',
+            height: '100%',
+            playerVars: {
+              controls: 0,
+              playsinline: 1,
+              rel: 0,
+              disablekb: 1,
+              fs: 0,
+              iv_load_policy: 3,
+              origin: location.origin,
+            },
+            events: {
+              onReady: function (e) {
+                player = e.target
+                send({ type: 'ready' })
+                // 再生中の位置を、アプリのつまみに伝える
+                setInterval(function () {
+                  send({ type: 'time' })
+                }, 200)
+              },
+              onStateChange: function (e) {
+                send({ type: 'state', data: e.data })
+              },
+              onError: function (e) {
+                send({ type: 'error', data: e.data })
+              },
+            },
+          })
+        }
+
+        var script = document.createElement('script')
+        script.src = 'https://www.youtube.com/iframe_api'
+        script.onerror = function () {
+          send({ type: 'error', data: -1 })
+        }
+        document.head.appendChild(script)
+      })()
+    </script>
+  </body>
+</html>

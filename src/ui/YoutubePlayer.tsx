@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { youtubeThumbnail, youtubeUrl } from '../data/youtube'
+import { isNativeApp } from '../platform'
 import { type PlayerControl, useObjectUrl } from './common'
 import { PauseIcon, PlayIcon, SpeakerIcon } from './icons'
 
@@ -77,6 +78,101 @@ function loadApi(): Promise<YTNamespace> {
   return api
 }
 
+/**
+ * アプリ（iOS・Android）で YouTube を埋め込むための中継ページ。YouTube は埋め込むページの場所が https でないと
+ * 再生しない（アプリの画面は capacitor://localhost などで動いている）ので、公開しているページを挟む
+ */
+const EMBED_PAGE = import.meta.env.VITE_YT_EMBED_URL ?? 'https://makim0939.github.io/michishirube/yt-embed.html'
+const EMBED_ORIGIN = new URL(EMBED_PAGE).origin
+/** 中継ページが読み込めない（電波が無いなど）ときに、待つのをやめるまで */
+const EMBED_TIMEOUT_MS = 15000
+
+type PlayerOptions = ConstructorParameters<YTNamespace['Player']>[1]
+
+/** 中継ページの中の YouTube を、YouTube の Player と同じ形で操作する（位置・長さ・状態は、中継ページから届いた最新の値） */
+class EmbedPlayer implements YTPlayer {
+  private iframe: HTMLIFrameElement
+  private time = 0
+  private duration = 0
+  private state: number = STATE.unstarted
+  private ready = false
+  private timeout: ReturnType<typeof setTimeout>
+  private onMessage: (e: MessageEvent) => void
+
+  constructor(el: HTMLElement, options: PlayerOptions) {
+    const iframe = document.createElement('iframe')
+    iframe.src = `${EMBED_PAGE}?v=${encodeURIComponent(options.videoId)}`
+    iframe.allow = 'autoplay; encrypted-media'
+    iframe.title = 'YouTube の動画'
+    iframe.style.cssText = 'width:100%;height:100%;border:0'
+    el.replaceWith(iframe)
+    this.iframe = iframe
+    const events = options.events ?? {}
+    this.timeout = setTimeout(() => {
+      if (!this.ready) events.onError?.({ data: -1 })
+    }, EMBED_TIMEOUT_MS)
+    this.onMessage = (e) => {
+      if (e.source !== iframe.contentWindow || e.origin !== EMBED_ORIGIN) return
+      const m = e.data as { source?: string; type?: string; data?: number; time?: number; duration?: number }
+      if (m?.source !== 'lattecho-yt') return
+      if (typeof m.time === 'number') this.time = m.time
+      if (typeof m.duration === 'number') this.duration = m.duration
+      if (m.type === 'ready') {
+        this.ready = true
+        clearTimeout(this.timeout)
+        events.onReady?.()
+      } else if (m.type === 'state' && typeof m.data === 'number') {
+        this.state = m.data
+        events.onStateChange?.({ data: m.data })
+      } else if (m.type === 'error') {
+        clearTimeout(this.timeout)
+        events.onError?.({ data: m.data ?? -1 })
+      }
+    }
+    window.addEventListener('message', this.onMessage)
+  }
+
+  private send(cmd: string, ...args: unknown[]) {
+    this.iframe.contentWindow?.postMessage({ cmd, args }, EMBED_ORIGIN)
+  }
+
+  playVideo() {
+    this.send('playVideo')
+  }
+  pauseVideo() {
+    this.send('pauseVideo')
+  }
+  seekTo(seconds: number, allowSeekAhead: boolean) {
+    this.time = seconds
+    this.send('seekTo', seconds, allowSeekAhead)
+  }
+  mute() {
+    this.send('mute')
+  }
+  unMute() {
+    this.send('unMute')
+  }
+  setPlaybackRate(rate: number) {
+    this.send('setPlaybackRate', rate)
+  }
+  getCurrentTime() {
+    return this.time
+  }
+  getDuration() {
+    return this.duration
+  }
+  getPlayerState() {
+    return this.state
+  }
+  destroy() {
+    clearTimeout(this.timeout)
+    window.removeEventListener('message', this.onMessage)
+    this.iframe.remove()
+  }
+}
+
+const embedApi: YTNamespace = { Player: EmbedPlayer }
+
 function formatTime(seconds: number): string {
   const s = Math.max(0, Math.floor(seconds))
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
@@ -132,7 +228,8 @@ export function YoutubePlayer({
   useEffect(() => {
     let cancelled = false
     let created: YTPlayer | null = null
-    loadApi()
+    // アプリでは中継ページを挟む。Web 版は YouTube をそのまま埋め込む
+    ;(isNativeApp ? Promise.resolve(embedApi) : loadApi())
       .then((YT) => {
         if (cancelled || !frame.current) return
         // YouTube は渡した要素を iframe に置き換えるので、React が持たない要素を中に作って渡す
