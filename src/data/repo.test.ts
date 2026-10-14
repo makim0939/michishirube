@@ -3,7 +3,7 @@ import { exportBackup, importBackup } from './backup'
 import { db } from './db'
 import {
   achieveSkill,
-  activateSkill,
+  practicingSkillIds,
   addRecord,
   addReference,
   createDomain,
@@ -41,29 +41,25 @@ describe('ensureSeeded', () => {
 })
 
 describe('挑戦と達成', () => {
-  it('前提はおすすめの順で、まだの型でも始められ、「できた」にもできる', async () => {
+  it('前提はおすすめの順で、まだの型でも「できた」にできる', async () => {
     const { a, b, c } = await chain()
-    // 前提（a）を始めていなくても、やってみたい型（b）から始められる
-    await activateSkill(b)
     // b ができると、b を前提にする型（おすすめになった型）を返す
     const { unlocked } = await achieveSkill(b)
     expect(unlocked.map((s) => s.id)).toEqual([c])
     await achieveSkill(a)
-
-    // 達成を取り消しても、練習中のものは勝手に外さない
-    await activateSkill(c)
     await revertAchievement(b)
-    expect((await db.skills.get(c))!.status).toBe('active')
+    expect((await db.skills.get(b))!.status).toBe('idle')
   })
 
-  it('記録した型は練習中に入る。「できた」の型はそのまま', async () => {
-    const domainId = await createDomain('ギター')
-    const [a, b] = await Promise.all(['A', 'B'].map((n) => createSkill(domainId, input(n))))
+  it('練習中は、最近記録した型。最近の記録が無ければ、最後に記録した型', async () => {
+    const { a, b } = await chain()
+    expect([...(await practicingSkillIds())]).toEqual([])
     await addRecord({ skillId: a, outcome: 'good', reason: '', nextAction: '', files: [] })
-    expect((await db.skills.get(a))!.status).toBe('active')
-    await achieveSkill(b)
     await addRecord({ skillId: b, outcome: 'good', reason: '', nextAction: '', files: [] })
-    expect((await db.skills.get(b))!.status).toBe('done')
+    expect([...(await practicingSkillIds())].sort()).toEqual([a, b].sort())
+    // 30日たつと、最後に記録した型（b）だけが練習中に残る
+    const later = Date.now() + 30 * 24 * 60 * 60 * 1000
+    expect([...(await practicingSkillIds(later))]).toEqual([b])
   })
 
   it('循環する前提には変更できない', async () => {

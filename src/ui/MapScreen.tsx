@@ -1,12 +1,10 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { db } from '../data/db'
-import { activateSkill, recordsOf } from '../data/repo'
+import { practicingSkillIds, recordsOf } from '../data/repo'
 import { recentForm, type RecentForm } from '../domain/form'
 import { computeStates, indexById, practiceOrder, sortByDepth } from '../domain/logic'
-import type { Skill } from '../domain/types'
 import { formatAgo, splitName } from './common'
-import { useAction, useToast } from './feedback'
 import { FormDots } from './FormDots'
 import { PlusIcon } from './icons'
 import { PatternImage } from './PatternImage'
@@ -23,8 +21,6 @@ const RoadmapGraph = lazy(() => import('./RoadmapGraph').then((m) => ({ default:
 type View = 'roadmap' | 'list'
 
 export function MapScreen({ domainId }: { domainId?: string }) {
-  const run = useAction()
-  const toast = useToast()
   // 初めは一覧（すぐ始められる）。つながりの図（ロードマップ）に切り替えたら、そちらを覚えておく
   const [view, setView] = useState<View>(() => (readStorage('local', VIEW_KEY) === 'roadmap' ? 'roadmap' : 'list'))
   const changeView = (v: View) => {
@@ -33,20 +29,23 @@ export function MapScreen({ domainId }: { domainId?: string }) {
   }
 
   const data = useLiveQuery(async () => {
-    const [domains, allSkills] = await Promise.all([db.domains.orderBy('order').toArray(), db.skills.toArray()])
+    const [domains, allSkills, practicing] = await Promise.all([
+      db.domains.orderBy('order').toArray(),
+      db.skills.toArray(),
+      practicingSkillIds(),
+    ])
     // タブから開いたときは、最後に見ていた分野を出す
     const wanted = domainId ?? readStorage('local', LAST_DOMAIN_KEY)
     const current = domains.find((d) => d.id === wanted) ?? domains[0]
     const skills = current ? allSkills.filter((s) => s.domainId === current.id) : []
     // 練習中の型だけ、杯数と最近の調子、最後に練習した日時（並びに使う）を出す
     const stats = new Map<string, { count: number; form: RecentForm; last: number }>()
-    for (const s of skills.filter((s) => s.status === 'active')) {
+    for (const s of skills.filter((s) => practicing.has(s.id) && s.status !== 'done')) {
       const records = await recordsOf(s.id)
-      // 今日の画面と同じく、最後の記録の日時（記録が無ければ練習を始めた日時）
-      const last = records[0]?.createdAt ?? s.activatedAt ?? 0
+      const last = records[0]?.createdAt ?? 0
       stats.set(s.id, { count: records.length, form: recentForm(records), last })
     }
-    return { domains, current, skills, stats }
+    return { domains, current, skills, stats, practicing }
   }, [domainId])
 
   const currentId = data?.current?.id
@@ -55,8 +54,8 @@ export function MapScreen({ domainId }: { domainId?: string }) {
   }, [currentId])
 
   if (!data) return null
-  const { domains, current, skills, stats } = data
-  const states = computeStates(skills)
+  const { domains, current, skills, stats, practicing } = data
+  const states = computeStates(skills, practicing)
   const byId = indexById(skills)
   const ordered = sortByDepth(skills)
   // 練習中は、今日の画面と同じ並び（最近練習した順）
@@ -67,21 +66,6 @@ export function MapScreen({ domainId }: { domainId?: string }) {
   const available = ordered.filter((s) => states.get(s.id) === 'available')
   const locked = ordered.filter((s) => states.get(s.id) === 'locked')
   const done = ordered.filter((s) => states.get(s.id) === 'done')
-
-  // 次のおすすめだけ、ここからすぐ練習中にできる（ほかの型は、型の画面から記録すれば練習中に入る）
-  const startButton = (skill: Skill) => (
-    <button
-      className="btn small"
-      onClick={() =>
-        run(async () => {
-          await activateSkill(skill.id)
-          toast.show(`「${splitName(skill.name).main}」を練習中にしました。今日の画面から記録できます`)
-        })
-      }
-    >
-      はじめる
-    </button>
-  )
 
   return (
     <div className="screen types">
@@ -134,7 +118,7 @@ export function MapScreen({ domainId }: { domainId?: string }) {
       {view === 'roadmap' && current && skills.length > 0 && (
         <>
           <Suspense fallback={<div className="graph" aria-busy="true" />}>
-            <RoadmapGraph key={current.id} skills={skills} />
+            <RoadmapGraph key={current.id} skills={skills} practicing={practicing} />
           </Suspense>
           <p className="muted small">型を押すと、記録とコツが見られます。指で動かしたり、広げたりできます。</p>
         </>
@@ -183,7 +167,7 @@ export function MapScreen({ domainId }: { domainId?: string }) {
         </section>
       )}
 
-      {/* 次に練習するとよい型。ここからだけ、すぐ練習中にできる */}
+      {/* 次に練習するとよい型（押して型の画面から記録すると、練習中になる） */}
       {view === 'list' && available.length > 0 && (
         <section className="section">
           <h2>次のおすすめ</h2>
@@ -194,17 +178,16 @@ export function MapScreen({ domainId }: { domainId?: string }) {
                   <PatternImage name={s.name} />
                   <span className="type-row-text">
                     <span className="type-name">{splitName(s.name).main}</span>
-                    <span className="muted small">{recommendLabel(s, byId)}</span>
+                    <span className="muted small">{recommendLabel(s, byId, practicing)}</span>
                   </span>
                 </a>
-                {startButton(s)}
               </li>
             ))}
           </ul>
         </section>
       )}
 
-      {/* その先の型も、押して型の画面から記録すれば、そのまま練習中に入る */}
+      {/* その先の型も、押して型の画面から記録できる */}
       {view === 'list' && locked.length > 0 && (
         <section className="section">
           <h2>その先</h2>

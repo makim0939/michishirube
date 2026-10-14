@@ -1,4 +1,4 @@
-import { canActivate, newlyUnlocked, wouldCreateCycle } from '../domain/logic'
+import { newlyUnlocked, practicingFrom, PRACTICING_DAYS, wouldCreateCycle } from '../domain/logic'
 import { isWebUrl, parseTemplate, templateToEntities, type RoadmapTemplate } from '../domain/template'
 import {
   DEFAULT_SETTINGS,
@@ -215,29 +215,20 @@ export function defaultReferenceTitle(url: string): string {
 
 // ---- 挑戦・達成 ----
 
-const ACTIVATE_MESSAGES = {
-  done: 'すでにできています',
-  already: 'すでに練習中です',
-} as const
-
 async function setSkill(id: string, patch: Partial<Skill>) {
   await db.skills.update(id, { ...patch, updatedAt: Date.now() })
   await markDirty('skill', [id])
 }
 
-export async function activateSkill(id: string) {
-  await db.transaction('rw', [db.skills, db.outbox], async () => {
-    const skills = await db.skills.toArray()
-    const skill = skills.find((s) => s.id === id)
-    if (!skill) throw new RepoError('型が見つかりません')
-    const check = canActivate(skill, skills)
-    if (!check.ok) throw new RepoError(ACTIVATE_MESSAGES[check.reason])
-    await setSkill(id, { status: 'active', activatedAt: Date.now() })
-  })
-}
-
-export async function deactivateSkill(id: string) {
-  await db.transaction('rw', db.skills, db.outbox, () => setSkill(id, { status: 'idle', activatedAt: undefined }))
+/**
+ * 練習中の型（最近記録した型）の id。自分で出し入れせず、記録から決める。
+ * 最近の記録が無ければ、最後に記録した型を練習中にする（久しぶりに開いても、続きからすぐ記録できるように）
+ */
+export async function practicingSkillIds(now = Date.now()): Promise<Set<string>> {
+  const since = now - PRACTICING_DAYS * 24 * 60 * 60 * 1000
+  const recent = await db.records.where('createdAt').aboveOrEqual(since).toArray()
+  const last = recent.length > 0 ? undefined : await db.records.orderBy('createdAt').last()
+  return practicingFrom(recent, last)
 }
 
 /** 達成にして、達成を目指せるようになったスキルを返す（解除演出に使う） */
@@ -339,7 +330,7 @@ export async function addRecord(input: RecordInput): Promise<string> {
     nextAction,
     mediaIds: media.map((m) => m.id),
   }
-  await db.transaction('rw', [db.records, db.media, db.skills, db.outbox], async () => {
+  await db.transaction('rw', db.records, db.media, db.outbox, async () => {
     await db.media.bulkAdd(media)
     await db.records.add(record)
     await markDirty(
@@ -347,10 +338,6 @@ export async function addRecord(input: RecordInput): Promise<string> {
       media.map((m) => m.id),
     )
     await markDirty('record', [recordId])
-    // 記録した型は練習中に入れる（「はじめる」を押さなくても、やりたい型をすぐ記録できるように）。
-    // 「できた」の型は、そのまま「できた」に残す
-    const skill = await db.skills.get(input.skillId)
-    if (skill?.status === 'idle') await setSkill(skill.id, { status: 'active', activatedAt: now })
   })
   return recordId
 }
