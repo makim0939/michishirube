@@ -1,8 +1,7 @@
 /**
  * Google の画面から戻ってきたときに出すページ。
- * アプリでは、アプリが結果を問い合わせて自動でこの画面を閉じる（閉じなければ「完了」で閉じてもらう）。
- * Web 版は、ここから元の画面へ戻る。iPhone のホーム画面アプリから開いたときは別のシートで開くので、
- * 自動では移らず、閉じるかリンクで戻ってもらう（移るとホーム画面アプリとは別の保存場所で開いてしまう）
+ * 認可した画面（アプリの中のブラウザ・Web 版）を、始めたアプリ・Web 版へ戻す（成功したら一度きりのコードを付けて）。
+ * 自動で移らないときのために、戻るボタンも出す
  */
 
 export type ConnectResult = 'connected' | 'cancelled' | 'failed' | 'invalid'
@@ -24,9 +23,9 @@ const TITLES: Record<ConnectKind, Record<ConnectResult, string>> = {
 }
 
 const BODIES: Record<ConnectResult, string> = {
-  connected: 'ラテ帳に戻ります。戻らないときは、この画面を閉じてください。',
-  cancelled: 'この画面を閉じて、ラテ帳に戻ってください。',
-  failed: 'この画面を閉じて、ラテ帳の設定からもう一度試してください。',
+  connected: 'ラテ帳に戻ります。戻らないときは、下のボタンを押してください。',
+  cancelled: 'ラテ帳に戻って、もう一度試してください。',
+  failed: 'ラテ帳に戻って、設定からもう一度試してください。',
   invalid: '時間が経ちすぎたか、別の画面から開かれました。ラテ帳の設定からもう一度始めてください。',
 }
 
@@ -34,16 +33,18 @@ function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]!)
 }
 
-export function resultPage(result: ConnectResult, kind: ConnectKind = 'youtube', returnTo?: string): string {
+/** backUrl：ラテ帳（アプリ・Web 版）へ戻る URL。成功したときだけ、自動で移る */
+export function resultPage(result: ConnectResult, kind: ConnectKind = 'youtube', backUrl?: string): string {
   const title = TITLES[kind][result]
-  const back = returnTo
-    ? `<p><a class="back" href="${escapeHtml(`${returnTo.split('#')[0]}#/settings/sync`)}">ラテ帳に戻る</a></p>`
-    : ''
+  const back = backUrl ? `<p><a class="back" href="${escapeHtml(backUrl)}">ラテ帳に戻る</a></p>` : ''
+  const auto =
+    backUrl && result === 'connected' ? `<script>location.replace(${JSON.stringify(backUrl).replace(/</g, '\\u003c')})</script>` : ''
   return `<!doctype html>
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="no-referrer">
 <title>${escapeHtml(title)}｜ラテ帳</title>
 <style>
   :root { color-scheme: light; font-family: system-ui, -apple-system, 'Hiragino Sans', sans-serif; line-height: 1.7; }
@@ -57,6 +58,7 @@ export function resultPage(result: ConnectResult, kind: ConnectKind = 'youtube',
 <h1>${escapeHtml(title)}</h1>
 <p>${escapeHtml(BODIES[result])}</p>
 ${back}
+${auto}
 </body>
 </html>`
 }

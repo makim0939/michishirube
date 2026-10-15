@@ -12,6 +12,7 @@ import {
   readAuthRequest,
   readIdToken,
   sha256,
+  tooManyAuthStarts,
   upsertUser,
   userForSession,
   type AuthKind,
@@ -31,6 +32,9 @@ interface Env {
 }
 
 type App = { Bindings: Env; Variables: { userId: string } }
+
+/** iPhone・Android のアプリの URL スキーム（認可が終わったら、これでアプリへ戻る） */
+const APP_SCHEME = 'io.github.makim0939.lattecho'
 
 const app = new Hono<App>()
 
@@ -86,18 +90,16 @@ app.put('/api/photos/:id', async (c) => {
   if (!/^image\/[a-z0-9.+-]+$/i.test(type)) throw new BadRequest('Content-Type must be image/*')
   const data = await c.req.arrayBuffer()
   if (data.byteLength === 0 || data.byteLength > PHOTO_MAX_BYTES) throw new BadRequest('photo size is out of range')
-  const used = await c.env.DB.prepare(
-    'SELECT COALESCE(SUM(LENGTH(data)), 0) AS bytes FROM user_photos WHERE user_id = ?1 AND id != ?2',
-  )
+  const used = await c.env.DB.prepare('SELECT COALESCE(SUM(size), 0) AS bytes FROM user_photos WHERE user_id = ?1 AND id != ?2')
     .bind(userId, id)
     .first<{ bytes: number }>()
   if ((used?.bytes ?? 0) + data.byteLength > PHOTO_QUOTA_BYTES) {
     return c.json({ error: 'quota', message: 'サーバーに置ける写真の量を超えました' }, 413)
   }
   await c.env.DB.prepare(
-    'INSERT INTO user_photos (user_id, id, type, data, created_at) VALUES (?1, ?2, ?3, ?4, ?5) ON CONFLICT (user_id, id) DO UPDATE SET type = excluded.type, data = excluded.data',
+    'INSERT INTO user_photos (user_id, id, type, data, size, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6) ON CONFLICT (user_id, id) DO UPDATE SET type = excluded.type, data = excluded.data, size = excluded.size',
   )
-    .bind(userId, id, type, data, Date.now())
+    .bind(userId, id, type, data, data.byteLength, Date.now())
     .run()
   return c.json({ ok: true })
 })
@@ -148,19 +150,22 @@ function callbackUrl(requestUrl: string): string {
 
 /**
  * 認可を始める。アプリは番号（id）と、合言葉（verifier）のハッシュ（challenge）を送る。
- * 結果は、合言葉を知っているアプリだけが受け取れる（ほかのアプリやページに横取りされないように）。
+ * Google の画面で認可が終わると、認可した画面にだけ一度きりのコードを渡す（アプリには URL スキームで、Web 版には戻り先の URL で）。
+ * 結果は、そのコードと合言葉の両方を持つ端末だけが受け取れる
+ * （Google の画面へのリンクをほかの人に開かせても、結果は開いた人の端末に戻るので横取りできない）。
  * YouTube の連携は、ログインしている人だけが始められる
  */
 app.post('/api/auth/start', async (c) => {
   const config = googleConfig(c.env)
   if (!config || !c.env.APP_TOKEN) return c.json({ error: 'google_not_configured' }, 400)
-  const { kind, id, challenge, returnTo } = await jsonBody(c)
+  const { kind, id, challenge, returnTo, app: fromApp } = await jsonBody(c)
   if (kind !== 'login' && kind !== 'youtube') throw new BadRequest('kind is invalid')
   if (typeof id !== 'string' || !/^[A-Za-z0-9_-]{16,64}$/.test(id)) throw new BadRequest('id is invalid')
   if (typeof challenge !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(challenge)) throw new BadRequest('challenge is invalid')
-  if (returnTo !== undefined && (typeof returnTo !== 'string' || !isAllowedReturn(returnTo, parseOrigins(c.env.ALLOWED_ORIGINS)))) {
+  if (fromApp !== true && (typeof returnTo !== 'string' || !isAllowedReturn(returnTo, parseOrigins(c.env.ALLOWED_ORIGINS)))) {
     throw new BadRequest('returnTo is not allowed')
   }
+  if (await tooManyAuthStarts(c.env.DB)) return c.json({ error: 'busy', message: '混み合っています。少しおいてから試してください' }, 429)
   let userId: string | null = null
   if (kind === 'youtube') {
     const token = bearerToken(c.req.header('Authorization'))
@@ -168,7 +173,10 @@ app.post('/api/auth/start', async (c) => {
     if (!userId) return c.json({ error: 'unauthorized' }, 401)
   }
   await createAuthRequest(c.env.DB, { id, kind, challenge, userId })
-  const state = await signState({ id, returnTo: returnTo as string | undefined, issuedAt: Date.now() }, c.env.APP_TOKEN)
+  const state = await signState(
+    fromApp === true ? { id, app: true, issuedAt: Date.now() } : { id, returnTo: returnTo as string, issuedAt: Date.now() },
+    c.env.APP_TOKEN,
+  )
   return c.json({ url: authUrl(config, callbackUrl(c.req.url), state, kind) })
 })
 
@@ -179,35 +187,45 @@ app.get('/api/youtube/callback', async (c) => {
   if (!config || !state || !request || request.status !== 'pending') return c.html(resultPage('invalid'), 400)
   const kind: AuthKind = request.kind
   const returnTo = state.returnTo && isAllowedReturn(state.returnTo, parseOrigins(c.env.ALLOWED_ORIGINS)) ? state.returnTo : undefined
+  /** 認可した画面を、始めたアプリ・Web 版へ戻す URL。成功したら一度きりのコードを付ける */
+  const back = (status: string, oneTimeCode?: string) => {
+    const params = new URLSearchParams({ auth_id: request.id, auth_status: status, ...(oneTimeCode ? { auth_code: oneTimeCode } : {}) })
+    if (state.app) return `${APP_SCHEME}://auth?${params}`
+    return returnTo ? `${returnTo.split('#')[0].split('?')[0]}?${params}#/settings/sync` : undefined
+  }
   const code = c.req.query('code')
   if (!code) {
     await finishAuthRequest(c.env.DB, request.id, 'cancelled')
-    return c.html(resultPage('cancelled', kind, returnTo))
+    return c.html(resultPage('cancelled', kind, back('cancelled')))
   }
   try {
     const token = await exchangeCode(config, code, callbackUrl(c.req.url))
+    let oneTimeCode: string | undefined
     if (kind === 'login') {
       if (!token.id_token) throw new Error('id_token を受け取れませんでした')
       const { sub, email } = readIdToken(token.id_token)
       const userId = await upsertUser(c.env.DB, sub)
       // メールアドレスはアプリに渡すだけで、サーバーには残さない（結果は受け取られたらすぐ消す）
-      await finishAuthRequest(c.env.DB, request.id, 'done', { session: await createSession(c.env.DB, userId), email })
+      oneTimeCode = await finishAuthRequest(c.env.DB, request.id, 'done', { session: await createSession(c.env.DB, userId), email })
     } else {
       if (!token.refresh_token) throw new Error('refresh token を受け取れませんでした')
       // YouTube の鍵は、アプリが受け取ったらすぐ消す（サーバーには残さない）
-      await finishAuthRequest(c.env.DB, request.id, 'done', { refreshToken: token.refresh_token })
+      oneTimeCode = await finishAuthRequest(c.env.DB, request.id, 'done', { refreshToken: token.refresh_token })
     }
-    return c.html(resultPage('connected', kind, returnTo))
+    return c.html(resultPage('connected', kind, back('done', oneTimeCode)))
   } catch (e) {
     console.error(e)
     await finishAuthRequest(c.env.DB, request.id, 'failed')
-    return c.html(resultPage('failed', kind, returnTo), 502)
+    return c.html(resultPage('failed', kind, back('failed')), 502)
   }
 })
 
-/** 認可の結果を受け取る。まだなら pending を返す（アプリは少しずつ問い合わせる）。受け取ったら消す */
+/**
+ * 認可の結果を受け取る。始めた端末の合言葉（verifier）と、認可した画面に渡した一度きりのコード（code）の両方が要る。
+ * 受け取ったら消す
+ */
 app.post('/api/auth/finish', async (c) => {
-  const { id, verifier } = await jsonBody(c)
+  const { id, verifier, code } = await jsonBody(c)
   if (typeof id !== 'string' || typeof verifier !== 'string' || verifier.length < 43 || verifier.length > 128) {
     throw new BadRequest('id and verifier are required')
   }
@@ -215,6 +233,11 @@ app.post('/api/auth/finish', async (c) => {
   if (!request) return c.json({ status: 'expired' })
   if (!safeEqual(await sha256(verifier), request.challenge)) return c.json({ error: 'forbidden' }, 403)
   if (request.status === 'pending') return c.json({ status: 'pending' })
+  if (request.status === 'done') {
+    if (typeof code !== 'string' || !request.code_hash || !safeEqual(await sha256(code), request.code_hash)) {
+      return c.json({ error: 'forbidden' }, 403)
+    }
+  }
   await deleteAuthRequest(c.env.DB, id)
   const result = request.result ? (JSON.parse(request.result) as Record<string, unknown>) : {}
   return c.json({ status: request.status, kind: request.kind, ...result })

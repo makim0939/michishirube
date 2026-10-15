@@ -35,8 +35,10 @@ async function hmac(secret: string, message: string): Promise<string> {
 export interface OAuthState {
   /** アプリが始めた認可の番号（auth_requests の id） */
   id: string
-  /** 認可のあとに戻る Web 版の URL（アプリでは無い。アプリは結果を問い合わせて、自分で画面を閉じる） */
+  /** 認可のあとに戻る Web 版の URL（アプリでは無い。アプリへは、アプリの URL スキームで戻る） */
   returnTo?: string
+  /** iPhone・Android のアプリから始めた（終わったら、アプリの URL スキームで戻る） */
+  app?: boolean
   issuedAt: number
 }
 

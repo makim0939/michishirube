@@ -22,38 +22,25 @@ import { AlertIcon, CheckIcon } from './icons'
 // アプリの中では、公開しているページを Safari で開く（アプリに入れたファイルを開くと、アプリの画面が置き換わるため）
 const PRIVACY_URL = isNativeApp ? `${SITE_URL}privacy.html` : `${import.meta.env.BASE_URL}privacy.html`
 
-/**
- * Web 版で、Google の画面から戻ってきたら結果を受け取る（アプリは、開いた画面の中で受け取る）。
- * iPhone のホーム画面アプリでは Google の画面が別のシートで開くので、閉じて戻ってきたとき（画面が見えたとき）にも確かめる
- */
+/** Web 版で、Google の画面から戻ってきたら結果を受け取る（戻り先の URL に一度きりのコードが付いてくる） */
 function useWebAuthResult() {
   const toast = useToast()
   const run = useAction()
-  const busy = useRef(false)
+  const done = useRef(false)
   useEffect(() => {
-    const check = () => {
-      if (busy.current) return
-      busy.current = true
-      void run(async () => {
-        const result = await resumeWebAuth()
-        if (!result || result === 'pending') return
-        if (result.kind === 'login') {
-          const { firstDevice } = await completeLogin(result)
-          toast.show(firstDevice ? 'ログインしました。この端末の記録をサーバーに置きました' : 'ログインしました。記録を受け取りました')
-        } else {
-          await saveYoutubeKey(result.refreshToken)
-          toast.show('YouTube と連携しました')
-        }
-      }).finally(() => {
-        busy.current = false
-      })
-    }
-    check()
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') check()
-    }
-    document.addEventListener('visibilitychange', onVisible)
-    return () => document.removeEventListener('visibilitychange', onVisible)
+    if (done.current) return
+    done.current = true
+    void run(async () => {
+      const result = await resumeWebAuth()
+      if (!result) return
+      if (result.kind === 'login') {
+        const { firstDevice } = await completeLogin(result)
+        toast.show(firstDevice ? 'ログインしました。この端末の記録をサーバーに置きました' : 'ログインしました。記録を受け取りました')
+      } else {
+        await saveYoutubeKey(result.refreshToken)
+        toast.show('YouTube と連携しました')
+      }
+    })
   }, [run, toast])
 }
 

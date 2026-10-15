@@ -44,6 +44,9 @@ export async function createSession(db: D1Database, userId: string, now = Date.n
 }
 
 /** トークンから利用者を探す。使われた日を1日に1回だけ書き直す（書き込みを減らす） */
+/** これだけ使われなかったログインは切る（なくした・手放した端末から使われ続けないように） */
+export const SESSION_IDLE_MS = 365 * 24 * 60 * 60 * 1000
+
 export async function userForSession(db: D1Database, token: string, now = Date.now()): Promise<string | null> {
   const hash = await sha256(token)
   const row = await db
@@ -51,6 +54,10 @@ export async function userForSession(db: D1Database, token: string, now = Date.n
     .bind(hash)
     .first<{ user_id: string; last_used_at: number }>()
   if (!row) return null
+  if (now - row.last_used_at > SESSION_IDLE_MS) {
+    await db.prepare('DELETE FROM sessions WHERE token_hash = ?1').bind(hash).run()
+    return null
+  }
   if (now - row.last_used_at > 24 * 60 * 60 * 1000) {
     await db.prepare('UPDATE sessions SET last_used_at = ?1 WHERE token_hash = ?2').bind(now, hash).run()
   }
@@ -102,7 +109,19 @@ export interface AuthRequestRow {
   user_id: string | null
   status: AuthStatus
   result: string | null
+  code_hash: string | null
   created_at: number
+}
+
+/** 認可を始められる数（全体で1分あたり）。いたずらで表を埋められないように */
+export const AUTH_STARTS_PER_MINUTE = 120
+
+export async function tooManyAuthStarts(db: D1Database, now = Date.now()): Promise<boolean> {
+  const row = await db
+    .prepare('SELECT COUNT(*) AS n FROM auth_requests WHERE created_at > ?1')
+    .bind(now - 60_000)
+    .first<{ n: number }>()
+  return (row?.n ?? 0) >= AUTH_STARTS_PER_MINUTE
 }
 
 export async function createAuthRequest(
@@ -114,7 +133,7 @@ export async function createAuthRequest(
     db.prepare('DELETE FROM auth_requests WHERE created_at < ?1').bind(now - AUTH_TTL_MS),
     db
       .prepare(
-        "INSERT INTO auth_requests (id, kind, challenge, user_id, status, result, created_at) VALUES (?1, ?2, ?3, ?4, 'pending', NULL, ?5)",
+        "INSERT INTO auth_requests (id, kind, challenge, user_id, status, result, code_hash, created_at) VALUES (?1, ?2, ?3, ?4, 'pending', NULL, NULL, ?5)",
       )
       .bind(req.id, req.kind, req.challenge, req.userId, now),
   ])
@@ -126,11 +145,22 @@ export async function readAuthRequest(db: D1Database, id: string, now = Date.now
   return row
 }
 
-export async function finishAuthRequest(db: D1Database, id: string, status: AuthStatus, result?: unknown) {
+/**
+ * 認可を終える。成功したら、一度きりのコードを作って返す（認可した画面にだけ渡す）。
+ * 結果は、このコードと、始めた端末の合言葉の両方がそろったときだけ受け取れる
+ */
+export async function finishAuthRequest(
+  db: D1Database,
+  id: string,
+  status: AuthStatus,
+  result?: unknown,
+): Promise<string | undefined> {
+  const code = status === 'done' ? randomToken() : undefined
   await db
-    .prepare("UPDATE auth_requests SET status = ?1, result = ?2 WHERE id = ?3 AND status = 'pending'")
-    .bind(status, result === undefined ? null : JSON.stringify(result), id)
+    .prepare("UPDATE auth_requests SET status = ?1, result = ?2, code_hash = ?3 WHERE id = ?4 AND status = 'pending'")
+    .bind(status, result === undefined ? null : JSON.stringify(result), code ? await sha256(code) : null, id)
     .run()
+  return code
 }
 
 export async function deleteAuthRequest(db: D1Database, id: string) {

@@ -1,3 +1,4 @@
+import { App } from '@capacitor/app'
 import { Browser } from '@capacitor/browser'
 import { isNativeApp } from '../platform'
 import { db } from './db'
@@ -52,11 +53,17 @@ async function post(path: string, body: unknown, session?: string): Promise<Reco
   return json
 }
 
+/** アプリの URL スキーム。Google の画面で認可が終わると、サーバーがこれでアプリへ戻す */
+const APP_SCHEME = 'io.github.makim0939.lattecho'
+
 type Finish = 'pending' | 'expired' | 'cancelled' | 'failed' | AuthResult
 
-/** 認可の結果を問い合わせる。合言葉（verifier）を知っているこのアプリだけが受け取れる */
-async function finish(id: string, verifier: string): Promise<Finish> {
-  const res = await post('/api/auth/finish', { id, verifier })
+/**
+ * 認可の結果を受け取る。始めた端末の合言葉（verifier）と、認可した画面に戻ってきた一度きりのコード（code）の両方が要る
+ * （Google の画面へのリンクをほかの人に開かせても、コードはその人の端末に戻るので、結果を横取りできない）
+ */
+async function finish(id: string, verifier: string, code: string): Promise<Finish> {
+  const res = await post('/api/auth/finish', { id, verifier, code })
   const status = res.status
   if (status === 'done') {
     if (res.kind === 'login' && typeof res.session === 'string') {
@@ -68,25 +75,35 @@ async function finish(id: string, verifier: string): Promise<Finish> {
   return status === 'pending' || status === 'expired' || status === 'cancelled' ? status : 'failed'
 }
 
+/** 戻ってきた URL から、認可の番号・結果・コードを読む */
+function readBack(url: string): { id: string; status: string; code?: string } | null {
+  try {
+    const params = new URL(url).searchParams
+    const id = params.get('auth_id')
+    const status = params.get('auth_status')
+    if (!id || !status) return null
+    return { id, status, code: params.get('auth_code') ?? undefined }
+  } catch {
+    return null
+  }
+}
+
 /** アプリの中の Safari で認可画面を開いている（続けて押されても、二重に開かない） */
 let sheetOpen = false
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
-
 /**
  * Google の画面で認可してもらう。
- * - アプリ：アプリの中の Safari で開き、終わったかをサーバーに問い合わせて、終わったら自分で閉じる。閉じられたら null
+ * - アプリ：アプリの中の Safari で開き、終わったら URL スキームでアプリへ戻ってくる。閉じられたら null
  * - Web 版：画面ごと Google へ移る（戻ってきたら resumeWebAuth で結果を受け取る）。この関数は戻らない
  */
 export async function authorizeWithGoogle(kind: AuthKind, session?: string): Promise<AuthResult | null> {
   if (isNativeApp && sheetOpen) return null
   const id = randomString(24)
   const verifier = randomString(48)
-  const returnTo = isNativeApp ? undefined : window.location.href.split('#')[0]
-  const { url } = (await post('/api/auth/start', { kind, id, challenge: await sha256(verifier), returnTo }, session)) as {
-    url: string
-  }
+  const challenge = await sha256(verifier)
   if (!isNativeApp) {
+    const returnTo = window.location.href.split('#')[0].split('?')[0]
+    const { url } = (await post('/api/auth/start', { kind, id, challenge, returnTo }, session)) as { url: string }
     try {
       localStorage.setItem(PENDING_KEY, JSON.stringify({ id, verifier }))
     } catch {
@@ -96,52 +113,62 @@ export async function authorizeWithGoogle(kind: AuthKind, session?: string): Pro
     return new Promise(() => {})
   }
 
+  const { url } = (await post('/api/auth/start', { kind, id, challenge, app: true }, session)) as { url: string }
   sheetOpen = true
-  let closed = false
-  const listener = await Browser.addListener('browserFinished', () => {
-    closed = true
+  let settle: (back: { status: string; code?: string } | null) => void = () => {}
+  const returned = new Promise<{ status: string; code?: string } | null>((resolve) => (settle = resolve))
+  const opened = await App.addListener('appUrlOpen', ({ url: incoming }) => {
+    const back = incoming.startsWith(`${APP_SCHEME}:`) ? readBack(incoming) : null
+    if (back && back.id === id) settle(back)
+  })
+  const closed = await Browser.addListener('browserFinished', () => {
+    // 閉じた直後にアプリへ戻ってくることもあるので、少し待ってからあきらめる
+    setTimeout(() => settle(null), 1500)
   })
   try {
     await Browser.open({ url, presentationStyle: 'popover' })
-    // 10分まで、少しずつ問い合わせる。閉じられたら、最後にもう一度だけ確かめてやめる
-    const until = Date.now() + 10 * 60 * 1000
-    while (Date.now() < until) {
-      await sleep(1500)
-      const wasClosed = closed
-      const res = await finish(id, verifier).catch(() => 'pending' as const)
-      if (typeof res === 'object') {
-        if (!closed) await Browser.close().catch(() => {})
-        return res
-      }
-      if (res !== 'pending' || wasClosed) {
-        if (!closed) await Browser.close().catch(() => {})
-        return null
-      }
-    }
+    const back = await returned
     await Browser.close().catch(() => {})
-    return null
+    if (!back || back.status !== 'done' || !back.code) return null
+    const res = await finish(id, verifier, back.code)
+    return typeof res === 'object' ? res : null
   } finally {
     sheetOpen = false
-    await listener.remove()
+    await opened.remove()
+    await closed.remove()
   }
 }
 
-/** Web 版で、Google の画面から戻ってきたときに結果を受け取る。まだなら 'pending' */
-export async function resumeWebAuth(): Promise<AuthResult | 'pending' | null> {
+/** Web 版で、Google の画面から戻ってきたときに結果を受け取る（URL に付いてきたコードを使い、URL からは消す） */
+export async function resumeWebAuth(): Promise<AuthResult | null> {
+  const back = readBack(window.location.href)
+  if (!back) return null
+  // 戻ってきた URL のコードは、1回使ったら消す（履歴や共有に残さない）
+  window.history.replaceState(null, '', window.location.href.replace(/\?[^#]*/, ''))
   let pending: { id: string; verifier: string } | null = null
   try {
     pending = JSON.parse(localStorage.getItem(PENDING_KEY) ?? 'null') as { id: string; verifier: string } | null
+    localStorage.removeItem(PENDING_KEY)
   } catch {
-    return null
+    // 読めなければ、受け取れない
   }
-  if (!pending) return null
-  const res = await finish(pending.id, pending.verifier)
-  if (res === 'pending') return 'pending'
-  localStorage.removeItem(PENDING_KEY)
+  if (!pending || pending.id !== back.id) {
+    throw new SyncError('この画面ではログインを終えられませんでした。ログインを始めた画面でもう一度試してください')
+  }
+  if (back.status !== 'done' || !back.code) return null
+  const res = await finish(pending.id, pending.verifier, back.code)
   return typeof res === 'object' ? res : null
 }
 
 // ---- ログイン・ログアウト ----
+
+/**
+ * この端末の YouTube の鍵を消す。ログアウトしたら、次にこの端末でログインした別の人の動画が、
+ * 前の人の YouTube に上がらないように
+ */
+async function forgetYoutubeKey() {
+  await db.meta.delete('youtube:refresh')
+}
 
 /** Google でログインしている（前の版の、合言葉でつないだ接続は含まない） */
 export function isLoggedIn(config: SyncConfig | undefined): boolean {
@@ -179,6 +206,7 @@ export async function logout() {
     )
   }
   await disconnectSync()
+  await forgetYoutubeKey()
 }
 
 /** アカウントと、サーバーに置いたデータをすべて消す。端末の記録はそのまま残る */
@@ -193,6 +221,7 @@ export async function deleteAccount() {
   }
   if (!res.ok && res.status !== 401) throw new SyncError(`削除できませんでした（${res.status}）`, res.status)
   await disconnectSync()
+  await forgetYoutubeKey()
   // 写真をサーバーに置いた印も消す（次にログインしたら置き直す）
   await db.media.toCollection().modify((m) => {
     delete m.cloudPhoto

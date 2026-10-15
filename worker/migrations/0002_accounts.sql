@@ -18,7 +18,9 @@ CREATE TABLE sessions (
 );
 CREATE INDEX sessions_user ON sessions (user_id);
 
--- Google の画面で認可している途中のもの（10分で消える）。終わったら結果をアプリが一度だけ受け取り、すぐ消す
+-- Google の画面で認可している途中のもの（10分で消える）。
+-- 終わったら、認可した画面（アプリ・ブラウザ）にだけ一度きりのコードを渡し、
+-- そのコードと、始めた端末の合言葉（challenge の元）の両方がそろったときだけ結果を渡して、すぐ消す
 CREATE TABLE auth_requests (
   id TEXT PRIMARY KEY,
   kind TEXT NOT NULL,
@@ -26,8 +28,10 @@ CREATE TABLE auth_requests (
   user_id TEXT,
   status TEXT NOT NULL,
   result TEXT,
+  code_hash TEXT,
   created_at INTEGER NOT NULL
 );
+CREATE INDEX auth_requests_created ON auth_requests (created_at);
 
 CREATE TABLE user_entities (
   user_id TEXT NOT NULL,
@@ -46,6 +50,8 @@ CREATE TABLE user_photos (
   id TEXT NOT NULL,
   type TEXT NOT NULL,
   data BLOB NOT NULL,
+  -- 大きさ（置ける量の上限を、中身を読まずに数えるため）
+  size INTEGER NOT NULL,
   created_at INTEGER NOT NULL,
   PRIMARY KEY (user_id, id)
 );
@@ -53,8 +59,8 @@ CREATE TABLE user_photos (
 -- これまで1人で使っていたデータは「legacy」として残し、前のトークンを知っている人がログインしたときに引き継ぐ
 INSERT INTO user_entities (user_id, kind, id, data, updated_at, deleted, seq)
   SELECT 'legacy', kind, id, data, updated_at, deleted, seq FROM entities;
-INSERT INTO user_photos (user_id, id, type, data, created_at)
-  SELECT 'legacy', id, type, data, created_at FROM photos;
+INSERT INTO user_photos (user_id, id, type, data, size, created_at)
+  SELECT 'legacy', id, type, data, LENGTH(data), created_at FROM photos;
 
 DROP TABLE entities;
 DROP TABLE photos;

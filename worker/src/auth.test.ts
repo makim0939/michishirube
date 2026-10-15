@@ -56,14 +56,15 @@ describe('同期リクエストの検査', () => {
 })
 
 describe('連携結果のページ', () => {
-  it('アプリへ飛ばさず閉じるよう案内し、戻り先は HTML として安全に埋め込む', async () => {
+  it('成功したらラテ帳へ戻し、戻り先は HTML・JS として安全に埋め込む', async () => {
     const { resultPage } = await import('./resultPage')
-    const html = resultPage('connected', 'youtube', 'https://makim0939.github.io/michishirube/"><script>')
+    const html = resultPage('connected', 'youtube', 'https://makim0939.github.io/michishirube/?a="><script></script>')
     expect(html).toContain('YouTube と連携しました')
-    expect(html).toContain('閉じて')
+    expect(html).toContain('location.replace(')
+    expect(html).not.toContain('<script></script>')
     expect(resultPage('connected', 'login')).toContain('ログインしました')
-    expect(html).not.toContain('<script>')
-    expect(html).not.toMatch(/http-equiv="refresh"/)
+    // 失敗したときは自動で移らず、戻るボタンだけ
+    expect(resultPage('failed', 'login', 'https://x.example/')).not.toContain('location.replace')
   })
 })
 
