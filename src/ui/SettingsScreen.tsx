@@ -26,7 +26,7 @@ import { RoadmapSettings } from './RoadmapSettings'
 import { backHandler, go, href, type SettingsSection } from './router'
 import { SyncSettings } from './SyncSettings'
 import { forgetToday } from './TodayScreen'
-import { isNativeApp, SITE_URL } from '../platform'
+import { isNativeApp, SITE_URL, YOUTUBE_TERMS_URL } from '../platform'
 import { AlertIcon, BackIcon, CheckIcon, ForwardIcon } from './icons'
 
 function StorageStatus() {
@@ -283,6 +283,13 @@ function StoragePage() {
             onSelect={select(() => (storage === 'youtube' ? Promise.resolve() : changeStorage('youtube')))}
           />
         </ul>
+        <p className="muted small">
+          YouTube に上げる動画は、
+          <a href={YOUTUBE_TERMS_URL} target="_blank" rel="noopener noreferrer">
+            YouTube 利用規約
+          </a>
+          に沿った内容であることを、あなたが確認したものとみなされます。
+        </p>
       </section>
 
       <section className="section">

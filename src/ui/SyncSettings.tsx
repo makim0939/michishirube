@@ -16,7 +16,7 @@ import { connectYoutube, disconnectYoutube, resumeUploads, saveYoutubeKey, youtu
 import { ConfirmButton, formatAgo, formatDate } from './common'
 import { useAction, useToast } from './feedback'
 import { replace } from './router'
-import { isNativeApp, SITE_URL } from '../platform'
+import { isNativeApp, SITE_URL, YOUTUBE_TERMS_URL } from '../platform'
 import { AlertIcon, CheckIcon } from './icons'
 
 // アプリの中では、公開しているページを Safari で開く（アプリに入れたファイルを開くと、アプリの画面が置き換わるため）
@@ -146,7 +146,11 @@ function YoutubeSection() {
       )}
       <p className="muted small">
         設定の「動画」で保存先を YouTube にすると、動画をあなたの YouTube チャンネルに上げます（はじめは限定公開）。YouTube
-        の鍵はこの端末にだけ置くので、ほかの端末ではその端末で連携してください。
+        の鍵はこの端末にだけ置くので、ほかの端末ではその端末で連携してください。YouTube に上げる動画は、
+        <a href={YOUTUBE_TERMS_URL} target="_blank" rel="noopener noreferrer">
+          YouTube 利用規約
+        </a>
+        に沿った内容であることを、あなたが確認したものとみなされます。動画は「子ども向けではない」として上げます（変えるときは、YouTube で設定してください）。
       </p>
     </div>
   )
