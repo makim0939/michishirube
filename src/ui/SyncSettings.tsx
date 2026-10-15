@@ -16,13 +16,11 @@ import { connectYoutube, disconnectYoutube, resumeUploads, saveYoutubeKey, youtu
 import { ConfirmButton, formatAgo, formatDate } from './common'
 import { useAction, useToast } from './feedback'
 import { replace } from './router'
-import { isNativeApp, SITE_URL } from '../platform'
+import { isNativeApp, SITE_URL, YOUTUBE_TERMS_URL } from '../platform'
 import { AlertIcon, CheckIcon } from './icons'
 
 // アプリの中では、公開しているページを Safari で開く（アプリに入れたファイルを開くと、アプリの画面が置き換わるため）
 const PRIVACY_URL = isNativeApp ? `${SITE_URL}privacy` : `${import.meta.env.BASE_URL}privacy.html`
-/** YouTube 利用規約（YouTube に動画を上げる機能には、この規約に沿うことの確認の表示が要る。携帯用のページがある） */
-const YOUTUBE_TERMS_URL = isNativeApp ? 'https://m.youtube.com/t/terms' : 'https://www.youtube.com/t/terms'
 
 /** Web 版で、Google の画面から戻ってきたら結果を受け取る（戻り先の URL に一度きりのコードが付いてくる） */
 function useWebAuthResult() {

@@ -92,7 +92,7 @@ https://github.com/makim0939/michishirube
 | 1:30 | 設定 → アカウント。「YouTube と連携」を押す前に、ボタンの下の説明（YouTube 利用規約・子ども向けではない）を見せてから、ボタンを押す | "Now the user links YouTube. Before linking, the app tells the user that uploaded videos must comply with the YouTube Terms of Service and are uploaded as not made for kids. This is the only place where the app asks for the YouTube upload permission." |
 | 1:45 | 同意画面（YouTube）。権限の文言とアドレスバー（`client_id`・`scope=…youtube.upload`）を見せる | "The consent screen shows the app name and the permission, 'Manage your YouTube videos'. In the address bar, the scope is youtube.upload and our client ID is visible." （拡大して見せる） |
 | 2:10 | 許可して戻る。「連携しました」の表示を見せる | "After granting, the app shows that YouTube is linked." |
-| 2:30 | 設定 → 動画 → 保存先を「YouTube」にする | "The user chooses YouTube as the storage destination for videos. Nothing is uploaded unless the user does this." |
+| 2:30 | 設定 → 動画 → 保存先の下の説明（YouTube 利用規約）を見せてから、保存先を「YouTube」にする | "The user chooses YouTube as the storage destination for videos. The screen tells the user that uploaded videos must comply with the YouTube Terms of Service. Nothing is uploaded unless the user does this." |
 | 2:45 | 記録する → 短い動画を撮る（または選ぶ）→ 保存 | "The user records a short practice video and saves the record." |
 | 3:05 | 設定 → アカウントで、アップが進むのを見せる。続けて、YouTube Studio を開き、動画が「限定公開」で入っているのを見せる | "The app uploads the video to the user's own YouTube channel. In YouTube Studio the video appears with visibility 'Unlisted'. This is the only thing the permission is used for." |
 | 3:30 | 設定 → アカウント → YouTube → 連携を解除。続けて、Google の「アプリのアクセス許可」ページを見せる | "The user can unlink at any time. This also revokes the permission on Google's side, and it can also be revoked here in the Google account permissions page." |

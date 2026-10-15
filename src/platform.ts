@@ -10,6 +10,9 @@ export const isNativeApp = Capacitor.isNativePlatform()
 /** Android のアプリ */
 export const isAndroidApp = Capacitor.getPlatform() === 'android'
 
+/** YouTube 利用規約（YouTube に動画を上げる機能には、この規約に沿うことの確認の表示が要る。携帯用のページがある） */
+export const YOUTUBE_TERMS_URL = isNativeApp ? 'https://m.youtube.com/t/terms' : 'https://www.youtube.com/t/terms'
+
 /** iPhone・iPad のアプリ */
 export const isIosApp = Capacitor.getPlatform() === 'ios'
 
