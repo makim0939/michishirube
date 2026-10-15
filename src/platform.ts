@@ -10,6 +10,17 @@ export const isNativeApp = Capacitor.isNativePlatform()
 /** Android のアプリ */
 export const isAndroidApp = Capacitor.getPlatform() === 'android'
 
+/** iPhone・iPad のアプリ */
+export const isIosApp = Capacitor.getPlatform() === 'ios'
+
+/** iPhone・iPad か（アプリでも Safari でも。iPadOS の Safari は Mac として名乗るので、タッチ対応かどうかでも判定する） */
+export function isIosDevice(): boolean {
+  return (
+    /iPhone|iPad|iPod/.test(navigator.userAgent) ||
+    (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1)
+  )
+}
+
 /** 公開している Web 版の場所（アプリからプライバシーポリシーなどを開くとき・https の場所が要るときに使う） */
 /**
  * Android の「戻る」（ボタン・端からのスワイプ）。何もしないとアプリが閉じるので、画面の履歴があれば1つ前の画面に戻る。

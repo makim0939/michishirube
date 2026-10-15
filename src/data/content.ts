@@ -9,6 +9,7 @@ import {
   usesFiles,
   writeBlobFile,
 } from './files'
+import { isIosApp } from '../platform'
 import { QUALITY } from './mediaPrep'
 import { getVideoSettings, type VideoQuality, type VideoSettings } from './videoStorage'
 
@@ -85,6 +86,14 @@ export function targetQuality(
   return base
 }
 
+/**
+ * その動画を、アプリで作り直せるか。iPhone の動画の読み込みは WebM を読めないので、作り直そうとしても必ず失敗する
+ * （失敗のまま印が付かないと、YouTube に上げるのを、ずっと待ってしまう）
+ */
+export function canTranscode(m: Pick<Media, 'type'>, ios = isIosApp): boolean {
+  return !(ios && m.type.includes('webm'))
+}
+
 /** アプリのファイルに置いた動画・写真の大きさの合計（設定の使用量に出す） */
 export async function contentFilesSize(): Promise<number> {
   if (!usesFiles) return 0
@@ -134,6 +143,11 @@ async function optimizeNow(ids?: string[]) {
     if (!m?.file || !m.type.startsWith('video/')) continue
     const quality = targetQuality(m, settings, now)
     if (m.optimized === quality) continue
+    // 作り直せない動画は、そのまま使う（作り直し済みの印を付けて、YouTube に上げられるようにする）
+    if (!canTranscode(m)) {
+      await db.media.update(id, { optimized: quality })
+      continue
+    }
     const source = m.file
     const out = optimizedPath(m, quality)
     let result: { skipped: boolean; size?: number }
