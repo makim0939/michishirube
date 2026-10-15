@@ -55,9 +55,13 @@ describe('録画の結果の判定', () => {
     expect(judgeRecording(1_000, 1_500, true)).toBe('ok')
   })
 
-  it('押していないのに止まった録画は、この形式では撮れない（映像を作る部品が無い端末は、1秒ほどで止まる）', () => {
+  it('押していないのに、すぐ（3秒より前に）止まった録画は、この形式では撮れない（映像を作る部品が無い端末は、1秒ほどで止まる）', () => {
     expect(judgeRecording(1_559, 1_000, false)).toBe('broken')
-    expect(judgeRecording(900_000, 5_000, false)).toBe('broken')
+    expect(judgeRecording(900_000, 2_500, false)).toBe('broken')
+  })
+
+  it('しばらく撮ってから勝手に止まった（電話・アプリの切り替えなど）録画は、形式のせいにせず、撮れた分を残す', () => {
+    expect(judgeRecording(900_000, 8_000, false)).toBe('ok')
   })
 
   it('0 バイト・映像が入らず数 KB だけの録画は、この形式では撮れない', () => {

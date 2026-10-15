@@ -20,7 +20,6 @@ const MODE_KEY = 'michishirube:recorder-mode'
 
 type Mode = 'video' | 'photo'
 
-
 function formatElapsed(ms: number) {
   const s = Math.floor(ms / 1000)
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`

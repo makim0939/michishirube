@@ -82,15 +82,16 @@ export type RecordingVerdict = 'ok' | 'too-short' | 'broken'
 
 /**
  * 録画の結果を見て、この形式がこの端末で使えるかを決める。
- * - 押して止めていないのに止まった：映像を作る部品（H.264 のハードウェア）が無い端末（Android のエミュレーターなど）は、
- *   録画を始めて1秒ほどで、エラーで止まる。この形式では撮れない
+ * - 押して止めていないのに、録画を始めて3秒より前に止まった：映像を作る部品（H.264 のハードウェア）が無い端末
+ *   （Android のエミュレーターなど）は、1秒ほどでエラーで止まる。この形式では撮れない
+ *   （数秒たってから止まったのは、電話・アプリの切り替えなどの中断。撮れた分は残す）
  * - 0 バイト、または映像が入っていない（音声と見出しだけの数 KB）：同じく、この形式では撮れない。
  *   映像が入っていれば、静かな画面でも1秒あたり数十 KB にはなる
  * - 押してすぐ止めた（2秒より短い）のが空なのは、形式のせいではない
  */
 export function judgeRecording(bytes: number, elapsedMs: number, stoppedByUser: boolean): RecordingVerdict {
-  if (!stoppedByUser) return 'broken'
-  if (elapsedMs < 2000) return bytes === 0 ? 'too-short' : 'ok'
+  if (!stoppedByUser && elapsedMs < 3000) return 'broken'
+  if (stoppedByUser && elapsedMs < 2000) return bytes === 0 ? 'too-short' : 'ok'
   return bytes < (elapsedMs / 1000) * 2000 ? 'broken' : 'ok'
 }
 
