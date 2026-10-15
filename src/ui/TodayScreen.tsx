@@ -1,5 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useRef, useState } from 'react'
+import { isLoggedIn } from '../data/account'
 import { db } from '../data/db'
 import { cupNumbers, practicingSkillIds, recordsOf } from '../data/repo'
 import { getSyncConfig, getSyncStatus } from '../data/sync'
@@ -89,7 +90,8 @@ function Notice() {
   }))
   if (!data) return null
 
-  if (data.config && data.status.error) {
+  // Google でログインしていない端末（端末だけで使う人・前の版の接続）には、同期の失敗を出さない
+  if (isLoggedIn(data.config) && data.status.error) {
     return (
       <a className="notice" href={href('/settings/sync')}>
         <AlertIcon size={18} />
@@ -117,7 +119,7 @@ function Notice() {
     )
   }
   // 同期を使わない人もいるので、閉じたら出さない
-  if (!data.config && data.records > 0 && !syncHintHidden) {
+  if (!isLoggedIn(data.config) && data.records > 0 && !syncHintHidden) {
     return (
       <div className="notice">
         <AlertIcon size={18} />

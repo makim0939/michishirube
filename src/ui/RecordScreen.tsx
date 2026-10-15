@@ -12,7 +12,7 @@ import type { Media, Outcome } from '../domain/types'
 import { ConfirmButton, Empty, formatBytes, isVideo, MediaView, requestPersist, splitName } from './common'
 import { useCupImageUrl } from './cupImage'
 import { useAction, useToast } from './feedback'
-import { canRecordInApp, Recorder } from './Recorder'
+import { canRecordInApp, Recorder, type RecordChoice } from './Recorder'
 import { backHandler, go, goBack, href } from './router'
 import { readStorage, removeStorage, writeStorage } from './storage'
 import { Trimmer } from './Trimmer'
@@ -57,7 +57,7 @@ function NotOnDevice({ media }: { media: Media }) {
 
 /** 画面に並べる動画・写真。新しく撮ったものと、保存済みの記録にあるもの */
 type Item =
-  | { kind: 'new'; key: string; file: File; poster?: Poster; inMemory: boolean }
+  | { kind: 'new'; key: string; file: File; poster?: Poster; inMemory: boolean; choice?: RecordChoice }
   | { kind: 'existing'; key: string; media: Media; replaced?: { file: File; poster?: Poster } }
 
 function itemBlob(item: Item): Blob | undefined {
@@ -179,7 +179,7 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
   }
 
   /** inMemory：アプリ内の録画のように、もともとメモリ上にあるファイル */
-  const addFiles = async (list: FileList | File[] | null, inMemory = false) => {
+  const addFiles = async (list: FileList | File[] | null, inMemory = false, choice?: RecordChoice) => {
     // FileList は input の value を空にすると中身も消えるので、先に配列へ写す
     let picked = list ? Array.from(list) : []
     // Android はメモリに写すので、大きすぎる動画は入れない（アプリが落ちないように）
@@ -199,6 +199,8 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
       key: nextKey(),
       file,
       inMemory: inMemory || file !== picked[i],
+      // 撮る前に選んだ画質・公開範囲は、動画だけに付ける
+      ...(choice && file.type.startsWith('video/') ? { choice } : {}),
     }))
     setItems((prev) => [...prev, ...added])
     change()
@@ -240,6 +242,8 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
               blob: i.inMemory ? i.file : await detach(i.file),
               poster: i.poster?.blob,
               posterEnd: i.poster?.end,
+              quality: i.choice?.quality,
+              youtubePrivacy: i.choice?.privacy,
             })
           else if (i.replaced)
             replace.push({
@@ -564,13 +568,14 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
       {recording && videoSettings && (
         <Recorder
           quality={videoSettings.quality}
+          privacy={videoSettings.storage === 'youtube' ? videoSettings.youtubePrivacy : undefined}
           focus={editing ? undefined : next?.text}
           references={skill.references}
-          onDone={(video, photo) => {
+          onDone={(video, photo, choice) => {
             setRecording(false)
             // できあがりの写真も撮ったら、動画と一緒に記録に入れる（カップの絵には写真を使う）
             const files = [video, photo].filter((f): f is File => !!f)
-            void addFiles(files, true)
+            void addFiles(files, true, choice)
           }}
           onClose={() => {
             setRecording(false)

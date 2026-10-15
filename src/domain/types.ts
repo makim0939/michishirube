@@ -97,6 +97,10 @@ export interface Media {
   updatedAt: number
   /** 以前の「端末に残す」印。今は使わない（同期で届く古いデータに残っていることがある） */
   keep?: boolean
+  /** 撮るときに選んだ画質（この動画だけ。無ければ設定の画質）。アプリで画質をそろえるときに使う */
+  quality?: 'standard' | 'high'
+  /** 撮るときに選んだ YouTube の公開範囲（この動画だけ。無ければ設定の公開範囲） */
+  youtubePrivacy?: 'unlisted' | 'public'
   /** 動画を YouTube に上げた結果 */
   upload?: UploadState
   uploadError?: string

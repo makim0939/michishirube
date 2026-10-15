@@ -70,16 +70,16 @@ export const KEEP_HIGH_DAYS = 3
 
 /**
  * その動画をどの画質にそろえるか。
- * - まだそろえていない動画（撮った・アルバムから入れた）は、いまの設定の画質
+ * - まだそろえていない動画（撮った・アルバムから入れた）は、撮るときに選んだ画質。選んでいなければ、いまの設定の画質
  * - そろえ済みの動画は、その画質のまま（標準を高画質に戻すことはできない）。ただし、端末に置く高画質の動画は、
  *   「高画質のまま残す」にしていなければ、日がたったら標準に軽くする
  */
 export function targetQuality(
-  m: Pick<Media, 'optimized' | 'contentAt' | 'createdAt'>,
+  m: Pick<Media, 'optimized' | 'quality' | 'contentAt' | 'createdAt'>,
   settings: VideoSettings,
   now: number,
 ): VideoQuality {
-  const base = m.optimized ?? settings.quality
+  const base = m.optimized ?? m.quality ?? settings.quality
   const old = (m.contentAt ?? m.createdAt) < now - KEEP_HIGH_DAYS * 24 * 60 * 60 * 1000
   if (base === 'high' && settings.storage === 'device' && !settings.keepHigh && old) return 'standard'
   return base
