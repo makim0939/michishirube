@@ -42,6 +42,17 @@ function trimUrls() {
   }
 }
 
+let trimTimer: ReturnType<typeof setTimeout> | undefined
+
+/**
+ * 手放すのは、少し待ってから行う。画面を切り替えるとき、前の画面の後片付けが、次の画面が拾った URL
+ * （まだ「使っている」と数えられる前）を先に手放してしまわないように
+ */
+function scheduleTrim() {
+  clearTimeout(trimTimer)
+  trimTimer = setTimeout(trimUrls, 1000)
+}
+
 /**
  * 写真の表示用 URL。key は中身が変われば変わるもの。画面を開き直しても、最初の描画から URL が入っている
  * （useObjectUrl は、描画のあとで URL を作るので、開き直した直後に1コマだけ空になる）
@@ -54,7 +65,7 @@ export function useImageUrl(blob: Blob | undefined, key: string | undefined): st
     entry.users++
     return () => {
       entry.users--
-      trimUrls()
+      scheduleTrim()
     }
   }, [key, url])
   return url
