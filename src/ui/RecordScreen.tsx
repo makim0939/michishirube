@@ -400,6 +400,7 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
               const blob = itemBlob(item)
               const type = itemType(item)
               const poster = item.kind === 'new' ? item.poster?.blob : (item.replaced?.poster?.blob ?? item.media.poster)
+              const privacyLabel = (item.kind === 'new' ? (item.privacy ?? videoSettings?.youtubePrivacy) : undefined) === 'public' ? '公開' : '限定公開'
               return (
                 <li key={item.key}>
                   {blob ? (
@@ -426,8 +427,13 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
                     )}
                     {/* 保存先が YouTube のとき、この動画の公開範囲（押すたびに切り替わる）。上げたあとの動画は変えられない */}
                     {storage === 'youtube' && item.kind === 'new' && isVideo({ type }) && (
-                      <button type="button" className="btn small" onClick={() => togglePrivacy(item)}>
-                        {(item.privacy ?? videoSettings?.youtubePrivacy) === 'public' ? '公開' : '限定公開'}
+                      <button
+                        type="button"
+                        className="btn small"
+                        aria-label={`YouTube の公開範囲：${privacyLabel}（押すと切り替わります）`}
+                        onClick={() => togglePrivacy(item)}
+                      >
+                        {privacyLabel}
                       </button>
                     )}
                   </div>
