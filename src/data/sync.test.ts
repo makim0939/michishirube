@@ -3,10 +3,10 @@ import { exportBackup, importBackup } from './backup'
 import { db } from './db'
 import { pickRecorderMimeType } from './mediaPrep'
 import { addRecord, createDomain, createSkill, ensureSeeded } from './repo'
-import { getVideoStorage, setVideoStorage } from './videoStorage'
+import { getVideoStorage, setVideoStorage, setYoutubePrivacy } from './videoStorage'
 import { applyRemote, connectWithConfig, runSync } from './sync'
 import { selectVideosToDrop } from './tidy'
-import { uploadVideo, youtubePlayable } from './youtube'
+import { uploadVideo, videoMeta, youtubePlayable } from './youtube'
 
 const input = (name: string) => ({ name, description: '', criteria: '', sources: [], prereqIds: [] })
 
@@ -194,6 +194,14 @@ describe('YouTube へのアップロード', () => {
     expect(id).toBe('abc123')
     expect(JSON.parse(String(calls[0].init?.body)).status.privacyStatus).toBe('unlisted')
     expect(calls[1].url).toBe('https://upload.example/session')
+  })
+
+  it('公開範囲は、撮るときに選んだものを設定より先に使う', async () => {
+    const media = { id: 'm', recordId: 'r', skillId: 's', type: 'video/mp4', size: 1, createdAt: 0, updatedAt: 0 }
+    expect((await videoMeta(media)).privacy).toBe('unlisted')
+    await setYoutubePrivacy('public')
+    expect((await videoMeta(media)).privacy).toBe('public')
+    expect((await videoMeta({ ...media, youtubePrivacy: 'unlisted' })).privacy).toBe('unlisted')
   })
 
   it('上限に達したら専用のエラーにする', async () => {

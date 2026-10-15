@@ -30,25 +30,32 @@ const QUALITY_CHOICES: { value: VideoQuality; label: string }[] = [
   { value: 'high', label: '高画質' },
 ]
 
+const MODE_CHOICES: { value: Mode; label: string }[] = [
+  { value: 'video', label: '動画' },
+  { value: 'photo', label: '写真' },
+]
+
 const PRIVACY_CHOICES: { value: YoutubePrivacy; label: string }[] = [
   { value: 'unlisted', label: '限定公開' },
   { value: 'public', label: '公開' },
 ]
 
-/** カメラの上に出す、2択の切り替え（動画と写真の切り替えと同じ形） */
+/** カメラの上に出す、2択の切り替え（iPhone のカメラの動画／写真と同じ形）。small は画質などの小さい版 */
 function Segmented<T extends string>({
   label,
   value,
   choices,
   onChange,
+  small,
 }: {
+  small?: boolean
   label: string
   value: T
   choices: { value: T; label: string }[]
   onChange: (value: T) => void
 }) {
   return (
-    <div className="recorder-modes small" role="radiogroup" aria-label={label}>
+    <div className={`recorder-modes${small ? ' small' : ''}`} role="radiogroup" aria-label={label}>
       {choices.map((c) => (
         <button
           key={c.value}
@@ -250,6 +257,8 @@ export function Recorder({
   }
 
   const recording = startedAt !== undefined
+  /** この動画に選んだ画質・公開範囲 */
+  const choice: RecordChoice = { quality, privacy }
 
   /** いま映っているコマから、枠の中を写真にする（開いているカメラのまま、1回押すだけ） */
   const shoot = async () => {
@@ -273,7 +282,7 @@ export function Recorder({
       setShooting(false)
       return
     }
-    onDone(finished, photo, { quality, privacy })
+    onDone(finished, photo, choice)
   }
 
   const switchMode = (next: Mode) => {
@@ -294,7 +303,7 @@ export function Recorder({
             disabled={shooting}
             onClick={() => void shoot()}
           />
-          <button className="btn small ghost recorder-native" disabled={shooting} onClick={() => onDone(finished, undefined, { quality, privacy })}>
+          <button className="btn small ghost recorder-native" disabled={shooting} onClick={() => onDone(finished, undefined, choice)}>
             スキップ
           </button>
         </div>
@@ -381,26 +390,13 @@ export function Recorder({
         {/* この動画だけの画質と公開範囲（初めは設定のとおり）。写真のときは場所だけ空けて、下の切り替えが動かないようにする */}
         {!recording && !error && (
           <div className="recorder-options" style={photoMode ? { visibility: 'hidden' } : undefined} aria-hidden={photoMode}>
-            <Segmented label="画質" value={quality} choices={QUALITY_CHOICES} onChange={setQuality} />
-            {privacy && <Segmented label="YouTube の公開範囲" value={privacy} choices={PRIVACY_CHOICES} onChange={setPrivacy} />}
+            <Segmented small label="画質" value={quality} choices={QUALITY_CHOICES} onChange={setQuality} />
+            {privacy && <Segmented small label="YouTube の公開範囲" value={privacy} choices={PRIVACY_CHOICES} onChange={setPrivacy} />}
           </div>
         )}
         {/* 動画と写真の切り替え（iPhone のカメラと同じく、シャッターの上に） */}
         {!recording && !error && (
-          <div className="recorder-modes" role="radiogroup" aria-label="撮るもの">
-            {(['video', 'photo'] as const).map((m) => (
-              <button
-                key={m}
-                type="button"
-                role="radio"
-                aria-checked={mode === m}
-                className={mode === m ? 'selected' : ''}
-                onClick={() => switchMode(m)}
-              >
-                {m === 'video' ? '動画' : '写真'}
-              </button>
-            ))}
-          </div>
+          <Segmented label="撮るもの" value={mode} choices={MODE_CHOICES} onChange={switchMode} />
         )}
         <div className="recorder-controls">
           {!recording && onAlbum ? (
