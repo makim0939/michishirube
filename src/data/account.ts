@@ -10,8 +10,17 @@ import { connectWithConfig, disconnectSync, getSyncConfig, SyncError, type SyncC
  * 動画の中身と YouTube の鍵はサーバーに置かない
  */
 
-/** みんなで使うサーバー */
-export const SERVER_URL: string = import.meta.env.VITE_API_URL ?? 'https://michishirube-api.makim0939.workers.dev'
+/** みんなで使うサーバー（アプリのトップページ・プライバシーポリシーと同じドメイン） */
+export const SERVER_URL: string = import.meta.env.VITE_API_URL ?? 'https://latte.makimura.me'
+
+/** 独自ドメインにする前のサーバーの URL。同じサーバーで、前の版のアプリはここにつないでいる */
+const PREVIOUS_SERVER_URL = 'https://michishirube-api.makim0939.workers.dev'
+
+/** このアプリのサーバーの URL か（前の版の、合言葉でつないだ接続を見分けるのに使う） */
+export function isOurServer(url: string): boolean {
+  const normalized = url.replace(/\/+$/, '')
+  return normalized === SERVER_URL || normalized === PREVIOUS_SERVER_URL
+}
 
 /** Web 版で、Google の画面へ移る前に覚えておく認可（戻ってきたら結果を受け取る） */
 const PENDING_KEY = 'michishirube:auth-pending'
@@ -182,7 +191,7 @@ export function isLoggedIn(config: SyncConfig | undefined): boolean {
 export async function completeLogin(result: Extract<AuthResult, { kind: 'login' }>): Promise<{ firstDevice: boolean }> {
   const previous = await getSyncConfig()
   const config: SyncConfig = { url: SERVER_URL, token: result.session, email: result.email, account: true }
-  if (previous && !isLoggedIn(previous) && previous.url.replace(/\/+$/, '') === SERVER_URL) {
+  if (previous && !isLoggedIn(previous) && isOurServer(previous.url)) {
     await fetch(`${SERVER_URL}/api/account/claim-legacy`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${config.token}`, 'X-Legacy-Token': previous.token },

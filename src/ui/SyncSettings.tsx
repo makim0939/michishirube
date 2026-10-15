@@ -4,10 +4,10 @@ import {
   completeLogin,
   deleteAccount,
   isLoggedIn,
+  isOurServer,
   loginWithGoogle,
   logout,
   resumeWebAuth,
-  SERVER_URL,
 } from '../data/account'
 import { db } from '../data/db'
 import { getSyncConfig, getSyncStatus, runSync } from '../data/sync'
@@ -20,7 +20,7 @@ import { isNativeApp, SITE_URL } from '../platform'
 import { AlertIcon, CheckIcon } from './icons'
 
 // アプリの中では、公開しているページを Safari で開く（アプリに入れたファイルを開くと、アプリの画面が置き換わるため）
-const PRIVACY_URL = isNativeApp ? `${SITE_URL}privacy.html` : `${import.meta.env.BASE_URL}privacy.html`
+const PRIVACY_URL = isNativeApp ? `${SITE_URL}privacy` : `${import.meta.env.BASE_URL}privacy.html`
 
 /** Web 版で、Google の画面から戻ってきたら結果を受け取る（戻り先の URL に一度きりのコードが付いてくる） */
 function useWebAuthResult() {
@@ -172,7 +172,7 @@ export function SyncSettings({ notice }: { notice?: string }) {
   const { config, status, pending } = data
   const loggedIn = isLoggedIn(config)
   // 前の版で、同じサーバーに合言葉でつないでいた端末（ログインすると、そのデータを引き継ぐ）
-  const legacy = !!config && !loggedIn && config.url.replace(/\/+$/, '') === SERVER_URL
+  const legacy = !!config && !loggedIn && isOurServer(config.url)
 
   if (!config || !loggedIn) return <LoginSection legacy={legacy} />
 

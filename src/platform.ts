@@ -23,4 +23,5 @@ export function watchBackButton() {
   })
 }
 
-export const SITE_URL = 'https://makim0939.github.io/michishirube/'
+/** アプリのトップページ・プライバシーポリシー（サーバーと同じドメイン）。アプリはここのページを開く */
+export const SITE_URL = 'https://latte.makimura.me/'

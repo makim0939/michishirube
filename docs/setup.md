@@ -34,7 +34,9 @@ pnpm worker:deploy
 ```
 
 - **データベースの更新（migrate）を先に行ってから、公開（deploy）します。** 逆にすると、新しいサーバーが古い表を読もうとして失敗します。
-- 最後に表示される `https://michishirube-api.〇〇.workers.dev` がサーバーの URL です。アプリは `src/data/account.ts` の `SERVER_URL` に書いたサーバーを使います。
+- サーバーの URL は `https://latte.makimura.me` です（`worker/wrangler.jsonc` の `routes`。Cloudflare で `makimura.me` を管理している同じアカウントなら、公開するときにドメインの割り当て・証明書も自動で行われます）。アプリは `src/data/account.ts` の `SERVER_URL` に書いたサーバーを使います。
+- 同じドメインで、`/api/*` はサーバー、それ以外は `worker/site/` のトップページ（`/`）とプライバシーポリシー（`/privacy`）を返します。`worker/site/privacy.html` は `public/privacy.html`（アプリの中・Web 版のもの）のコピーで、ずれるとテストが失敗します。直すときは両方に同じものを入れてください。
+- 前の URL（`https://michishirube-api.makim0939.workers.dev`）も、同じサーバーのまま動きます。独自ドメインにする前のアプリがつながるので、止めないでください。
 
 ### 1-2. 署名の鍵を登録する
 
@@ -55,7 +57,7 @@ npx wrangler secret put APP_TOKEN --config worker/wrangler.jsonc
 GitHub に push して使っている場合、`worker/` の変更が `main` に入ったときに、GitHub Actions が自動でサーバーを更新します（データベースの更新も一緒に行います）。
 
 1. Cloudflare のダッシュボード → 右上のアイコン →「プロフィール」→「API トークン」→「トークンを作成」
-2. 「Cloudflare Workers を編集する」のテンプレートを選び、権限に **アカウント → D1 → 編集** を足して作成し、トークンを控えます
+2. 「Cloudflare Workers を編集する」のテンプレートを選び、権限に **アカウント → D1 → 編集** を足して作成し、トークンを控えます（ゾーンのリソースには、独自ドメインを管理している `makimura.me` を含めます。ドメインの割り当てに使います）
 3. ダッシュボードの「Workers & Pages」の右側に出ている **アカウント ID** を控えます
 4. GitHub のリポジトリ →「Settings」→「Environments」で `production` を作り、「Deployment branches and tags」を `main` だけにします
 5. 「Environment secrets」に `CLOUDFLARE_API_TOKEN`（2）と `CLOUDFLARE_ACCOUNT_ID`（3）を登録します
@@ -71,9 +73,10 @@ GitHub に push して使っている場合、`worker/` の変更が `main` に�
 
 1. アプリ名は「ラテ帳」、対象は **外部**。
 2. 「ブランディング」：
-   - ホームページ：`https://makim0939.github.io/michishirube/`
-   - プライバシー ポリシー：`https://makim0939.github.io/michishirube/privacy.html`
-   - 承認済みドメイン：`makim0939.github.io` と `makim0939.workers.dev`
+   - ホームページ：`https://latte.makimura.me/`
+   - プライバシー ポリシー：`https://latte.makimura.me/privacy`
+   - 承認済みドメイン：`makimura.me`（Search Console で、同じ Google アカウントでドメインの所有を確認しておく。`github.io` と `workers.dev` は共有のドメインなので入れられない）
+   - 同意画面にアプリ名として出る「ラテ帳」が、ホームページの表示（タイトル・見出し）と一致していること
 3. 「データアクセス」で、次のスコープを追加します。
    - `openid`、`.../auth/userinfo.email`（ログイン。審査の軽いスコープ）
    - `https://www.googleapis.com/auth/youtube.upload`（YouTube へのアップロード。**審査が必要なスコープ**）
@@ -85,8 +88,11 @@ GitHub に push して使っている場合、`worker/` の変更が `main` に�
 2. 「承認済みのリダイレクト URI」に、次を入れます（ログインと YouTube の連携で同じものを使います）。
 
    ```text
-   https://michishirube-api.〇〇.workers.dev/api/youtube/callback
+   https://latte.makimura.me/api/youtube/callback
+   https://michishirube-api.makim0939.workers.dev/api/youtube/callback
    ```
+
+   下の1つは、独自ドメインにする前のアプリ用です（消さないでください）。
 
 3. クライアント ID とシークレットを登録します。
 
@@ -106,4 +112,4 @@ npx wrangler secret put GOOGLE_CLIENT_SECRET --config worker/wrangler.jsonc
 
 ## 開発
 
-`pnpm worker:dev` でサーバーを手元で動かせます。Web 版・アプリをそのサーバーにつなぐときは、`VITE_API_URL=http://127.0.0.1:8787` を付けて起動・ビルドします。
+`pnpm worker:dev` でサーバーを手元で動かせます。Web 版・アプリをそのサーバーにつなぐときは、`VITE_API_URL=http://127.0.0.1:8787` を付けて起動・ビルドします。**実機に入れるビルドには付けないでください**（実機の `127.0.0.1` は端末自身なので、サーバーにつながらなくなります）。
