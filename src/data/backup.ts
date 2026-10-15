@@ -157,10 +157,12 @@ export async function exportBackup(opts: {
     db.meta.filter((m) => !isLocalMeta(m.key)).toArray(),
   ])
   // アプリのファイルの場所は、この端末だけのものなので入れない
-  const rows: BackupMedia[] = media.map(({ blob, file, optimized: _optimized, poster: _poster, posterEnd: _posterEnd, ...rest }) => ({
+  const rows: BackupMedia[] = media.map(
+    ({ blob, file, optimized: _optimized, optimizeTries: _tries, poster: _poster, posterEnd: _posterEnd, ...rest }) => ({
     ...rest,
     path: opts.includeMedia && hasContent({ blob, file }) ? `media/${rest.id}${extension(rest)}` : null,
-  }))
+  }),
+  )
   const data: BackupData = {
     format: FORMAT,
     version: VERSION,

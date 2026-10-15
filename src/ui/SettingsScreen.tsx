@@ -200,7 +200,7 @@ function Choice({
   onSelect: () => void
 }) {
   return (
-    <li>
+    <li role="none">
       <button type="button" className="settings-row choice" role="radio" aria-checked={selected} onClick={onSelect}>
         <span className="settings-label">
           {label}

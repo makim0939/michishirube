@@ -11,6 +11,7 @@ const files = vi.hoisted(() => ({
   onWipe: undefined as undefined | (() => Promise<void>),
   transcoded: [] as { input: string; output: string; shortSide: number }[],
   transcodeResult: { skipped: false, size: 1 } as { skipped: boolean; size?: number },
+  transcodeError: undefined as unknown,
 }))
 vi.mock('./files', () => ({
   usesFiles: true,
@@ -26,6 +27,7 @@ vi.mock('./files', () => ({
   listContentFiles: async () => files.listed,
   transcodeVideoFile: async (input: string, output: string, preset: { shortSide: number }) => {
     files.transcoded.push({ input, output, shortSide: preset.shortSide })
+    if (files.transcodeError) throw files.transcodeError
     return files.transcodeResult
   },
   deleteAllContentFiles: async () => {
@@ -182,7 +184,28 @@ describe('動画の画質をそろえる', () => {
     files.transcoded = []
     files.deleted = []
     files.transcodeResult = { skipped: false, size: 1 }
+    files.transcodeError = undefined
     watchContentFiles()
+  })
+
+  it('作り直せなかったら次の起動でまた試し、3回失敗したら元のまま使う', async () => {
+    await db.media.add(media({ blob: undefined, file: 'media/m1-1.mp4', size: 100 }))
+    files.transcodeError = new Error('中断')
+    await optimizeVideos()
+    await optimizeVideos()
+    expect(await db.media.get('m1')).toMatchObject({ optimizeTries: 2 })
+    expect((await db.media.get('m1'))?.optimized).toBeUndefined()
+    await optimizeVideos()
+    expect(await db.media.get('m1')).toMatchObject({ optimized: 'standard', file: 'media/m1-1.mp4' })
+  })
+
+  it('作り直す仕組みが無いアプリでは、印を付けない', async () => {
+    await db.media.add(media({ blob: undefined, file: 'media/m1-1.mp4', size: 100 }))
+    files.transcodeError = { code: 'UNIMPLEMENTED' }
+    await optimizeVideos()
+    const row = await db.media.get('m1')
+    expect(row?.optimized).toBeUndefined()
+    expect(row?.optimizeTries).toBeUndefined()
   })
 
   it('作り直したら、新しいファイルに替えて前のファイルを消す（同期の対象にはしない）', async () => {

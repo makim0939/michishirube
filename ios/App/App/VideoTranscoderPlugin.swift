@@ -48,8 +48,24 @@ public class VideoTranscoderPlugin: CAPPlugin, CAPBridgedPlugin {
             throw NSError(domain: "lattecho", code: 1, userInfo: [NSLocalizedDescriptionKey: "映像がありません"])
         }
         let audioTrack = try await asset.loadTracks(withMediaType: .audio).first
-        let (natural, transform, dataRate) = try await videoTrack.load(.naturalSize, .preferredTransform, .estimatedDataRate)
-        let shortSide = min(abs(natural.width), abs(natural.height))
+        let dataRate = try await videoTrack.load(.estimatedDataRate)
+
+        // 縦の動画も向きをそろえた絵で作り直す。HDR（iPhone の標準のカメラ）は、SDR（BT.709）に変換する
+        //（そのまま 8bit にすると、色が白っぽく・くすんだりする）
+        let composition: AVMutableVideoComposition
+        if #available(iOS 16, *) {
+            composition = try await AVMutableVideoComposition.videoComposition(withPropertiesOf: asset)
+        } else {
+            composition = AVMutableVideoComposition(propertiesOf: asset)
+        }
+        composition.colorPrimaries = AVVideoColorPrimaries_ITU_R_709_2
+        composition.colorTransferFunction = AVVideoTransferFunction_ITU_R_709_2
+        composition.colorYCbCrMatrix = AVVideoYCbCrMatrix_ITU_R_709_2
+        let render = composition.renderSize
+        let shortSide = min(abs(render.width), abs(render.height))
+        guard shortSide > 0 else {
+            throw NSError(domain: "lattecho", code: 1, userInfo: [NSLocalizedDescriptionKey: "映像の大きさが分かりません"])
+        }
 
         // すでに決めた画質以下なら、作り直さない（画質を落とすだけになるので）
         if shortSide <= maxShortSide * 1.05 && Double(dataRate) <= Double(videoBitrate) * 1.3 {
@@ -58,17 +74,18 @@ public class VideoTranscoderPlugin: CAPPlugin, CAPBridgedPlugin {
 
         let scale = min(1, maxShortSide / shortSide)
         let even = { (v: CGFloat) -> Int in max(2, Int((v * scale / 2).rounded()) * 2) }
-        let width = even(abs(natural.width))
-        let height = even(abs(natural.height))
+        let width = even(abs(render.width))
+        let height = even(abs(render.height))
 
         try? FileManager.default.removeItem(at: outURL)
         let reader = try AVAssetReader(asset: asset)
         let writer = try AVAssetWriter(outputURL: outURL, fileType: .mp4)
         writer.shouldOptimizeForNetworkUse = true
 
-        let videoOut = AVAssetReaderTrackOutput(
-            track: videoTrack,
-            outputSettings: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange])
+        let videoOut = AVAssetReaderVideoCompositionOutput(
+            videoTracks: [videoTrack],
+            videoSettings: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange])
+        videoOut.videoComposition = composition
         videoOut.alwaysCopiesSampleData = false
         reader.add(videoOut)
         let videoIn = AVAssetWriterInput(
@@ -78,13 +95,16 @@ public class VideoTranscoderPlugin: CAPPlugin, CAPBridgedPlugin {
                 AVVideoWidthKey: width,
                 AVVideoHeightKey: height,
                 AVVideoScalingModeKey: AVVideoScalingModeResizeAspectFill,
+                AVVideoColorPropertiesKey: [
+                    AVVideoColorPrimariesKey: AVVideoColorPrimaries_ITU_R_709_2,
+                    AVVideoTransferFunctionKey: AVVideoTransferFunction_ITU_R_709_2,
+                    AVVideoYCbCrMatrixKey: AVVideoYCbCrMatrix_ITU_R_709_2,
+                ],
                 AVVideoCompressionPropertiesKey: [
                     AVVideoAverageBitRateKey: videoBitrate,
                     AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel,
                 ],
             ])
-        // 縦の動画の向きは、映像を回さずに向きの情報として残す（元の動画と同じ）
-        videoIn.transform = transform
         videoIn.expectsMediaDataInRealTime = false
         writer.add(videoIn)
 

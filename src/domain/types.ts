@@ -84,6 +84,8 @@ export interface Media {
    * アルバムの大きな動画や、日がたった高画質の動画を軽くするときに使う
    */
   optimized?: 'standard' | 'high'
+  /** 画質をそろえようとして失敗した回数（同期しない）。何度か失敗したら、元のまま使う */
+  optimizeTries?: number
   /** 動画のサムネイル（JPEG）。この端末にだけある */
   poster?: Blob
   /** poster が動画の最後のコマ（できあがりのカップ）か。この端末にだけある（同期しない） */

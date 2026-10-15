@@ -62,6 +62,9 @@ function optimizedPath(m: Pick<Media, 'id' | 'contentAt' | 'createdAt'>, quality
   return `media/${m.id}-${m.contentAt ?? m.createdAt}-${quality}.mp4`
 }
 
+/** 画質をそろえるのに、この回数失敗したらあきらめる */
+const MAX_OPTIMIZE_TRIES = 3
+
 /** 高画質で端末に置く動画を、この日数がたったら標準に軽くする（SNS に出すのは撮ってすぐのことが多いので） */
 export const KEEP_HIGH_DAYS = 3
 
@@ -128,7 +131,7 @@ async function optimizeNow(ids?: string[]) {
   const targets = ids ?? ((await db.media.filter((m) => m.type.startsWith('video/') && !!m.file).primaryKeys()) as string[])
   for (const id of targets) {
     const m = await db.media.get(id)
-    if (!m?.file || !m.type.startsWith('video/') || m.upload === 'uploading') continue
+    if (!m?.file || !m.type.startsWith('video/')) continue
     const quality = targetQuality(m, settings, now)
     if (m.optimized === quality) continue
     const source = m.file
@@ -140,8 +143,10 @@ async function optimizeNow(ids?: string[]) {
       // 作り直す仕組みが入っていない（古いアプリなど）ときは、印を付けずにやめる（入ったらそろえる）
       if ((e as { code?: string } | null)?.code === 'UNIMPLEMENTED') return
       console.warn('動画の画質をそろえられませんでした', id, e)
-      // 作り直せない動画（端末が読めない形式など）は、そのまま残す（何度も試さない）
-      await db.media.update(id, { optimized: m.optimized ?? quality })
+      // アプリが裏に回ったなどで止まったのかもしれないので、次に起動したときにまた試す。
+      // 何度も失敗する動画（端末が読めない形式など）は、元のまま使う（YouTube にもそのまま上げる）
+      const tries = (m.optimizeTries ?? 0) + 1
+      await db.media.update(id, tries >= MAX_OPTIMIZE_TRIES ? { optimized: m.optimized ?? quality } : { optimizeTries: tries })
       continue
     }
     // 作り直しても軽くならなければ（もともと軽い動画）、元のまま使う

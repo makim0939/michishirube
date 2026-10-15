@@ -74,6 +74,9 @@ async function detach(file: File): Promise<File> {
   return new File([await inMemory(file)], file.name, { type: file.type })
 }
 
+/** Android でアルバムから入れられる動画の大きさ（4K でも1分ほど）。超えるとメモリに写すときにアプリが落ちることがある */
+const ANDROID_MAX_PICK_BYTES = 400 * 1024 * 1024
+
 let keySeq = 0
 const nextKey = () => `item-${++keySeq}`
 
@@ -178,7 +181,12 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
   /** inMemory：アプリ内の録画のように、もともとメモリ上にあるファイル */
   const addFiles = async (list: FileList | File[] | null, inMemory = false) => {
     // FileList は input の value を空にすると中身も消えるので、先に配列へ写す
-    const picked = list ? Array.from(list) : []
+    let picked = list ? Array.from(list) : []
+    // Android はメモリに写すので、大きすぎる動画は入れない（アプリが落ちないように）
+    if (isAndroidApp && picked.some((f) => f.type.startsWith('video/') && f.size > ANDROID_MAX_PICK_BYTES)) {
+      picked = picked.filter((f) => !(f.type.startsWith('video/') && f.size > ANDROID_MAX_PICK_BYTES))
+      toast.show('長すぎる動画は入れられません。写真アプリで短く切り取ってから選んでください', 'error')
+    }
     if (picked.length === 0) return
     // 写真は縮小してから持つ（端末の容量と同期の量を抑える）。
     // Android は、選んだファイルを少したつと読めなくなる（読む許可が切れる）ので、動画もすぐメモリに写す
@@ -553,9 +561,9 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
         </section>
       )}
 
-      {recording && (
+      {recording && videoSettings && (
         <Recorder
-          quality={videoSettings?.quality ?? 'standard'}
+          quality={videoSettings.quality}
           focus={editing ? undefined : next?.text}
           references={skill.references}
           onDone={(video, photo) => {

@@ -278,6 +278,9 @@ function contentFields(m: NewMedia, now: number): Partial<Media> {
   const type = m.blob.type || 'application/octet-stream'
   return {
     contentAt: now,
+    // 中身が変わったので、画質をそろえ直す
+    optimized: undefined,
+    optimizeTries: undefined,
     blob: m.blob,
     poster: m.poster,
     type,

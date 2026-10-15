@@ -11,6 +11,7 @@ import androidx.media3.effect.Presentation;
 import androidx.media3.transformer.Composition;
 import androidx.media3.transformer.DefaultEncoderFactory;
 import androidx.media3.transformer.EditedMediaItem;
+import androidx.media3.transformer.EditedMediaItemSequence;
 import androidx.media3.transformer.Effects;
 import androidx.media3.transformer.ExportException;
 import androidx.media3.transformer.ExportResult;
@@ -116,7 +117,11 @@ public class VideoTranscoderPlugin extends Plugin {
                 EditedMediaItem item = new EditedMediaItem.Builder(MediaItem.fromUri(Uri.fromFile(in)))
                     .setEffects(new Effects(ImmutableList.of(), ImmutableList.of(Presentation.createForShortSide(targetShortSide))))
                     .build();
-                transformer.start(item, out.getAbsolutePath());
+                // HDR（標準のカメラの 10bit 動画）は、SDR に変換する（H.264 の HDR を作れない端末が多いため）
+                Composition composition = new Composition.Builder(new EditedMediaItemSequence.Builder(item).build())
+                    .setHdrMode(Composition.HDR_MODE_TONE_MAP_HDR_TO_SDR_USING_OPEN_GL)
+                    .build();
+                transformer.start(composition, out.getAbsolutePath());
             } catch (Exception e) {
                 //noinspection ResultOfMethodCallIgnored
                 out.delete();
