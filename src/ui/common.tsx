@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { shareFileNative } from '../data/files'
+import { isAndroidApp } from '../platform'
 import { formatDateTime } from '../domain/format'
 import type { Media, SkillState } from '../domain/types'
 import { PlayIcon } from './icons'
@@ -287,6 +289,11 @@ export function Empty({ children }: { children: ReactNode }) {
 /** 端末に保存する。スマホでは共有シート（「ファイルに保存」）、PC ではダウンロード */
 export async function saveFile(blob: Blob, fileName: string) {
   const file = new File([blob], fileName, { type: blob.type })
+  // Android のアプリは、Web の共有・ダウンロードが効かないので、共有シートで渡す
+  if (isAndroidApp) {
+    await shareFileNative(file)
+    return
+  }
   const touch = window.matchMedia('(pointer: coarse)').matches
   if (touch && navigator.canShare?.({ files: [file] })) {
     try {

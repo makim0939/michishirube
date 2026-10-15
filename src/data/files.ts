@@ -1,5 +1,6 @@
 import { Capacitor, registerPlugin } from '@capacitor/core'
 import { Directory, Encoding, Filesystem } from '@capacitor/filesystem'
+import { Share } from '@capacitor/share'
 import { isNativeApp } from '../platform'
 
 /**
@@ -47,11 +48,41 @@ async function toBase64(blob: Blob): Promise<string> {
 const CHUNK = 3 * 256 * 1024
 
 /** Blob をファイルに書く。動画は大きいので、少しずつ足して書く（一度に大きな文字列を作らない） */
-export async function writeBlobFile(path: string, blob: Blob) {
-  const target = fullPath(path)
-  await Filesystem.writeFile({ path: target, directory: DIR, data: await toBase64(blob.slice(0, CHUNK)) })
+async function writeBlobTo(target: string, directory: Directory, blob: Blob) {
+  await Filesystem.writeFile({
+    path: target,
+    directory,
+    recursive: true,
+    data: await toBase64(blob.slice(0, CHUNK)),
+  })
   for (let offset = CHUNK; offset < blob.size; offset += CHUNK) {
-    await Filesystem.appendFile({ path: target, directory: DIR, data: await toBase64(blob.slice(offset, offset + CHUNK)) })
+    await Filesystem.appendFile({ path: target, directory, data: await toBase64(blob.slice(offset, offset + CHUNK)) })
+  }
+}
+
+export async function writeBlobFile(path: string, blob: Blob) {
+  await writeBlobTo(fullPath(path), DIR, blob)
+}
+
+/** 共有のために一時的に置く場所（アプリのキャッシュ。共有先のアプリが読み終わるまで、すぐには消さない） */
+const SHARE_DIR = 'share'
+
+/**
+ * Android で、ファイルを共有シートに渡す（Android の画面の仕組み（WebView）には、Web の共有 API が無い）。
+ * 一時ファイルに書いて、そのファイルを共有する。前に共有したファイルは、ここで片付ける。
+ * 共有シートを閉じただけなら、そのまま戻る
+ */
+export async function shareFileNative(file: File) {
+  await Filesystem.rmdir({ path: SHARE_DIR, directory: Directory.Cache, recursive: true }).catch(() => {})
+  const path = `${SHARE_DIR}/${file.name}`
+  await writeBlobTo(path, Directory.Cache, file)
+  const { uri } = await Filesystem.getUri({ path, directory: Directory.Cache })
+  try {
+    await Share.share({ files: [uri] })
+  } catch (e) {
+    // 共有シートを閉じただけ（Android は、閉じると "Share canceled" で失敗として返す）なら、失敗ではない
+    if (/cancel/i.test(String((e as { message?: unknown } | null)?.message ?? e))) return
+    throw e
   }
 }
 
