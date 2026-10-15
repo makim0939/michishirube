@@ -47,9 +47,9 @@ interface Row {
   seq: number
 }
 
-/** 1文あたりの行数。D1 は1文の束縛パラメータが100まで（1行6個） */
-const ROWS_PER_STATEMENT = 16
-const IDS_PER_STATEMENT = 100
+/** 1文あたりの行数。D1 は1文の束縛パラメータが100まで（1行7個） */
+const ROWS_PER_STATEMENT = 14
+const IDS_PER_STATEMENT = 90
 
 function chunks<T>(list: T[], size: number): T[][] {
   const out: T[][] = []
@@ -62,10 +62,11 @@ function chunks<T>(list: T[], size: number): T[][] {
  * seq は「今の最大 + 送られてきた順番」。batch は1つのトランザクションで、ほかの端末の書き込みと混ざらないので、
  * 後から書かれたものほど大きい seq になる（端末は seq を手がかりに差分を取りに来る）
  */
-export function writeStatements(db: D1Database, changes: EntityChange[]): D1PreparedStatement[] {
+export function writeStatements(db: D1Database, userId: string, changes: EntityChange[]): D1PreparedStatement[] {
   const statements = chunks(changes, ROWS_PER_STATEMENT).map((rows, n) => {
-    const values = rows.map(() => '(?, ?, ?, ?, ?, (SELECT COALESCE(MAX(seq), 0) FROM entities) + ?)').join(', ')
+    const values = rows.map(() => '(?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(seq), 0) FROM user_entities) + ?)').join(', ')
     const params = rows.flatMap((c, i) => [
+      userId,
       c.kind,
       c.id,
       c.deleted ? null : JSON.stringify(c.data),
@@ -75,10 +76,10 @@ export function writeStatements(db: D1Database, changes: EntityChange[]): D1Prep
     ])
     return db
       .prepare(
-        `INSERT INTO entities (kind, id, data, updated_at, deleted, seq) VALUES ${values}
-         ON CONFLICT (kind, id) DO UPDATE SET
+        `INSERT INTO user_entities (user_id, kind, id, data, updated_at, deleted, seq) VALUES ${values}
+         ON CONFLICT (user_id, kind, id) DO UPDATE SET
            data = excluded.data, updated_at = excluded.updated_at, deleted = excluded.deleted, seq = excluded.seq
-         WHERE excluded.updated_at > entities.updated_at`,
+         WHERE excluded.updated_at > user_entities.updated_at`,
       )
       .bind(...params)
   })
@@ -87,7 +88,11 @@ export function writeStatements(db: D1Database, changes: EntityChange[]): D1Prep
     .filter((c) => c.kind === 'media' && c.deleted)
     .flatMap((c) => [c.id, posterPhotoId(c.id)])
   for (const ids of chunks(removedMedia, IDS_PER_STATEMENT)) {
-    statements.push(db.prepare(`DELETE FROM photos WHERE id IN (${ids.map(() => '?').join(', ')})`).bind(...ids))
+    statements.push(
+      db
+        .prepare(`DELETE FROM user_photos WHERE user_id = ? AND id IN (${ids.map(() => '?').join(', ')})`)
+        .bind(userId, ...ids),
+    )
   }
   return statements
 }
@@ -96,12 +101,15 @@ export function writeStatements(db: D1Database, changes: EntityChange[]): D1Prep
  * 変更を書き込み、since より後の変更を返す。
  * 同じものが両方の端末で変わっていたら、updatedAt が新しいほうを残す（同じ時刻なら先に届いたほう）
  */
-export async function sync(db: D1Database, req: SyncRequest): Promise<SyncResponse> {
-  if (req.changes.length > 0) await db.batch(writeStatements(db, req.changes))
+export async function sync(db: D1Database, userId: string, req: SyncRequest): Promise<SyncResponse> {
+  if (req.changes.length > 0) await db.batch(writeStatements(db, userId, req.changes))
 
+  // seq はすべての利用者で通しの番号。その人の分だけを、番号の順に返す
   const { results } = await db
-    .prepare('SELECT kind, id, data, updated_at, deleted, seq FROM entities WHERE seq > ?1 ORDER BY seq LIMIT ?2')
-    .bind(req.since, SYNC_LIMITS.pageSize + 1)
+    .prepare(
+      'SELECT kind, id, data, updated_at, deleted, seq FROM user_entities WHERE user_id = ?1 AND seq > ?2 ORDER BY seq LIMIT ?3',
+    )
+    .bind(userId, req.since, SYNC_LIMITS.pageSize + 1)
     .all<Row>()
   const page = results.slice(0, SYNC_LIMITS.pageSize)
   return {

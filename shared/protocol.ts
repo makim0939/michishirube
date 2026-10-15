@@ -26,7 +26,7 @@ export interface SyncResponse {
 }
 
 export const SYNC_LIMITS = {
-  /** 1回で送れる変更の数（サーバー側で16件ずつ1文にまとめるので、13文に収まる） */
+  /** 1回で送れる変更の数（サーバー側で14件ずつ1文にまとめるので、15文に収まる） */
   maxChanges: 200,
   /** 1件の JSON の大きさ */
   maxEntityBytes: 64 * 1024,

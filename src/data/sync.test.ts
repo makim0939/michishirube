@@ -4,7 +4,7 @@ import { db } from './db'
 import { pickRecorderMimeType } from './mediaPrep'
 import { addRecord, createDomain, createSkill, ensureSeeded } from './repo'
 import { getVideoStorage, setVideoStorage } from './videoStorage'
-import { applyRemote, connectSync, runSync } from './sync'
+import { applyRemote, connectWithConfig, runSync } from './sync'
 import { selectVideosToDrop } from './tidy'
 import { uploadVideo, youtubePlayable } from './youtube'
 
@@ -46,7 +46,7 @@ describe('同期', () => {
     vi.stubGlobal('fetch', server.fetch)
     const domainId = await createDomain('ピアノ')
     const skillId = await createSkill(domainId, input('スケール'))
-    expect(await connectSync({ url: 'https://api.example', token: 't' })).toEqual({ firstDevice: true })
+    expect(await connectWithConfig({ url: 'https://api.example', token: 't' })).toEqual({ firstDevice: true })
     expect(server.rows.get(`skill:${skillId}`)?.deleted).toBe(false)
     expect(await db.outbox.count()).toBe(0)
 
@@ -69,7 +69,7 @@ describe('同期', () => {
     })
     await ensureSeeded()
     expect(await db.domains.count()).toBe(1)
-    expect(await connectSync({ url: 'https://api.example', token: 't' })).toEqual({ firstDevice: false })
+    expect(await connectWithConfig({ url: 'https://api.example', token: 't' })).toEqual({ firstDevice: false })
     expect((await db.domains.toArray()).map((d) => d.id)).toEqual(['remote'])
   })
 
@@ -106,7 +106,7 @@ describe('動画のサムネイル', () => {
     })
     const [m] = await db.media.where('recordId').equals(recordId).toArray()
     await db.media.update(m.id, { poster: new Blob(['poster'], { type: 'image/jpeg' }) })
-    await connectSync({ url: 'https://api.example', token: 't' })
+    await connectWithConfig({ url: 'https://api.example', token: 't' })
     await runSync()
     const puts = server.fetch.mock.calls.filter(([url, init]) => String(url).includes('/api/photos/') && init?.method === 'PUT')
     expect(puts.map(([url]) => new URL(String(url)).pathname)).toContain(`/api/photos/${m.id}.poster`)

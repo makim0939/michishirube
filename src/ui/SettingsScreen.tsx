@@ -4,6 +4,7 @@ import { estimateBackupSize, exportBackup, importBackup, type BackupPart } from 
 import { db } from '../data/db'
 import { contentFilesSize, KEEP_HIGH_DAYS, optimizeVideos, resetContentFiles } from '../data/content'
 import { saveSnapshotNow } from '../data/snapshot'
+import { isLoggedIn } from '../data/account'
 import { getSyncConfig, getSyncStatus } from '../data/sync'
 import { TIDY_AFTER_DAYS } from '../data/tidy'
 import {
@@ -86,7 +87,7 @@ const PRIVACY_URL = isNativeApp ? `${SITE_URL}privacy.html` : `${import.meta.env
 
 const TITLES: Record<SettingsSection, string> = {
   storage: '動画',
-  sync: 'クラウド同期',
+  sync: 'アカウント',
   backup: 'バックアップ',
   roadmaps: 'ロードマップ',
   data: 'データの削除',
@@ -137,7 +138,8 @@ function SettingsHome() {
     return { video, config, status, domains }
   })
   if (!data) return null
-  const sync = !data.config ? '使っていません' : data.status.error ? '同期できていません' : 'つながっています'
+  const loggedIn = isLoggedIn(data.config)
+  const sync = !loggedIn ? 'ログインしていません' : data.status.error ? '同期できていません' : (data.config?.email ?? 'ログイン中')
   return (
     <div className="screen">
       <header className="screen-header">
@@ -152,7 +154,7 @@ function SettingsHome() {
             label="動画"
             value={`${data.video.storage === 'device' ? 'この端末' : 'YouTube'}・${data.video.quality === 'high' ? '高画質' : '標準'}`}
           />
-          <Row to="sync" label="クラウド同期" value={sync} warn={!!data.config && !!data.status.error} />
+          <Row to="sync" label="アカウント" value={sync} warn={loggedIn && !!data.status.error} />
           <Row to="backup" label="バックアップ" />
         </ul>
       </section>
@@ -234,7 +236,7 @@ function StoragePage() {
         toast.show('動画を YouTube に上げ始めます')
         void resumeUploads().catch(() => {})
       } else {
-        toast.show('「クラウド同期」で YouTube と連携すると、動画を上げ始めます')
+        toast.show('「アカウント」で YouTube と連携すると、動画を上げ始めます')
       }
     } else {
       toast.show('これから撮る動画は、この端末にだけ置きます')
@@ -483,7 +485,7 @@ function DataPage() {
         <ConfirmButton
           className="btn ghost"
           confirmLabel="すべて削除する"
-          message="この端末のロードマップ・記録・動画・写真・設定をすべて削除し、クラウド同期の接続も解除します。サーバーと YouTube のデータは消えないので、つなぎ直せば戻ります。"
+          message="この端末のロードマップ・記録・動画・写真・設定をすべて削除し、ログインも解除します。サーバーと YouTube のデータは消えないので、ログインし直せば戻ります。"
           onConfirm={() =>
             run(async () => {
               await db.transaction('rw', [db.domains, db.skills, db.records, db.media, db.meta, db.outbox], async () => {

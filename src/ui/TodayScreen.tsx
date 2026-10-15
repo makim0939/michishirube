@@ -121,7 +121,7 @@ function Notice() {
     return (
       <div className="notice">
         <AlertIcon size={18} />
-        <a href={href('/settings/sync')}>記録はまだこの端末だけです。設定からクラウド同期をつなぐと、消えても戻せます</a>
+        <a href={href('/settings/sync')}>記録はまだこの端末だけです。Google でログインすると、機種を変えても戻せます</a>
         <button
           className="notice-close"
           aria-label="閉じる"

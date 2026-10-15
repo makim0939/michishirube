@@ -33,16 +33,17 @@ async function hmac(secret: string, message: string): Promise<string> {
 }
 
 export interface OAuthState {
-  /** 認可のあとに戻るアプリの URL */
-  returnTo: string
+  /** アプリが始めた認可の番号（auth_requests の id） */
+  id: string
+  /** 認可のあとに戻る Web 版の URL（アプリでは無い。アプリは結果を問い合わせて、自分で画面を閉じる） */
+  returnTo?: string
   issuedAt: number
 }
 
 const STATE_TTL_MS = 10 * 60 * 1000
 
 /**
- * Google の認可画面に渡す state。戻り先の URL を載せ、改ざんされていないことを署名で確かめる。
- * 署名の鍵には APP_TOKEN を使うので、トークンを知っている人しか認可を始められない
+ * Google の認可画面に渡す state。認可の番号と戻り先の URL を載せ、改ざんされていないことを署名で確かめる
  */
 export async function signState(state: OAuthState, secret: string): Promise<string> {
   const payload = base64url(encoder.encode(JSON.stringify(state)))
@@ -55,7 +56,8 @@ export async function verifyState(token: string, secret: string, now = Date.now(
   if (!safeEqual(await hmac(secret, payload), signature)) return null
   try {
     const state = JSON.parse(new TextDecoder().decode(fromBase64url(payload))) as OAuthState
-    if (typeof state.returnTo !== 'string' || typeof state.issuedAt !== 'number') return null
+    if (typeof state.id !== 'string' || typeof state.issuedAt !== 'number') return null
+    if (state.returnTo !== undefined && typeof state.returnTo !== 'string') return null
     if (now - state.issuedAt > STATE_TTL_MS || state.issuedAt > now + 60_000) return null
     return state
   } catch {

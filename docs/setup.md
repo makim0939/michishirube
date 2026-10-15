@@ -1,24 +1,21 @@
-# クラウド同期と YouTube 連携の設定
+# サーバーの運営（Google ログイン・同期・YouTube 連携）
 
-ラテ帳は、何もしなくても端末の中だけで使えます。ただ、スマホの空きが少ないと、ブラウザが記録を消すことがあります。
-次の設定をすると、記録・ロードマップ・写真は Cloudflare に、動画は YouTube に保存されます。端末から消えても戻せ、PC とも同期できます。
+利用者は、アプリの「設定 → アカウント」で **Google でログイン** するだけで、記録と写真をほかの端末でも使えます。
+このページは、そのためのサーバー（Cloudflare Workers + D1）を**運営する人**向けの手順です。
 
-| 保存するもの | 保存先 | 費用 |
-|---|---|---|
-| 記録・ロードマップ・進捗・参考資料・縮小した写真 | Cloudflare Workers + D1 | 無料プラン（カード登録なし。上限に達しても課金されず止まるだけ） |
-| 動画（保存先を YouTube にしたとき） | あなたの YouTube チャンネル（限定公開） | 無料 |
+## サーバーに置くもの・置かないもの
 
-所要時間の目安：Cloudflare 10分、Google 15分。
+| 置くもの（ログインした人だけ） | 置かないもの |
+|---|---|
+| 記録・型・分野・設定、動画と写真の情報（種類・大きさ・日時・YouTube の動画 ID） | 動画の中身（端末か、利用者自身の YouTube） |
+| 縮小した写真・動画のサムネイル（1人 50MB まで） | Google のメールアドレス・名前・パスワード |
+| Google アカウントの番号（sub）、ログイン中の端末のトークンのハッシュ | YouTube の鍵（refresh token。端末にだけ置き、アップロードの前に access token へ替えるときだけ通す） |
 
-## 1. Cloudflare（記録の保存先）
+利用者は「アカウントを削除」で、サーバーのデータをすべて消せます。
 
-### 1-1. アカウントを作る
+## 1. Cloudflare
 
-<https://dash.cloudflare.com/sign-up> で無料アカウントを作ります（カードは不要です）。
-
-### 1-2. サーバーを公開する
-
-このリポジトリのフォルダで実行します。
+### 1-1. 公開する
 
 ```bash
 pnpm install
@@ -28,91 +25,70 @@ pnpm install
 npx wrangler login
 ```
 
-ブラウザが開くので、Cloudflare にログインして許可します。
+```bash
+pnpm worker:migrate --remote
+```
 
 ```bash
 pnpm worker:deploy
 ```
 
-- データベース（D1）は、初回の公開で自動的に作られます。
-- `workers.dev` のサブドメインを聞かれたら、好きな名前を決めてください。
-- 最後に表示される `https://michishirube-api.〇〇.workers.dev` が**サーバーの URL**です。控えておきます。
+- **データベースの更新（migrate）を先に行ってから、公開（deploy）します。** 逆にすると、新しいサーバーが古い表を読もうとして失敗します。
+- 最後に表示される `https://michishirube-api.〇〇.workers.dev` がサーバーの URL です。アプリは `src/data/account.ts` の `SERVER_URL` に書いたサーバーを使います。
 
-データベースに表を作ります。
+### 1-2. 署名の鍵を登録する
 
-```bash
-pnpm worker:migrate --remote
-```
-
-### 1-3. トークンを決めて登録する
-
-アプリからサーバーを使うための合言葉です。推測されない長い文字列にします。
+Google の画面へ渡す値の署名に使います。推測されない長い文字列にします（前の版で使っていた `APP_TOKEN` があれば、そのまま使えます）。
 
 ```bash
 openssl rand -hex 32
 ```
 
-表示された文字列を**パスワードマネージャーなどに保存**してから、サーバーに登録します（貼り付けを求められます）。
-
 ```bash
 npx wrangler secret put APP_TOKEN --config worker/wrangler.jsonc
 ```
 
-### 1-4. アプリをつなぐ
+> 前の版（合言葉でつなぐ形）で置いていた記録は、更新のときに「引き継ぎ待ち」として残ります。前の合言葉でつないでいた端末で Google にログインすると、そのアカウントに引き継がれます。
 
-アプリの「設定 → クラウド同期」に、サーバーの URL とトークンを入れて「つなぐ」を押します。
+### 1-3. （任意）サーバーの更新を自動にする
 
-- 1台目（いま記録しているスマホ）：端末の記録がサーバーに送られます。
-- 2台目（PC など）：同じ URL とトークンを入れると、サーバーの記録を受け取ります。
-
-### 1-5. （任意）サーバーの更新を自動にする
-
-GitHub に fork・push して使っている場合、サーバー（`worker/`）の変更が `main` に入ったときに、GitHub Actions が自動でサーバーを更新します（データベースの更新も一緒に行います）。そのために、Cloudflare の API トークンを GitHub に登録します。登録しなければ、これまでどおり `pnpm worker:deploy` で手で更新します。
+GitHub に push して使っている場合、`worker/` の変更が `main` に入ったときに、GitHub Actions が自動でサーバーを更新します（データベースの更新も一緒に行います）。
 
 1. Cloudflare のダッシュボード → 右上のアイコン →「プロフィール」→「API トークン」→「トークンを作成」
-2. 「Cloudflare Workers を編集する」のテンプレートを選び、権限に **アカウント → D1 → 編集** を足します。「アカウント リソース」は自分のアカウントだけにし、必要なら「TTL」で有効期限も付けて作成します。表示されたトークンを控えます（一度しか表示されません）
+2. 「Cloudflare Workers を編集する」のテンプレートを選び、権限に **アカウント → D1 → 編集** を足して作成し、トークンを控えます
 3. ダッシュボードの「Workers & Pages」の右側に出ている **アカウント ID** を控えます
-4. GitHub のリポジトリ →「Settings」→「Environments」→「New environment」で、`production` という名前の Environment を作ります
-5. 作った Environment の「Deployment branches and tags」で「Selected branches and tags」を選び、`main` だけを足します（ほかのブランチや PR からはトークンを使えなくなります）。デプロイのたびに自分で承認したいときは、「Required reviewers」に自分を入れます
-6. 同じ画面の「Environment secrets」→「Add environment secret」で、次の2つを登録します
-   - `CLOUDFLARE_API_TOKEN`：2 のトークン
-   - `CLOUDFLARE_ACCOUNT_ID`：3 のアカウント ID
+4. GitHub のリポジトリ →「Settings」→「Environments」で `production` を作り、「Deployment branches and tags」を `main` だけにします
+5. 「Environment secrets」に `CLOUDFLARE_API_TOKEN`（2）と `CLOUDFLARE_ACCOUNT_ID`（3）を登録します
 
-`APP_TOKEN` や Google のシークレットは、自動の更新では変わりません（サーバーに登録したものがそのまま使われます）。
+## 2. Google
 
-## 2. Google（動画を YouTube に上げる）
+### 2-1. プロジェクトと API
 
-YouTube への自動アップロードには、Google Cloud で「アプリ」を登録する必要があります。
+1. <https://console.cloud.google.com/> で新しいプロジェクトを作ります。
+2. 「API とサービス」→「ライブラリ」で **YouTube Data API v3** を有効にします。
 
-### 2-1. プロジェクトを作り、YouTube の API を有効にする
+### 2-2. 同意画面（Google Auth Platform）
 
-1. <https://console.cloud.google.com/> を開き、新しいプロジェクトを作ります（名前は「michishirube」など）。
-2. 「API とサービス」→「ライブラリ」で **YouTube Data API v3** を探し、「有効にする」を押します。
+1. アプリ名は「ラテ帳」、対象は **外部**。
+2. 「ブランディング」：
+   - ホームページ：`https://makim0939.github.io/michishirube/`
+   - プライバシー ポリシー：`https://makim0939.github.io/michishirube/privacy.html`
+   - 承認済みドメイン：`makim0939.github.io` と `makim0939.workers.dev`
+3. 「データアクセス」で、次のスコープを追加します。
+   - `openid`、`.../auth/userinfo.email`（ログイン。審査の軽いスコープ）
+   - `https://www.googleapis.com/auth/youtube.upload`（YouTube へのアップロード。**審査が必要なスコープ**）
+4. 公開ステータスを **本番環境** にします。
 
-### 2-2. 同意画面（Google Auth Platform）を設定する
+### 2-3. OAuth クライアント
 
-1. 「API とサービス」→「OAuth 同意画面」（Google Auth Platform）を開き、「開始」を押します。
-2. アプリ名は「ラテ帳」、サポートメールは自分のアドレスにします。対象は **外部** を選びます。
-3. 「ブランディング」で、次を入れます（本番環境にするのに必要です）。
-   - アプリのホームページ：`https://makim0939.github.io/michishirube/`
-   - プライバシー ポリシーのリンク：`https://makim0939.github.io/michishirube/privacy.html`
-   - 承認済みドメイン：`makim0939.github.io` と `makim0939.workers.dev`（サーバーの URL のドメイン）
-   - デベロッパーの連絡先：自分のアドレス
-4. 「データアクセス」で「スコープを追加」から `https://www.googleapis.com/auth/youtube.upload` を追加します。
-5. 「対象」で公開ステータスを **本番環境にする（アプリを公開）** にします。
-   - 「テスト」のままだと、7日ごとに連携が切れます。
-   - 審査は受けなくて大丈夫です。自分だけで使うので、連携のときに「確認されていないアプリ」の警告が出るだけです。
-
-### 2-3. OAuth クライアントを作る
-
-1. 「クライアント」→「クライアントを作成」で、種類に **ウェブ アプリケーション** を選びます。
-2. 「承認済みのリダイレクト URI」に、次を入れます（`〇〇` は 1-2 で決めたサブドメイン）。
+1. 「クライアント」→「クライアントを作成」で **ウェブ アプリケーション** を選びます。
+2. 「承認済みのリダイレクト URI」に、次を入れます（ログインと YouTube の連携で同じものを使います）。
 
    ```text
    https://michishirube-api.〇〇.workers.dev/api/youtube/callback
    ```
 
-3. 作成すると表示される **クライアント ID** と **クライアント シークレット** を、サーバーに登録します。
+3. クライアント ID とシークレットを登録します。
 
 ```bash
 npx wrangler secret put GOOGLE_CLIENT_ID --config worker/wrangler.jsonc
@@ -122,21 +98,12 @@ npx wrangler secret put GOOGLE_CLIENT_ID --config worker/wrangler.jsonc
 npx wrangler secret put GOOGLE_CLIENT_SECRET --config worker/wrangler.jsonc
 ```
 
-### 2-4. アプリで連携する
+## 3. 利用者が増える前にすること
 
-1. アプリの「設定 → YouTube」で「Google でログインして連携」を押します。
-2. 動画を上げたい YouTube チャンネルのアカウントを選びます。
-3. 「Google はこのアプリを確認していません」と出たら、「詳細」→「ラテ帳（安全ではないページ）に移動」（同意画面のアプリ名を別にした場合は、その名前）→「続行」で進みます。
-4. 「YouTube と連携しました」という画面が出たら、その画面を閉じてアプリに戻ります（iPhone では左上の「完了」）。設定画面が「連携しています」に変わり、アップ待ちの動画が順に上がります。
+- **Google の審査（YouTube の権限）**：審査を通るまでは、YouTube と連携できるのは 100 人まで、連携のときに「確認されていないアプリ」と出ます。ログインだけ（`openid`・`email`）なら審査は軽く済みます。審査には、プライバシーポリシー・ドメインの確認・使い方の動画が要り、数週間かかることがあります。
+- **YouTube の割り当て**：1日に上げられる本数は、プロジェクト全体（全利用者の合計）で決まっています。「API とサービス」→「割り当て」で確認し、足りなくなる前に増枠を申請します。
+- **データベースの大きさ**：D1 の無料プランは、1つのデータベースが 500MB まで（写真は1人 50MB まで）。利用者が増えたら、有料プランか写真の置き場所（R2 など）を検討します。
 
-> **iPhone の注意**：Safari のタブで開いたラテ帳と、ホーム画面から開いたラテ帳は、別々の保存場所を持ちます。クラウド同期も YouTube の連携も、**ふだん使うホーム画面のアプリで**設定してください。
+## 開発
 
-## 知っておくこと
-
-- **YouTube に上げるのは、設定の「動画の保存先」を YouTube にしたときだけです。** はじめは「この端末」で、動画は端末にだけ置きます。
-- **動画は「限定公開」で上がります。** URL を知っている人だけが見られ、検索やチャンネルの一覧には出ません。URL はアプリの中にだけ残ります。限定公開なので、アプリの中で再生できます。
-- **上げてから3日たった動画は、端末から消えます。** そのあともアプリの中で YouTube から再生・見比べできます。切り取り・消音の編集は、端末にある3日のあいだだけできます。
-- **アップロードはアプリを開いている間に進みます。** iPhone では、アプリを閉じるとアップロードが止まります。次に開いたときに続きから上げます。
-- **1日に上げられる本数** は、Google Cloud の「API とサービス」→「割り当て」で確認できます。上限に達すると、翌日に自動で再開します。
-- **記録を削除しても、YouTube の動画は残ります。** 不要なら YouTube アプリで削除してください。
-- **トークンを変えたいとき** は、1-3 の `secret put` をやり直し、各端末で「接続を解除」してからつなぎ直します。
+`pnpm worker:dev` でサーバーを手元で動かせます。Web 版・アプリをそのサーバーにつなぐときは、`VITE_API_URL=http://127.0.0.1:8787` を付けて起動・ビルドします。

@@ -1,39 +1,43 @@
 /**
- * Google の連携画面から戻ってきたときに出すページ。
- * iPhone のホーム画面アプリから連携すると Google の画面は別のシートで開き、そこでアプリへ飛ばすと
- * ホーム画面アプリとは別の保存場所でアプリが開いてしまう（同期が未設定に見える）。
- * そのため、ここではアプリへ飛ばさず「閉じて戻ってください」と案内する
+ * Google の画面から戻ってきたときに出すページ。
+ * アプリでは、アプリが結果を問い合わせて自動でこの画面を閉じる（閉じなければ「完了」で閉じてもらう）。
+ * Web 版は、ここから元の画面へ戻る。iPhone のホーム画面アプリから開いたときは別のシートで開くので、
+ * 自動では移らず、閉じるかリンクで戻ってもらう（移るとホーム画面アプリとは別の保存場所で開いてしまう）
  */
 
 export type ConnectResult = 'connected' | 'cancelled' | 'failed' | 'invalid'
+export type ConnectKind = 'login' | 'youtube'
 
-const MESSAGES: Record<ConnectResult, { title: string; body: string }> = {
-  connected: {
-    title: 'YouTube と連携しました',
-    body: 'この画面を閉じて、ラテ帳に戻ってください。アップ待ちの動画が順に YouTube へ上がります。',
+const TITLES: Record<ConnectKind, Record<ConnectResult, string>> = {
+  login: {
+    connected: 'ログインしました',
+    cancelled: 'ログインをやめました',
+    failed: 'ログインできませんでした',
+    invalid: 'ログインを確認できませんでした',
   },
-  cancelled: {
-    title: '連携をやめました',
-    body: 'この画面を閉じて、ラテ帳に戻ってください。連携するときは、設定画面からもう一度始めてください。',
+  youtube: {
+    connected: 'YouTube と連携しました',
+    cancelled: '連携をやめました',
+    failed: '連携できませんでした',
+    invalid: '連携を確認できませんでした',
   },
-  failed: {
-    title: '連携できませんでした',
-    body: 'この画面を閉じて、ラテ帳の設定画面からもう一度試してください。続けて失敗するときは、Google Cloud のクライアント ID・シークレットとリダイレクト URI を確認してください。',
-  },
-  invalid: {
-    title: '連携を確認できませんでした',
-    body: '時間が経ちすぎたか、別の画面から開かれました。ラテ帳の設定画面からもう一度始めてください。',
-  },
+}
+
+const BODIES: Record<ConnectResult, string> = {
+  connected: 'ラテ帳に戻ります。戻らないときは、この画面を閉じてください。',
+  cancelled: 'この画面を閉じて、ラテ帳に戻ってください。',
+  failed: 'この画面を閉じて、ラテ帳の設定からもう一度試してください。',
+  invalid: '時間が経ちすぎたか、別の画面から開かれました。ラテ帳の設定からもう一度始めてください。',
 }
 
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]!)
 }
 
-export function resultPage(result: ConnectResult, returnTo?: string): string {
-  const { title, body } = MESSAGES[result]
+export function resultPage(result: ConnectResult, kind: ConnectKind = 'youtube', returnTo?: string): string {
+  const title = TITLES[kind][result]
   const back = returnTo
-    ? `<p class="small">PC など、同じ画面で開いている場合は <a href="${escapeHtml(`${returnTo.split('#')[0]}#/settings/youtube-${result}`)}">ラテ帳に戻る</a></p>`
+    ? `<p><a class="back" href="${escapeHtml(`${returnTo.split('#')[0]}#/settings/sync`)}">ラテ帳に戻る</a></p>`
     : ''
   return `<!doctype html>
 <html lang="ja">
@@ -42,19 +46,16 @@ export function resultPage(result: ConnectResult, returnTo?: string): string {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>${escapeHtml(title)}｜ラテ帳</title>
 <style>
-  :root { color-scheme: light dark; font-family: system-ui, -apple-system, 'Hiragino Sans', sans-serif; line-height: 1.7; }
-  body { max-width: 480px; margin: 0 auto; padding: 48px 20px; background: Canvas; color: CanvasText; text-align: center; }
-  .icon { font-size: 3rem; }
-  h1 { font-size: 1.3rem; }
-  .hint { padding: 12px 14px; border-radius: 12px; background: color-mix(in srgb, CanvasText 8%, Canvas); text-align: left; }
-  .small { font-size: 0.85rem; opacity: 0.75; }
+  :root { color-scheme: light; font-family: system-ui, -apple-system, 'Hiragino Sans', sans-serif; line-height: 1.7; }
+  body { max-width: 480px; margin: 0 auto; padding: 64px 24px; background: #faf7f2; color: #2a1e17; text-align: center; }
+  h1 { font-size: 1.25rem; font-weight: 600; }
+  p { color: #7a6858; }
+  .back { display: inline-block; margin-top: 8px; padding: 10px 20px; border: 1px solid #e6ddd1; border-radius: 999px; color: #2a1e17; text-decoration: none; }
 </style>
 </head>
 <body>
-<div class="icon" aria-hidden="true">${result === 'connected' ? '✅' : '⚠️'}</div>
 <h1>${escapeHtml(title)}</h1>
-<p>${escapeHtml(body)}</p>
-<p class="hint">iPhone のホーム画面から開いた場合は、左上の「完了」（または ×）でこの画面を閉じると、ラテ帳に戻ります。</p>
+<p>${escapeHtml(BODIES[result])}</p>
 ${back}
 </body>
 </html>`

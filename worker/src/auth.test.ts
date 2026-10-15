@@ -17,8 +17,11 @@ describe('OAuth の state', () => {
 
   it('署名した state は戻せるが、改ざん・別の鍵・期限切れは通さない', async () => {
     const now = 1_000_000
-    const token = await signState({ returnTo: 'https://example.com/app/', issuedAt: now }, secret)
-    expect(await verifyState(token, secret, now + 1000)).toEqual({ returnTo: 'https://example.com/app/', issuedAt: now })
+    const token = await signState({ id: 'abc', returnTo: 'https://example.com/app/', issuedAt: now }, secret)
+    expect(await verifyState(token, secret, now + 1000)).toEqual({ id: 'abc', returnTo: 'https://example.com/app/', issuedAt: now })
+    // アプリ（戻り先なし）でも使える
+    const app = await signState({ id: 'abc', issuedAt: now }, secret)
+    expect(await verifyState(app, secret, now)).toEqual({ id: 'abc', issuedAt: now })
     expect(await verifyState(token, 'other', now)).toBeNull()
     expect(await verifyState(`x${token}`, secret, now)).toBeNull()
     expect(await verifyState(token, secret, now + 11 * 60 * 1000)).toBeNull()
@@ -55,10 +58,20 @@ describe('同期リクエストの検査', () => {
 describe('連携結果のページ', () => {
   it('アプリへ飛ばさず閉じるよう案内し、戻り先は HTML として安全に埋め込む', async () => {
     const { resultPage } = await import('./resultPage')
-    const html = resultPage('connected', 'https://makim0939.github.io/michishirube/"><script>')
+    const html = resultPage('connected', 'youtube', 'https://makim0939.github.io/michishirube/"><script>')
     expect(html).toContain('YouTube と連携しました')
-    expect(html).toContain('閉じる')
+    expect(html).toContain('閉じて')
+    expect(resultPage('connected', 'login')).toContain('ログインしました')
     expect(html).not.toContain('<script>')
     expect(html).not.toMatch(/http-equiv="refresh"/)
+  })
+})
+
+describe('Google の id_token', () => {
+  it('アカウントの番号とメールアドレスを読む', async () => {
+    const { readIdToken } = await import('./accounts')
+    const payload = btoa(JSON.stringify({ sub: '1234', email: 'a@example.com' })).replace(/=+$/, '')
+    expect(readIdToken(`x.${payload}.y`)).toEqual({ sub: '1234', email: 'a@example.com' })
+    expect(() => readIdToken('x.e30.y')).toThrow()
   })
 })
