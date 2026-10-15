@@ -298,7 +298,13 @@ function PracticeBlock({ practice }: { practice: Practice }) {
 
 /** ホームに出す内容を読み込む */
 async function loadToday() {
-  const [skills, practicing] = await Promise.all([db.skills.toArray(), practicingSkillIds()])
+  const [skills, practicing, recordedKeys] = await Promise.all([
+    db.skills.toArray(),
+    practicingSkillIds(),
+    // iPhone の Safari は、重複なしのカーソルが使えないので、キーを全部読んでまとめる
+    db.records.orderBy('skillId').keys(),
+  ])
+  const recorded = new Set(recordedKeys as string[])
   const byId = indexById(skills)
   const states = computeStates(skills, practicing)
   // 練習中＝最近記録した型（「できた」の型も、続けて練習していれば出す）
@@ -346,7 +352,7 @@ async function loadToday() {
   const thisWeek = await db.records.where('createdAt').aboveOrEqual(startOfWeek(Date.now())).count()
   // 次のおすすめ：前提ができている「次の一歩」を先に、前提を練習中のものを後に並べる
   const available = sortByDepth(skills.filter((s) => states.get(s.id) === 'available'))
-    .map((s) => ({ ...s, parallel: !prereqsDone(s, byId), label: recommendLabel(s, byId, practicing) }))
+    .map((s) => ({ ...s, parallel: !prereqsDone(s, byId), label: recommendLabel(s, byId, practicing, recorded) }))
     .sort((a, b) => Number(a.parallel) - Number(b.parallel))
     .slice(0, RECOMMEND)
   return {

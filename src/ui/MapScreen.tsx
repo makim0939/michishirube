@@ -29,11 +29,14 @@ export function MapScreen({ domainId }: { domainId?: string }) {
   }
 
   const data = useLiveQuery(async () => {
-    const [domains, allSkills, practicing] = await Promise.all([
+    const [domains, allSkills, practicing, recordedKeys] = await Promise.all([
       db.domains.orderBy('order').toArray(),
       db.skills.toArray(),
       practicingSkillIds(),
+      // iPhone の Safari は、重複なしのカーソルが使えないので、キーを全部読んでまとめる
+      db.records.orderBy('skillId').keys(),
     ])
+    const recorded = new Set(recordedKeys as string[])
     // タブから開いたときは、最後に見ていた分野を出す
     const wanted = domainId ?? readStorage('local', LAST_DOMAIN_KEY)
     const current = domains.find((d) => d.id === wanted) ?? domains[0]
@@ -45,7 +48,7 @@ export function MapScreen({ domainId }: { domainId?: string }) {
       const last = records[0]?.createdAt ?? 0
       stats.set(s.id, { count: records.length, form: recentForm(records), last })
     }
-    return { domains, current, skills, stats, practicing }
+    return { domains, current, skills, stats, practicing, recorded }
   }, [domainId])
 
   const currentId = data?.current?.id
@@ -54,7 +57,7 @@ export function MapScreen({ domainId }: { domainId?: string }) {
   }, [currentId])
 
   if (!data) return null
-  const { domains, current, skills, stats, practicing } = data
+  const { domains, current, skills, stats, practicing, recorded } = data
   const states = computeStates(skills, practicing)
   const byId = indexById(skills)
   const ordered = sortByDepth(skills)
@@ -178,7 +181,7 @@ export function MapScreen({ domainId }: { domainId?: string }) {
                   <PatternImage name={s.name} />
                   <span className="type-row-text">
                     <span className="type-name">{splitName(s.name).main}</span>
-                    <span className="muted small">{recommendLabel(s, byId, practicing)}</span>
+                    <span className="muted small">{recommendLabel(s, byId, practicing, recorded)}</span>
                   </span>
                 </a>
               </li>
