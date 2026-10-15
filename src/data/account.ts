@@ -16,6 +16,11 @@ export const SERVER_URL: string = import.meta.env.VITE_API_URL ?? 'https://latte
 /** 独自ドメインにする前のサーバーの URL。同じサーバーで、前の版のアプリはここにつないでいる */
 const PREVIOUS_SERVER_URL = 'https://michishirube-api.makim0939.workers.dev'
 
+/** この端末がつないでいるサーバーの URL（末尾の / なし） */
+function serverOf(config: SyncConfig): string {
+  return config.url.replace(/\/+$/, '')
+}
+
 /** このアプリのサーバーの URL か（前の版の、合言葉でつないだ接続を見分けるのに使う） */
 export function isOurServer(url: string): boolean {
   const normalized = url.replace(/\/+$/, '')
@@ -210,7 +215,8 @@ export async function loginWithGoogle(): Promise<{ firstDevice: boolean } | null
 export async function logout() {
   const config = await getSyncConfig()
   if (config) {
-    await fetch(`${SERVER_URL}/api/session`, { method: 'DELETE', headers: { Authorization: `Bearer ${config.token}` } }).catch(
+    // ログインした端末がつないでいるサーバー（独自ドメインにする前にログインした端末は、前の URL）に送る
+    await fetch(`${serverOf(config)}/api/session`, { method: 'DELETE', headers: { Authorization: `Bearer ${config.token}` } }).catch(
       () => {},
     )
   }
@@ -224,7 +230,7 @@ export async function deleteAccount() {
   if (!config) return
   let res: Response
   try {
-    res = await fetch(`${SERVER_URL}/api/account`, { method: 'DELETE', headers: { Authorization: `Bearer ${config.token}` } })
+    res = await fetch(`${serverOf(config)}/api/account`, { method: 'DELETE', headers: { Authorization: `Bearer ${config.token}` } })
   } catch {
     throw new SyncError('サーバーにつながりません。電波を確認してください')
   }
