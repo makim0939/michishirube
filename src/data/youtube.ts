@@ -1,81 +1,82 @@
-import { Browser } from '@capacitor/browser'
 import { liveQuery } from 'dexie'
 import { formatDateTime, OUTCOME_LABEL } from '../domain/format'
 import type { Media } from '../domain/types'
 import { ContentUnavailableError, contentBlob, hasContent } from './content'
 import { usesFiles } from './files'
 import { db, markDirty, mediaByIndex } from './db'
-import { isNativeApp, SITE_URL } from '../platform'
+import { authorizeWithGoogle } from './account'
 import { api, getSyncConfig, SyncError, type SyncConfig } from './sync'
 import { getVideoSettings, getVideoStorage, type YoutubePrivacy } from './videoStorage'
 
 /**
- * 動画を YouTube に「限定公開」で上げる（アプリの中で再生できるように。URL を知らない人には見つからない）。
- * 上げるのは、動画の保存先が YouTube の端末だけ。
- * access token はサーバーから1時間だけ使えるものをもらい、動画はアプリから YouTube へ直接送る。
+ * 動画を YouTube に上げる（公開範囲は設定から。はじめは限定公開）。上げるのは、動画の保存先が YouTube の端末だけ。
+ * YouTube の鍵はこの端末にだけ置き、上げる前にサーバーで1時間だけ使える access token に替えてもらう。
+ * 動画はアプリから YouTube へ直接送る（サーバーを通さない）
  */
 
 export interface YoutubeStatus {
+  /** サーバーに Google の設定がある */
   configured: boolean
+  /** この端末が YouTube と連携している（YouTube の鍵をこの端末に持っている） */
   connected: boolean
 }
 
 const PAUSE_KEY = 'youtube:pausedUntil'
+/** YouTube の鍵（refresh token）。この端末にだけ置き、サーバーには置かない（同期・バックアップにも入れない） */
+const REFRESH_KEY = 'youtube:refresh'
 /** 続けてこの回数失敗したら、自動では上げ直さない（壊れた動画を何度も送らないように） */
 export const MAX_UPLOAD_ATTEMPTS = 3
 const UPLOAD_BASE = 'https://www.googleapis.com/upload/youtube/v3/videos?part=snippet,status&uploadType='
 
+async function refreshToken(): Promise<string | undefined> {
+  return (await db.meta.get(REFRESH_KEY))?.value as string | undefined
+}
+
+/** ログインしていなければ undefined */
 export async function youtubeStatus(): Promise<YoutubeStatus | undefined> {
   const config = await getSyncConfig()
   if (!config) return undefined
-  return (await (await api(config, '/api/youtube/status')).json()) as YoutubeStatus
+  const { configured } = (await (await api(config, '/api/youtube/status')).json()) as { configured: boolean }
+  return { configured, connected: !!(await refreshToken()) }
 }
-
-/** アプリの中の Safari で連携画面を開いている（続けて押されても、二重に開かない） */
-let authSheetOpen = false
 
 /**
- * Google の連携画面を開く。Web 版は画面ごと移り、終わったら戻ってくる。
- * アプリでは、アプリの中の Safari（閉じるとアプリに戻る）で開き、閉じたら onClosed を呼ぶ（連携できたか確かめ直す）
+ * YouTube と連携する（Google の画面で、YouTube へのアップロードを許可してもらう）。
+ * 受け取った鍵はこの端末にだけ置く。ほかの端末では、その端末で連携し直す。連携したら true
  */
-export async function startYoutubeAuth(onClosed?: () => void) {
+export async function connectYoutube(): Promise<boolean> {
   const config = await requireConfig()
-  if (isNativeApp && authSheetOpen) return
-  // アプリでは、連携が終わったあとの「戻る」リンクの行き先に Web 版を使う（アプリの画面の場所は https でないので使えない）
-  const returnTo = isNativeApp ? SITE_URL : window.location.href.split('#')[0]
-  const { url } = (await (
-    await api(config, '/api/youtube/auth-url', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ returnTo }),
-    })
-  ).json()) as { url: string }
-  if (!isNativeApp) {
-    window.location.href = url
-    return
-  }
-  authSheetOpen = true
-  const listener = await Browser.addListener('browserFinished', () => {
-    authSheetOpen = false
-    void listener.remove()
-    onClosed?.()
-  })
-  try {
-    await Browser.open({ url, presentationStyle: 'popover' })
-  } catch (e) {
-    authSheetOpen = false
-    await listener.remove()
-    throw e
-  }
+  const result = await authorizeWithGoogle('youtube', config.token)
+  if (result?.kind !== 'youtube') return false
+  await saveYoutubeKey(result.refreshToken)
+  return true
 }
 
+/** 受け取った YouTube の鍵を置き、止めていたアップロードを再開する */
+export async function saveYoutubeKey(refresh: string) {
+  await db.meta.put({ key: REFRESH_KEY, value: refresh })
+  token = undefined
+  void resumeUploads().catch(() => {})
+}
+
+/** 連携を解除する（Google 側の許可も取り消し、この端末の鍵を消す） */
 export async function disconnectYoutube() {
-  await api(await requireConfig(), '/api/youtube', { method: 'DELETE' })
+  const refresh = await refreshToken()
+  const config = await getSyncConfig()
+  if (refresh && config) {
+    await api(config, '/api/youtube/revoke', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken: refresh }),
+    }).catch(() => {})
+  }
+  await db.meta.delete(REFRESH_KEY)
+  token = undefined
 }
 
 async function requireConfig(): Promise<SyncConfig> {
   const config = await getSyncConfig()
-  if (!config) throw new SyncError('先にクラウド同期を設定してください')
+  if (!config) throw new SyncError('先に Google でログインしてください')
   return config
 }
 
@@ -83,11 +84,24 @@ async function requireConfig(): Promise<SyncConfig> {
 
 let token: { value: string; expiresAt: number } | undefined
 
+/** アップロード用の access token。この端末の鍵をサーバーに渡し、1時間だけ使えるものに替えてもらう */
 async function accessToken(config: SyncConfig): Promise<string> {
   if (token && token.expiresAt - Date.now() > 60_000) return token.value
-  const res = (await (await api(config, '/api/youtube/token', { method: 'POST' })).json()) as {
-    accessToken: string
-    expiresAt: number
+  const refresh = await refreshToken()
+  if (!refresh) throw new SyncError('YouTube と連携していません', 409)
+  let res: { accessToken: string; expiresAt: number }
+  try {
+    res = (await (
+      await api(config, '/api/youtube/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken: refresh }),
+      })
+    ).json()) as { accessToken: string; expiresAt: number }
+  } catch (e) {
+    // 連携が取り消された・期限切れなら、鍵を消して連携し直してもらう
+    if (e instanceof SyncError && e.status === 409) await db.meta.delete(REFRESH_KEY)
+    throw e
   }
   token = { value: res.accessToken, expiresAt: res.expiresAt }
   return token.value

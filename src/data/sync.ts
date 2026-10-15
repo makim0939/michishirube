@@ -6,7 +6,7 @@ import { ContentUnavailableError, contentBlob, hasContent, moveContentsToFiles }
 import { db } from './db'
 
 /**
- * サーバー（Cloudflare Worker + D1）との同期。
+ * サーバー（Cloudflare Worker + D1）との同期。Google でログインした人のデータだけをやり取りする（account.ts）。
  * 画面はいつも端末の IndexedDB を読み書きし、変更は outbox にためてまとめて送る。
  * 同じものが両方で変わっていたら、updatedAt が新しいほうを残す。
  */
@@ -14,7 +14,12 @@ import { db } from './db'
 export interface SyncConfig {
   /** Worker の URL（例: https://michishirube-api.xxx.workers.dev） */
   url: string
+  /** ログインしたときにもらったトークン（前の版では、サーバーの合言葉 APP_TOKEN） */
   token: string
+  /** Google でログインした（前の版の、合言葉でつないだ接続なら無い） */
+  account?: boolean
+  /** ログインした Google アカウント（表示するだけ。サーバーには置いていない） */
+  email?: string
 }
 
 export interface SyncStatus {
@@ -57,7 +62,7 @@ export async function api(config: SyncConfig, path: string, init: RequestInit = 
   } catch {
     throw new SyncError('サーバーにつながりません。電波か URL を確認してください')
   }
-  if (res.status === 401) throw new SyncError('トークンが違います', 401)
+  if (res.status === 401) throw new SyncError('ログインし直してください', 401)
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { message?: string; error?: string }
     throw new SyncError(body.message ?? body.error ?? `サーバーでエラーが起きました（${res.status}）`, res.status)
@@ -344,11 +349,7 @@ export async function fetchPhoto(media: Media): Promise<Blob | undefined> {
  * 同期を始める。サーバーにすでにデータがあれば（2台目の端末）、この端末の初期データ（updatedAt が 0）は捨ててから受け取る。
  * サーバーが空なら（1台目）、この端末のデータを全部送る
  */
-export async function connectSync(input: SyncConfig): Promise<{ firstDevice: boolean }> {
-  const config = { url: input.url.trim().replace(/\/+$/, ''), token: input.token.trim() }
-  if (!/^https?:\/\//.test(config.url)) throw new SyncError('URL は https:// から入れてください')
-  await api(config, '/api/health')
-
+export async function connectWithConfig(config: SyncConfig): Promise<{ firstDevice: boolean }> {
   const first = (await (
     await api(config, '/api/sync', {
       method: 'POST',

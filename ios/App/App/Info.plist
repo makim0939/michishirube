@@ -24,6 +24,17 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>io.github.makim0939.lattecho</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>io.github.makim0939.lattecho</string>
+			</array>
+		</dict>
+	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>ラテアートを注ぐところと、できあがりのカップを撮るために使います。</string>
 	<key>NSMicrophoneUsageDescription</key>

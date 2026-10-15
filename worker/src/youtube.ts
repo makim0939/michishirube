@@ -1,13 +1,13 @@
 /**
- * YouTube へのアップロード用の認可。
- * 長く使える refresh token はサーバー（D1）だけに置き、アプリには1時間で切れる access token だけを渡す。
- * アップロード自体は、アプリから YouTube へ直接送る（動画を Worker に通さない）
+ * Google の認可（ログインと YouTube へのアップロード）。
+ * YouTube の refresh token はサーバーに保存しない。アプリの端末にだけ置き、アップロードの前に
+ * アプリから送ってもらって、1時間で切れる access token に替えて返す（クライアントシークレットがサーバーにしか無いため）。
+ * アップロード自体は、アプリから YouTube へ直接送る（動画をサーバーに通さない）
  */
 
+export const LOGIN_SCOPE = 'openid email'
 export const YOUTUBE_SCOPE = 'https://www.googleapis.com/auth/youtube.upload'
 const TOKEN_URL = 'https://oauth2.googleapis.com/token'
-const REFRESH_KEY = 'youtube_refresh_token'
-const ACCESS_KEY = 'youtube_access_token'
 
 export interface GoogleConfig {
   clientId: string
@@ -16,49 +16,25 @@ export interface GoogleConfig {
 
 export class ReauthRequired extends Error {}
 
-export function authUrl(config: GoogleConfig, redirectUri: string, state: string): string {
+export function authUrl(config: GoogleConfig, redirectUri: string, state: string, kind: 'login' | 'youtube'): string {
   const params = new URLSearchParams({
     client_id: config.clientId,
     redirect_uri: redirectUri,
     response_type: 'code',
-    scope: YOUTUBE_SCOPE,
-    // refresh token を毎回確実に受け取るため、同意画面を出す
-    access_type: 'offline',
-    prompt: 'consent',
-    include_granted_scopes: 'true',
     state,
+    ...(kind === 'login'
+      ? { scope: LOGIN_SCOPE, prompt: 'select_account' }
+      : // refresh token を毎回確実に受け取るため、同意画面を出す
+        { scope: YOUTUBE_SCOPE, access_type: 'offline', prompt: 'consent' }),
   })
   return `https://accounts.google.com/o/oauth2/v2/auth?${params}`
-}
-
-async function readSecret(db: D1Database, key: string): Promise<string | null> {
-  const row = await db.prepare('SELECT value FROM secrets WHERE key = ?1').bind(key).first<{ value: string }>()
-  return row?.value ?? null
-}
-
-async function writeSecret(db: D1Database, key: string, value: string) {
-  await db
-    .prepare(
-      'INSERT INTO secrets (key, value, updated_at) VALUES (?1, ?2, ?3) ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at',
-    )
-    .bind(key, value, Date.now())
-    .run()
-}
-
-export async function isConnected(db: D1Database): Promise<boolean> {
-  return (await readSecret(db, REFRESH_KEY)) !== null
-}
-
-export async function disconnect(db: D1Database): Promise<string | null> {
-  const refresh = await readSecret(db, REFRESH_KEY)
-  await db.prepare('DELETE FROM secrets WHERE key IN (?1, ?2)').bind(REFRESH_KEY, ACCESS_KEY).run()
-  return refresh
 }
 
 interface TokenResponse {
   access_token?: string
   expires_in?: number
   refresh_token?: string
+  id_token?: string
   error?: string
   error_description?: string
 }
@@ -72,8 +48,8 @@ async function requestToken(body: Record<string, string>): Promise<TokenResponse
   return (await res.json()) as TokenResponse
 }
 
-/** 認可コードを refresh token に替えて保存する */
-export async function exchangeCode(db: D1Database, config: GoogleConfig, code: string, redirectUri: string) {
+/** 認可コードを、Google のトークンに替える（保存はしない） */
+export async function exchangeCode(config: GoogleConfig, code: string, redirectUri: string): Promise<TokenResponse> {
   const token = await requestToken({
     code,
     client_id: config.clientId,
@@ -81,46 +57,30 @@ export async function exchangeCode(db: D1Database, config: GoogleConfig, code: s
     redirect_uri: redirectUri,
     grant_type: 'authorization_code',
   })
-  if (!token.refresh_token) {
-    throw new Error(token.error_description ?? token.error ?? 'refresh token を受け取れませんでした')
-  }
-  await writeSecret(db, REFRESH_KEY, token.refresh_token)
-  if (token.access_token && token.expires_in) {
-    await writeSecret(db, ACCESS_KEY, JSON.stringify({ token: token.access_token, exp: Date.now() + token.expires_in * 1000 }))
-  }
+  if (token.error) throw new Error(token.error_description ?? token.error)
+  return token
 }
 
-/** アップロード用の access token。期限が近ければ refresh token で取り直す */
+/** アプリから受け取った refresh token を、アップロード用の access token に替える */
 export async function accessToken(
-  db: D1Database,
   config: GoogleConfig,
+  refreshToken: string,
   now = Date.now(),
 ): Promise<{ accessToken: string; expiresAt: number }> {
-  const cached = await readSecret(db, ACCESS_KEY)
-  if (cached) {
-    const { token, exp } = JSON.parse(cached) as { token: string; exp: number }
-    // アップロード中に切れないよう、5分以上残っているものだけ使う
-    if (exp - now > 5 * 60 * 1000) return { accessToken: token, expiresAt: exp }
-  }
-  const refresh = await readSecret(db, REFRESH_KEY)
-  if (!refresh) throw new ReauthRequired('YouTube と連携していません')
   const token = await requestToken({
-    refresh_token: refresh,
+    refresh_token: refreshToken,
     client_id: config.clientId,
     client_secret: config.clientSecret,
     grant_type: 'refresh_token',
   })
   if (token.error === 'invalid_grant') {
-    // 連携が取り消された・期限切れ。保存している値は使えないので消す
-    await disconnect(db)
+    // 連携が取り消された・期限切れ。アプリは持っている値を消して、連携し直してもらう
     throw new ReauthRequired('YouTube との連携が切れました。もう一度連携してください')
   }
   if (!token.access_token || !token.expires_in) {
     throw new Error(token.error_description ?? token.error ?? 'access token を受け取れませんでした')
   }
-  const expiresAt = now + token.expires_in * 1000
-  await writeSecret(db, ACCESS_KEY, JSON.stringify({ token: token.access_token, exp: expiresAt }))
-  return { accessToken: token.access_token, expiresAt }
+  return { accessToken: token.access_token, expiresAt: now + token.expires_in * 1000 }
 }
 
 export async function revoke(token: string) {

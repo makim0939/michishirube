@@ -38,7 +38,7 @@ pnpm app:ios     # 作って Xcode で開く（Xcode から実機・シミュレ
 ## データの保存について
 
 - 記録・動画・写真は、まず**端末のブラウザの中（IndexedDB）**に保存します。オフラインでも使えます。
-- **クラウド同期**（[設定手順](docs/setup.md)）をつなぐと、記録・ロードマップ・写真は自分の Cloudflare（Workers + D1、無料プラン）に、動画は「動画の保存先」を YouTube にすると、自分の YouTube チャンネルに「限定公開」で自動的に保存されます。スマホの空きが少なくて端末のデータが消えても戻せ、PC とも同期できます。
+- **Google でログイン**すると、記録・ロードマップ・縮小した写真がサーバー（Cloudflare Workers + D1）に置かれ、ほかの端末でも使えます。動画はサーバーに置かず、端末か、「動画」の保存先を YouTube にしたときは自分の YouTube チャンネルに置きます（YouTube の鍵も端末にだけ置きます）。サーバーの運営手順は [docs/setup.md](docs/setup.md)。
 - 動画の保存先は、はじめは「この端末」です。YouTube にすると、上げてから3日たった動画を端末から消し、アプリの中で YouTube から再生します（消えたあとは編集できません）。
 - iPhone では、Safari で開いたままにせず「共有 → ホーム画面に追加」から開いてください。
 - 「設定 → バックアップ」から ZIP の書き出し・復元もできます。
@@ -82,5 +82,5 @@ pnpm build      # dist/ に PWA を出力
 - 構成：Vite + React + TypeScript、IndexedDB は Dexie、ロードマップの図は React Flow + dagre、PWA は vite-plugin-pwa。文字は Google Fonts（Zen Old Mincho・Zen Kaku Gothic New・Instrument Serif）
 - サーバー：`worker/`（Cloudflare Workers + Hono + D1）。`pnpm worker:dev` でローカル起動（`worker/.dev.vars.example` を `.dev.vars` にコピーして APP_TOKEN を入れる）。アプリとサーバーの通信の形は `shared/protocol.ts`
 - `main` に入ると GitHub Actions で GitHub Pages にデプロイされます（`BASE_PATH` にリポジトリ名を入れてビルド）
-- サーバー（`worker/`・`shared/`）の変更が `main` に入ると、GitHub Actions が D1 のマイグレーションを当ててから Cloudflare にデプロイします（Environment「production」の Secrets に `CLOUDFLARE_API_TOKEN` と `CLOUDFLARE_ACCOUNT_ID` が必要。main だけに限る。無ければ飛ばします。手順は [docs/setup.md](docs/setup.md) の 1-5）
+- サーバー（`worker/`・`shared/`）の変更が `main` に入ると、GitHub Actions が D1 のマイグレーションを当ててから Cloudflare にデプロイします（Environment「production」の Secrets に `CLOUDFLARE_API_TOKEN` と `CLOUDFLARE_ACCOUNT_ID` が必要。main だけに限る。無ければ飛ばします。手順は [docs/setup.md](docs/setup.md) の 1-3）
 - アイコン（`public/pwa-*.png` など）と `public/world/` の絵（型の見本・時間帯の光）は、描き起こした画像をそのまま置いています。型の見本は、型の名前から `src/ui/world.ts` の `patternFor` で選びます
