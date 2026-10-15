@@ -180,6 +180,13 @@ describe('動画の画質をそろえる', () => {
     expect(targetQuality({ createdAt: 0, optimized: 'standard' }, settings, 0)).toBe('standard')
   })
 
+  it('撮るときに選んだ画質が、設定より先（高画質を選んだ1本も、端末に置くなら日がたてば軽くする）', () => {
+    const standard = { ...settings, quality: 'standard' } as const
+    expect(targetQuality({ createdAt: 0, quality: 'high' }, standard, 0)).toBe('high')
+    expect(targetQuality({ createdAt: 0, quality: 'high' }, standard, 4 * DAY)).toBe('standard')
+    expect(targetQuality({ createdAt: 0, quality: 'standard' }, settings, 0)).toBe('standard')
+  })
+
   beforeEach(() => {
     files.transcoded = []
     files.deleted = []

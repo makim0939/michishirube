@@ -299,6 +299,7 @@ function StoragePage() {
             onSelect={select(() => (quality === 'high' ? Promise.resolve() : changeQuality('high')))}
           />
         </ul>
+        <p className="muted small">撮るときの画面で、その動画だけ変えることもできます</p>
         {/* 端末に置く高画質の動画は、撮ってすぐ（SNS に出すとき）だけ高画質にして、あとは軽くできる。軽くするのはアプリだけ */}
         {quality === 'high' && storage === 'device' && isNativeApp && (
           <ul className="settings-list">

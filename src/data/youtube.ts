@@ -130,7 +130,11 @@ export async function videoMeta(media: Media): Promise<VideoMeta> {
   if (record?.nextAction) lines.push(`次の一手：${record.nextAction}`)
   lines.push('', 'ラテ帳で記録')
   // YouTube のタイトルは100文字まで
-  return { title: title.slice(0, 100), description: lines.join('\n').slice(0, 4900), privacy: settings.youtubePrivacy }
+  return {
+    title: title.slice(0, 100),
+    description: lines.join('\n').slice(0, 4900),
+    privacy: media.youtubePrivacy ?? settings.youtubePrivacy,
+  }
 }
 
 export class QuotaExceeded extends Error {}

@@ -13,6 +13,7 @@ import {
 import latteArt from '../roadmaps/latte-art.json'
 import { moveContentsToFiles, optimizeVideos } from './content'
 import { db, markDirty, newId } from './db'
+import type { VideoQuality, YoutubePrivacy } from './videoStorage'
 
 export const BUNDLED_TEMPLATES: RoadmapTemplate[] = [parseTemplate(latteArt)]
 
@@ -258,6 +259,9 @@ export interface NewMedia {
   poster?: Blob
   /** poster が最後のコマ（できあがり）か。作れずに最初のコマにしたときは false */
   posterEnd?: boolean
+  /** 撮るときに選んだ画質・YouTube の公開範囲（この動画だけ。省くと設定のとおり） */
+  quality?: VideoQuality
+  youtubePrivacy?: YoutubePrivacy
 }
 
 export interface RecordInput {
@@ -310,6 +314,8 @@ function newMediaRows(recordId: string, skillId: string, files: NewMedia[], now:
     createdAt: now + i,
     updatedAt: now,
     ...(contentFields(m, now) as Pick<Media, 'type' | 'size'>),
+    ...(m.quality ? { quality: m.quality } : {}),
+    ...(m.youtubePrivacy ? { youtubePrivacy: m.youtubePrivacy } : {}),
   }))
 }
 

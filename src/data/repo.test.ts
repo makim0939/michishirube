@@ -98,6 +98,23 @@ describe('記録', () => {
     await deleteRecord(id)
     expect(await db.media.count()).toBe(0)
   })
+
+  it('撮るときに選んだ画質と公開範囲は、その動画だけに付く（選ばなければ付かない）', async () => {
+    const { a } = await chain()
+    await addRecord({
+      skillId: a,
+      reason: '',
+      nextAction: '',
+      files: [
+        { blob: new Blob(['v'], { type: 'video/mp4' }), quality: 'high', youtubePrivacy: 'public' },
+        { blob: new Blob(['w'], { type: 'video/mp4' }) },
+      ],
+    })
+    const rows = await db.media.orderBy('createdAt').toArray()
+    expect(rows[0]).toMatchObject({ quality: 'high', youtubePrivacy: 'public' })
+    expect(rows[1].quality).toBeUndefined()
+    expect(rows[1].youtubePrivacy).toBeUndefined()
+  })
 })
 
 describe('バックアップ', () => {
