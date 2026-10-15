@@ -4,7 +4,7 @@ import { contentBlob } from '../data/content'
 import { db } from '../data/db'
 import { compressPhoto, inMemory, makePoster, type Poster } from '../data/mediaPrep'
 import { addRecord, deleteRecord, lastNextAction, updateRecord, type NewMedia } from '../data/repo'
-import { getVideoSettings } from '../data/videoStorage'
+import { getVideoSettings, type VideoQuality, type YoutubePrivacy } from '../data/videoStorage'
 import { isAndroidApp } from '../platform'
 import { causeTip, LATTE_CAUSES } from '../domain/causes'
 import { OUTCOME_LABEL } from '../domain/format'
@@ -12,7 +12,7 @@ import type { Media, Outcome } from '../domain/types'
 import { ConfirmButton, Empty, formatBytes, isVideo, MediaView, requestPersist, splitName } from './common'
 import { useCupImageUrl } from './cupImage'
 import { useAction, useToast } from './feedback'
-import { canRecordInApp, Recorder, type RecordChoice } from './Recorder'
+import { canRecordInApp, Recorder } from './Recorder'
 import { backHandler, go, goBack, href } from './router'
 import { readStorage, removeStorage, writeStorage } from './storage'
 import { Trimmer } from './Trimmer'
@@ -57,7 +57,17 @@ function NotOnDevice({ media }: { media: Media }) {
 
 /** 画面に並べる動画・写真。新しく撮ったものと、保存済みの記録にあるもの */
 type Item =
-  | { kind: 'new'; key: string; file: File; poster?: Poster; inMemory: boolean; choice?: RecordChoice }
+  | {
+      kind: 'new'
+      key: string
+      file: File
+      poster?: Poster
+      inMemory: boolean
+      /** アプリのカメラで撮ったときの画質（アルバムから入れた動画は無い） */
+      quality?: VideoQuality
+      /** この動画だけ、YouTube に上げる公開範囲を変えたとき（変えなければ、設定のとおり） */
+      privacy?: YoutubePrivacy
+    }
   | { kind: 'existing'; key: string; media: Media; replaced?: { file: File; poster?: Poster } }
 
 function itemBlob(item: Item): Blob | undefined {
@@ -179,7 +189,7 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
   }
 
   /** inMemory：アプリ内の録画のように、もともとメモリ上にあるファイル */
-  const addFiles = async (list: FileList | File[] | null, inMemory = false, choice?: RecordChoice) => {
+  const addFiles = async (list: FileList | File[] | null, inMemory = false, quality?: VideoQuality) => {
     // FileList は input の value を空にすると中身も消えるので、先に配列へ写す
     let picked = list ? Array.from(list) : []
     // Android はメモリに写すので、大きすぎる動画は入れない（アプリが落ちないように）
@@ -199,8 +209,8 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
       key: nextKey(),
       file,
       inMemory: inMemory || file !== picked[i],
-      // 撮る前に選んだ画質・公開範囲は、動画だけに付ける
-      ...(choice && file.type.startsWith('video/') ? { choice } : {}),
+      // 撮った画質は、動画だけに付ける
+      ...(quality && file.type.startsWith('video/') ? { quality } : {}),
     }))
     setItems((prev) => [...prev, ...added])
     change()
@@ -211,6 +221,15 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
     setItems((prev) => prev.filter((i) => i.key !== item.key))
     if (item.kind === 'existing') setRemoved((prev) => [...prev, item.media.id])
     change()
+  }
+
+  /** この動画だけ、YouTube に上げる公開範囲を切り替える（初めは設定のとおり） */
+  const togglePrivacy = (item: Item) => {
+    if (item.kind !== 'new') return
+    const next: YoutubePrivacy = (item.privacy ?? videoSettings?.youtubePrivacy) === 'public' ? 'unlisted' : 'public'
+    setItems((prev) => prev.map((i) => (i.key === item.key && i.kind === 'new' ? { ...i, privacy: next } : i)))
+    change()
+    toast.show(next === 'public' ? 'この動画は、公開で YouTube に上げます' : 'この動画は、限定公開で YouTube に上げます')
   }
 
   const onTrimmed = (key: string, file: File) => {
@@ -242,8 +261,8 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
               blob: i.inMemory ? i.file : await detach(i.file),
               poster: i.poster?.blob,
               posterEnd: i.poster?.end,
-              quality: i.choice?.quality,
-              youtubePrivacy: i.choice?.privacy,
+              quality: i.quality,
+              youtubePrivacy: i.privacy,
             })
           else if (i.replaced)
             replace.push({
@@ -403,6 +422,12 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
                       <button type="button" className="btn small" onClick={() => setTrimming(item.key)}>
                         <ScissorsIcon size={16} />
                         編集
+                      </button>
+                    )}
+                    {/* 保存先が YouTube のとき、この動画の公開範囲（押すたびに切り替わる）。上げたあとの動画は変えられない */}
+                    {storage === 'youtube' && item.kind === 'new' && isVideo({ type }) && (
+                      <button type="button" className="btn small" onClick={() => togglePrivacy(item)}>
+                        {(item.privacy ?? videoSettings?.youtubePrivacy) === 'public' ? '公開' : '限定公開'}
                       </button>
                     )}
                   </div>
@@ -568,14 +593,13 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
       {recording && videoSettings && (
         <Recorder
           quality={videoSettings.quality}
-          privacy={videoSettings.storage === 'youtube' ? videoSettings.youtubePrivacy : undefined}
           focus={editing ? undefined : next?.text}
           references={skill.references}
-          onDone={(video, photo, choice) => {
+          onDone={(video, photo, quality) => {
             setRecording(false)
             // できあがりの写真も撮ったら、動画と一緒に記録に入れる（カップの絵には写真を使う）
             const files = [video, photo].filter((f): f is File => !!f)
-            void addFiles(files, true, choice)
+            void addFiles(files, true, quality)
           }}
           onClose={() => {
             setRecording(false)

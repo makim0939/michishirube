@@ -21,7 +21,6 @@ import { LIGHT_LABEL, lightFor, lightUrl, type Light } from './world'
 import { isNativeApp } from '../platform'
 
 const HINT_KEY = 'michishirube:install-hint-dismissed'
-const SYNC_HINT_KEY = 'michishirube:sync-hint-dismissed'
 /** メイン写真を探しにいく、新しい記録の数 */
 const HERO_LOOKBACK = 20
 /** 大きな写真でめくれる、最近の杯の数 */
@@ -75,16 +74,15 @@ function isIos() {
 }
 
 /**
- * 気にしてほしいことを1行だけ出す。同期の失敗 → ホーム画面に追加（閉じられる）→ 記録が端末にしかない、の順に大事。
- * ホーム画面に追加しないと Safari が記録を消すことがあるので、同期をつないでいなくても先に出す
+ * 気にしてほしいことを1行だけ出す。同期の失敗 → ホーム画面に追加（閉じられる）の順に大事。
+ * ホーム画面に追加しないと Safari が記録を消すことがあるので、同期をつないでいなくても先に出す。
+ * 「記録はこの端末だけ」という案内は、ログインしないで使う人には重いので出さない（設定の「アカウント」に書いてある）
  */
 function Notice() {
   const [hintHidden, setHintHidden] = useState(() => readStorage('local', HINT_KEY) === '1')
-  const [syncHintHidden, setSyncHintHidden] = useState(() => readStorage('local', SYNC_HINT_KEY) === '1')
   const data = useLiveQuery(async () => ({
     config: await getSyncConfig(),
     status: await getSyncStatus(),
-    records: await db.records.count(),
     uploads: await db.media.where('upload').anyOf('pending', 'uploading').count(),
     failed: await db.media.where('upload').equals('failed').count(),
   }))
@@ -111,25 +109,6 @@ function Notice() {
           onClick={() => {
             writeStorage('local', HINT_KEY, '1')
             setHintHidden(true)
-          }}
-        >
-          ×
-        </button>
-      </div>
-    )
-  }
-  // 同期を使わない人もいるので、閉じたら出さない
-  if (!isLoggedIn(data.config) && data.records > 0 && !syncHintHidden) {
-    return (
-      <div className="notice">
-        <AlertIcon size={18} />
-        <a href={href('/settings/sync')}>記録はまだこの端末だけです。Google でログインすると、機種を変えても戻せます</a>
-        <button
-          className="notice-close"
-          aria-label="閉じる"
-          onClick={() => {
-            writeStorage('local', SYNC_HINT_KEY, '1')
-            setSyncHintHidden(true)
           }}
         >
           ×

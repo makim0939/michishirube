@@ -1512,6 +1512,11 @@ a.media.placeholder {
   align-items: center;
 }
 
+/* 狭い画面でも、ボタンの文字が折り返して背が高くならないようにする */
+.recorder-top-row .btn {
+  white-space: nowrap;
+}
+
 .recorder .btn.on {
   background: rgb(255 255 255 / 85%);
   color: #1d140d;
@@ -1609,21 +1614,6 @@ a.media.placeholder {
   padding: 3px;
   border-radius: 999px;
   background: rgb(0 0 0 / 45%);
-}
-
-.recorder-options {
-  display: flex;
-  flex-wrap: nowrap;
-  justify-content: center;
-  gap: 8px;
-}
-
-.recorder-modes.small button {
-  min-width: 0;
-  min-height: 28px;
-  padding: 0 11px;
-  font-size: 0.78rem;
-  white-space: nowrap;
 }
 
 .recorder-modes button {
