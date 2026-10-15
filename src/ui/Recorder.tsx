@@ -281,27 +281,9 @@ export function Recorder({
           {recording ? (
             <span className="recorder-time">● {formatElapsed(now - startedAt)}</span>
           ) : (
-            <div className="row">
-              {references.length > 0 && (
-                <button className={`btn small${showRefs ? ' on' : ''}`} onClick={() => setShowRefs(!showRefs)}>
-                  手本
-                </button>
-              )}
-              {/* 画質（iPhone のカメラの「HD」と同じく、押すたびに切り替わる）。撮り直すと、設定の画質に戻る */}
-              {!photoMode && (
-                <button
-                  className="btn small"
-                  disabled={!ready}
-                  onClick={() => {
-                    const next = quality === 'high' ? 'standard' : 'high'
-                    setQuality(next)
-                    setNotice(next === 'high' ? '高画質で撮ります' : '標準の画質で撮ります')
-                  }}
-                >
-                  {quality === 'high' ? '高画質' : '標準'}
-                </button>
-              )}
-              {!photoMode && (
+            // 撮り方の設定。音と画質は、ほかのボタン（手本）と分けて、右上にまとめる。写真のときは、どちらも使わない
+            !photoMode && (
+              <div className="row">
                 <button
                   className="btn small"
                   disabled={!ready}
@@ -313,16 +295,41 @@ export function Recorder({
                   <MicIcon size={18} off={!audio} />
                   {audio ? '音あり' : '音なし'}
                 </button>
-              )}
-            </div>
+                {/* 画質は、選べるものを両方見せる（撮り直すと、設定の画質に戻る） */}
+                <div className="recorder-modes small" role="radiogroup" aria-label="画質">
+                  {(['standard', 'high'] as const).map((q) => (
+                    <button
+                      key={q}
+                      type="button"
+                      role="radio"
+                      aria-checked={quality === q}
+                      className={quality === q ? 'selected' : ''}
+                      disabled={!ready}
+                      onClick={() => setQuality(q)}
+                    >
+                      {QUALITY[q].shortSide}p
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )
           )}
         </div>
-        {/* 注ぐ直前に見たい、今回意識すること */}
-        {focus && (
-          <p className="recorder-focus">
-            <span>今回</span>
-            {focus}
-          </p>
+        {/* 注ぐ直前に見たい、今回意識すること。手本は、これと同じ「見るもの」として、ここに並べる */}
+        {(focus || (references.length > 0 && !recording)) && (
+          <div className="recorder-sub">
+            {focus && (
+              <p className="recorder-focus">
+                <span>今回</span>
+                {focus}
+              </p>
+            )}
+            {references.length > 0 && !recording && (
+              <button className={`btn small${showRefs ? ' on' : ''}`} onClick={() => setShowRefs(!showRefs)}>
+                手本
+              </button>
+            )}
+          </div>
         )}
         {showRefs && !recording && (
           <ul className="recorder-refs">

@@ -8,8 +8,8 @@ import { computeStates, indexById, practiceOrder, prereqsDone, sortByDepth } fro
 import type { Media, PracticeRecord, Skill } from '../domain/types'
 import { recentForm, type RecentForm } from '../domain/form'
 import { OUTCOME_MARK } from '../domain/format'
-import { formatAgo, splitName, useObjectUrl } from './common'
-import { pickCupMedia, useCupImage, useCupImageUrl } from './cupImage'
+import { formatAgo, splitName } from './common'
+import { pickCupMedia, useCupImage, useCupImageUrl, useImageUrl } from './cupImage'
 import { hasCupImage } from '../data/poster'
 import { FormDots } from './FormDots'
 import { AlertIcon, CameraIcon } from './icons'
@@ -142,7 +142,7 @@ type Slide = {
  */
 function HeroSlide({ slide, light, now }: { slide: Slide; light: Light; now: Date }) {
   const blob = useCupImage(slide.media)
-  const url = useObjectUrl(blob, slide.media ? `${slide.media.id}-hero-${blob?.size ?? 0}` : undefined)
+  const url = useImageUrl(blob, slide.media ? `${slide.media.id}-hero-${blob?.size ?? 0}` : undefined)
   return (
     <div className="hero-slide">
       <img
@@ -304,77 +304,97 @@ function PracticeBlock({ practice }: { practice: Practice }) {
   )
 }
 
-export function TodayScreen() {
+/** ホームに出す内容を読み込む */
+async function loadToday() {
+  const [skills, practicing] = await Promise.all([db.skills.toArray(), practicingSkillIds()])
+  const byId = indexById(skills)
+  const states = computeStates(skills, practicing)
+  // 練習中＝最近記録した型（「できた」の型も、続けて練習していれば出す）
+  const active = skills.filter((s) => practicing.has(s.id))
+  const perSkill = await Promise.all(active.map(async (skill) => ({ skill, records: await recordsOf(skill.id) })))
+  // 新しい記録から、大きな写真でめくる杯を選ぶ。最後に「はじまりの1杯」（いちばん古い、写真のある杯）を置く
+  const [latest, firstMedia] = await Promise.all([
+    db.records.orderBy('createdAt').reverse().limit(HERO_LOOKBACK).toArray(),
+    // いちばん古い写真。古い順にたどって最初に見つかったもの
+    db.media.orderBy('createdAt').filter((m) => hasCupImage(m)).first(),
+  ])
+  const firstCandidate = firstMedia && (await db.records.get(firstMedia.recordId))
+  // 動画・写真は、大きな写真の候補と各型の最近の杯の分をまとめて1回で読む
+  const recentOf = perSkill.map(({ records }) => records.slice(0, RECENT))
+  const mediaIds = [...latest, ...(firstCandidate ? [firstCandidate] : []), ...recentOf.flat()].flatMap(
+    (r) => r.mediaIds ?? [],
+  )
+  const media = await db.media.bulkGet([...new Set(mediaIds)])
+  const mediaById = new Map(media.filter((m) => !!m).map((m) => [m.id, m]))
+  const cupOf = (r: PracticeRecord) => pickCupMedia((r.mediaIds ?? []).map((id) => mediaById.get(id)))
+  // 写真のある杯（動画のコマは、きれいにカップが写っているとは限らないので使わない）
+  const heroRecords = latest.filter((r) => hasCupImage(cupOf(r))).slice(0, HERO_SLIDES)
+  const firstRecord = firstCandidate && hasCupImage(cupOf(firstCandidate)) ? firstCandidate : undefined
+  const withFirst = firstRecord && !heroRecords.some((r) => r.id === firstRecord.id)
+  // 練習中ではない型（できた・並行して記録した型）の新しい杯も、ホームで見返せるようにする
+  const activeIds = new Set(active.map((s) => s.id))
+  const others = latest
+    .filter((r) => !activeIds.has(r.skillId))
+    .slice(0, RECENT)
+    .map((record) => ({ record, media: cupOf(record), name: splitName(byId.get(record.skillId)?.name ?? '').main }))
+  const heroAll = withFirst ? [...heroRecords, firstRecord] : heroRecords
+  // 杯の番号は、型に関係なく全部の記録の通し番号（No.）
+  const numbered = [...recentOf.flat(), ...others.map((o) => o.record), ...heroAll]
+  const numbers = await cupNumbers([...new Map(numbered.map((r) => [r.id, r])).values()])
+  const unordered = perSkill.map(({ skill, records }, i) => ({
+    skill,
+    count: records.length,
+    form: recentForm(records),
+    next: records.find((r) => r.nextAction)?.nextAction,
+    recent: recentOf[i].map((record) => ({ record, media: cupOf(record), number: numbers.get(record.id) ?? 0 })),
+    last: records[0]?.createdAt ?? 0,
+  }))
+  // 最近練習した型を上に（撮るときに、カードを探さずに済むように）
+  const practices: Practice[] = practiceOrder(unordered, (p) => p.last)
+  const thisWeek = await db.records.where('createdAt').aboveOrEqual(startOfWeek(Date.now())).count()
+  // 次のおすすめ：前提ができている「次の一歩」を先に、前提を練習中のものを後に並べる
+  const available = sortByDepth(skills.filter((s) => states.get(s.id) === 'available'))
+    .map((s) => ({ ...s, parallel: !prereqsDone(s, byId), label: recommendLabel(s, byId, practicing) }))
+    .sort((a, b) => Number(a.parallel) - Number(b.parallel))
+    .slice(0, RECOMMEND)
+  return {
+    thisWeek,
+    practices,
+    others: others.map((o) => ({ ...o, number: numbers.get(o.record.id) ?? 0 })),
+    slides: heroAll.map(
+      (record): Slide => ({
+        record,
+        media: cupOf(record),
+        number: numbers.get(record.id) ?? 0,
+        skillName: byId.get(record.skillId)?.name,
+        first: withFirst && record.id === firstRecord.id,
+      }),
+    ),
+    available,
+    skillCount: skills.length,
+  }
+}
 
-  const data = useLiveQuery(async () => {
-    const [skills, practicing] = await Promise.all([db.skills.toArray(), practicingSkillIds()])
-    const byId = indexById(skills)
-    const states = computeStates(skills, practicing)
-    // 練習中＝最近記録した型（「できた」の型も、続けて練習していれば出す）
-    const active = skills.filter((s) => practicing.has(s.id))
-    const perSkill = await Promise.all(active.map(async (skill) => ({ skill, records: await recordsOf(skill.id) })))
-    // 新しい記録から、大きな写真でめくる杯を選ぶ。最後に「はじまりの1杯」（いちばん古い、写真のある杯）を置く
-    const [latest, firstMedia] = await Promise.all([
-      db.records.orderBy('createdAt').reverse().limit(HERO_LOOKBACK).toArray(),
-      // いちばん古い写真。古い順にたどって最初に見つかったもの
-      db.media.orderBy('createdAt').filter((m) => hasCupImage(m)).first(),
-    ])
-    const firstCandidate = firstMedia && (await db.records.get(firstMedia.recordId))
-    // 動画・写真は、大きな写真の候補と各型の最近の杯の分をまとめて1回で読む
-    const recentOf = perSkill.map(({ records }) => records.slice(0, RECENT))
-    const mediaIds = [...latest, ...(firstCandidate ? [firstCandidate] : []), ...recentOf.flat()].flatMap(
-      (r) => r.mediaIds ?? [],
-    )
-    const media = await db.media.bulkGet([...new Set(mediaIds)])
-    const mediaById = new Map(media.filter((m) => !!m).map((m) => [m.id, m]))
-    const cupOf = (r: PracticeRecord) => pickCupMedia((r.mediaIds ?? []).map((id) => mediaById.get(id)))
-    // 写真のある杯（動画のコマは、きれいにカップが写っているとは限らないので使わない）
-    const heroRecords = latest.filter((r) => hasCupImage(cupOf(r))).slice(0, HERO_SLIDES)
-    const firstRecord = firstCandidate && hasCupImage(cupOf(firstCandidate)) ? firstCandidate : undefined
-    const withFirst = firstRecord && !heroRecords.some((r) => r.id === firstRecord.id)
-    // 練習中ではない型（できた・並行して記録した型）の新しい杯も、ホームで見返せるようにする
-    const activeIds = new Set(active.map((s) => s.id))
-    const others = latest
-      .filter((r) => !activeIds.has(r.skillId))
-      .slice(0, RECENT)
-      .map((record) => ({ record, media: cupOf(record), name: splitName(byId.get(record.skillId)?.name ?? '').main }))
-    const heroAll = withFirst ? [...heroRecords, firstRecord] : heroRecords
-    // 杯の番号は、型に関係なく全部の記録の通し番号（No.）
-    const numbered = [...recentOf.flat(), ...others.map((o) => o.record), ...heroAll]
-    const numbers = await cupNumbers([...new Map(numbered.map((r) => [r.id, r])).values()])
-    const unordered = perSkill.map(({ skill, records }, i) => ({
-      skill,
-      count: records.length,
-      form: recentForm(records),
-      next: records.find((r) => r.nextAction)?.nextAction,
-      recent: recentOf[i].map((record) => ({ record, media: cupOf(record), number: numbers.get(record.id) ?? 0 })),
-      last: records[0]?.createdAt ?? 0,
-    }))
-    // 最近練習した型を上に（撮るときに、カードを探さずに済むように）
-    const practices: Practice[] = practiceOrder(unordered, (p) => p.last)
-    const thisWeek = await db.records.where('createdAt').aboveOrEqual(startOfWeek(Date.now())).count()
-    // 次のおすすめ：前提ができている「次の一歩」を先に、前提を練習中のものを後に並べる
-    const available = sortByDepth(skills.filter((s) => states.get(s.id) === 'available'))
-      .map((s) => ({ ...s, parallel: !prereqsDone(s, byId), label: recommendLabel(s, byId, practicing) }))
-      .sort((a, b) => Number(a.parallel) - Number(b.parallel))
-      .slice(0, RECOMMEND)
-    return {
-      thisWeek,
-      practices,
-      others: others.map((o) => ({ ...o, number: numbers.get(o.record.id) ?? 0 })),
-      slides: heroAll.map(
-        (record): Slide => ({
-          record,
-          media: cupOf(record),
-          number: numbers.get(record.id) ?? 0,
-          skillName: byId.get(record.skillId)?.name,
-          first: withFirst && record.id === firstRecord.id,
-        }),
-      ),
-      available,
-      skillCount: skills.length,
-    }
-  })
+/**
+ * 前に出したホームの内容。ほかの画面（カメラなど）から戻ったとき、読み込みを待たずにすぐ出す
+ * （待つあいだ、真っ白 → 枠だけ → 写真、と切り替わってちらつくため）。読み込めたら、新しい内容に替わる
+ */
+let lastToday: Awaited<ReturnType<typeof loadToday>> | undefined
+
+/** 覚えているホームの内容を捨てる（「すべて削除」のとき。削除したはずの記録を、戻った瞬間に出さない） */
+export function forgetToday() {
+  lastToday = undefined
+}
+
+export function TodayScreen() {
+  const data = useLiveQuery(
+    async () => {
+      lastToday = await loadToday()
+      return lastToday
+    },
+    [],
+    lastToday,
+  )
 
   if (!data) return null
 

@@ -1,10 +1,21 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ensurePoster, needsLocalPoster, needsRemotePoster } from '../data/poster'
 import { contentBlob } from '../data/content'
 import { fetchPhoto } from '../data/sync'
 import { youtubeThumbnail } from '../data/youtube'
 import type { Media } from '../domain/types'
-import { isVideo, useObjectUrl } from './common'
+import { isVideo } from './common'
+import { acquireUrl, recallContent, rememberContent, urlFor } from './imageCache'
+
+/**
+ * 写真の表示用 URL。key は中身が変われば変わるもの。画面を開き直しても、最初の描画から URL が入っている
+ * （useObjectUrl は、描画のあとで URL を作るので、開き直した直後に1コマだけ空になる）
+ */
+export function useImageUrl(blob: Blob | undefined, key: string | undefined): string | undefined {
+  const url = useMemo(() => (blob && key ? urlFor(key, blob) : undefined), [blob, key])
+  useEffect(() => (key ? acquireUrl(key) : undefined), [key, url])
+  return url
+}
 
 /** 記録の動画・写真から、カップの絵として見せる1つを選ぶ（写真があれば写真、無ければ動画） */
 export function pickCupMedia(list: (Media | undefined)[]): Media | undefined {
@@ -30,15 +41,18 @@ export function useContent(media: Media | undefined): { blob?: Blob; loading: bo
   // blob が無ければ、読めなかった
   const key = id && source ? `${id}|${source}` : undefined
   const [loaded, setLoaded] = useState<{ key: string; blob?: Blob }>()
+  // 前に読んだ中身（画面を開き直したときに、読み直すあいだ空にならないように）
+  const cached = key ? recallContent(key) : undefined
 
   useEffect(() => {
-    if (!key || !media) return
+    if (!key || !media || cached) return
     let cancelled = false
     const read = media.file
       ? contentBlob(media).catch((e: unknown) => (cloud ? fetchPhoto(media) : Promise.reject(e)))
       : fetchPhoto(media)
     read
       .then((b) => {
+        if (b) rememberContent(key, b)
         if (!cancelled) setLoaded({ key, blob: b })
       })
       .catch(() => {
@@ -55,6 +69,7 @@ export function useContent(media: Media | undefined): { blob?: Blob; loading: bo
   if (media.blob) return { blob: media.blob, loading: false }
   if (!key) return { loading: false }
   if (loaded?.key === key && loaded.blob) return { blob: loaded.blob, loading: false }
+  if (cached) return { blob: cached, loading: false }
   if (shown.current?.id === id) return { blob: shown.current.blob, loading: false }
   return { loading: loaded?.key !== key }
 }
@@ -96,7 +111,7 @@ export function useCupImageUrl(
   options: { upgrade?: boolean } = {},
 ): string | undefined {
   const blob = useCupImage(media, options)
-  const url = useObjectUrl(blob, media ? `${media.id}-${key}-${blob?.size ?? 0}` : undefined)
+  const url = useImageUrl(blob, media ? `${media.id}-${key}-${blob?.size ?? 0}` : undefined)
   if (url) return url
   return media && isVideo(media) && media.youtubeId ? youtubeThumbnail(media.youtubeId) : undefined
 }
