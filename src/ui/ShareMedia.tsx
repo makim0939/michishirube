@@ -29,8 +29,12 @@ function fileNameFor(media: Media, type: string): string {
 export async function shareFile(file: File): Promise<boolean> {
   const touch = window.matchMedia('(pointer: coarse)').matches
   if (!touch || !navigator.canShare?.({ files: [file] })) {
-    await saveFile(file, file.name)
-    return true
+    try {
+      await saveFile(file, file.name)
+      return true
+    } catch {
+      return false
+    }
   }
   try {
     await navigator.share({ files: [file] })
