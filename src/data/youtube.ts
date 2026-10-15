@@ -3,10 +3,11 @@ import { liveQuery } from 'dexie'
 import { formatDateTime, OUTCOME_LABEL } from '../domain/format'
 import type { Media } from '../domain/types'
 import { ContentUnavailableError, contentBlob, hasContent } from './content'
+import { usesFiles } from './files'
 import { db, markDirty, mediaByIndex } from './db'
 import { isNativeApp, SITE_URL } from '../platform'
 import { api, getSyncConfig, SyncError, type SyncConfig } from './sync'
-import { getVideoStorage } from './videoStorage'
+import { getVideoSettings, getVideoStorage, type YoutubePrivacy } from './videoStorage'
 
 /**
  * 動画を YouTube に「限定公開」で上げる（アプリの中で再生できるように。URL を知らない人には見つからない）。
@@ -95,11 +96,17 @@ async function accessToken(config: SyncConfig): Promise<string> {
 export interface VideoMeta {
   title: string
   description: string
+  /** 公開範囲。省くと限定公開 */
+  privacy?: YoutubePrivacy
 }
 
 /** YouTube に付けるタイトルと説明。あとで YouTube 側で見ても、どの練習か分かるようにする */
 export async function videoMeta(media: Media): Promise<VideoMeta> {
-  const [record, skill] = await Promise.all([db.records.get(media.recordId), db.skills.get(media.skillId)])
+  const [record, skill, settings] = await Promise.all([
+    db.records.get(media.recordId),
+    db.skills.get(media.skillId),
+    getVideoSettings(),
+  ])
   const domain = skill ? await db.domains.get(skill.domainId) : undefined
   const title = [domain?.name, skill?.name, formatDateTime(media.createdAt)].filter(Boolean).join('｜')
   const lines: string[] = []
@@ -109,7 +116,7 @@ export async function videoMeta(media: Media): Promise<VideoMeta> {
   if (record?.nextAction) lines.push(`次の一手：${record.nextAction}`)
   lines.push('', 'ラテ帳で記録')
   // YouTube のタイトルは100文字まで
-  return { title: title.slice(0, 100), description: lines.join('\n').slice(0, 4900) }
+  return { title: title.slice(0, 100), description: lines.join('\n').slice(0, 4900), privacy: settings.youtubePrivacy }
 }
 
 export class QuotaExceeded extends Error {}
@@ -127,7 +134,7 @@ export async function uploadVideo(
   const contentType = blob.type || 'video/mp4'
   const resource = JSON.stringify({
     snippet: { title: meta.title, description: meta.description, categoryId: '26' },
-    status: { privacyStatus: 'unlisted', embeddable: true, selfDeclaredMadeForKids: false },
+    status: { privacyStatus: meta.privacy ?? 'unlisted', embeddable: true, selfDeclaredMadeForKids: false },
   })
   const auth = { Authorization: `Bearer ${accessToken}` }
   const start = await fetchImpl(`${UPLOAD_BASE}resumable`, {
@@ -215,7 +222,7 @@ async function doUploads() {
   // 上げている間に撮った動画も、続けて上げる。失敗したものは、次に動いたときに上げ直す
   for (;;) {
     const targets = (await mediaByIndex(db.media.where('upload').anyOf('pending', 'uploading', 'failed')))
-      .filter((m) => hasContent(m) && (m.upload !== 'failed' || (m.uploadAttempts ?? 0) < MAX_UPLOAD_ATTEMPTS))
+      .filter((m) => readyToUpload(m) && (m.upload !== 'failed' || (m.uploadAttempts ?? 0) < MAX_UPLOAD_ATTEMPTS))
       .filter((m) => !tried.has(m.id))
       .sort((a, b) => a.createdAt - b.createdAt)
     if (targets.length === 0) return
@@ -266,6 +273,15 @@ export async function retryUpload(id: string) {
 }
 
 /** 上げる動画ができたら上げる。画面に戻ったとき・電波が戻ったときにも試す */
+/**
+ * 上げられる状態か。アプリでは、ファイルに移して画質をそろえ終えてから上げる
+ * （アルバムの大きな動画を、そのまま長い時間かけて上げないように）
+ */
+function readyToUpload(m: Media): boolean {
+  if (!hasContent(m)) return false
+  return !usesFiles || (!!m.file && !!m.optimized)
+}
+
 export function startAutoUpload(): () => void {
   const kick = () => {
     runUploads().catch(() => {
@@ -274,7 +290,7 @@ export function startAutoUpload(): () => void {
   }
   // 上げる動画が増えたときだけ動かす（状態の書き込みのたびに動かない）
   let last = 0
-  const sub = liveQuery(() => db.media.where('upload').equals('pending').count()).subscribe((n) => {
+  const sub = liveQuery(() => db.media.where('upload').equals('pending').filter(readyToUpload).count()).subscribe((n) => {
     if (n > last) kick()
     last = n
   })

@@ -5,7 +5,7 @@ import { type PlayerControl, useObjectUrl } from './common'
 import { PauseIcon, PlayIcon, SpeakerIcon } from './icons'
 
 /**
- * 端末から消えた動画を、アプリの中で YouTube から再生する（限定公開の動画を埋め込む）。
+ * 端末から消えた動画を、アプリの中で YouTube から再生する（限定公開・公開の動画を埋め込む）。
  * YouTube の操作ボタンは出さず、アプリの再生ボタン・つまみで操作する。
  * 端末の動画と同じく、再生前はサムネイルを正方形の枠いっぱいに、再生中は縦の動画全体を枠に収めて見せる
  */

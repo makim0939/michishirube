@@ -11,7 +11,7 @@ import {
   type Source,
 } from '../domain/types'
 import latteArt from '../roadmaps/latte-art.json'
-import { moveContentsToFiles } from './content'
+import { moveContentsToFiles, optimizeVideos } from './content'
 import { db, markDirty, newId } from './db'
 
 export const BUNDLED_TEMPLATES: RoadmapTemplate[] = [parseTemplate(latteArt)]
@@ -278,6 +278,9 @@ function contentFields(m: NewMedia, now: number): Partial<Media> {
   const type = m.blob.type || 'application/octet-stream'
   return {
     contentAt: now,
+    // 中身が変わったので、画質をそろえ直す
+    optimized: undefined,
+    optimizeTries: undefined,
     blob: m.blob,
     poster: m.poster,
     type,
@@ -343,6 +346,7 @@ export async function addRecord(input: RecordInput): Promise<string> {
   // アプリでは、動画・写真をアプリのファイルに移す（画面の中の保存場所は OS に消されることがあるため）。
   // 移し終わるのは待たない（起動時の移しが続いていても、保存はすぐ終える）
   void moveContentsToFiles(media.map((m) => m.id))
+  void optimizeVideos(media.map((m) => m.id))
   return recordId
 }
 
@@ -396,6 +400,7 @@ export async function updateRecord(input: RecordUpdate) {
   })
   // 足した・差し替えた動画・写真を、アプリのファイルに移す（アプリだけ。移し終わるのは待たない）
   void moveContentsToFiles(changed)
+  void optimizeVideos(changed)
 }
 
 export async function deleteRecord(id: string) {

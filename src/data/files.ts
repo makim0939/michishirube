@@ -1,4 +1,4 @@
-import { Capacitor } from '@capacitor/core'
+import { Capacitor, registerPlugin } from '@capacitor/core'
 import { Directory, Encoding, Filesystem } from '@capacitor/filesystem'
 import { isNativeApp } from '../platform'
 
@@ -91,6 +91,36 @@ async function fileExists(path: string): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+interface VideoTranscoderPlugin {
+  transcode(options: {
+    input: string
+    output: string
+    maxShortSide: number
+    videoBitrate: number
+    audioBitrate: number
+  }): Promise<{ skipped: boolean; size?: number }>
+}
+
+/** アプリの中だけのプラグイン（ios/App/App/VideoTranscoderPlugin.swift・android の VideoTranscoderPlugin.java） */
+const VideoTranscoder = registerPlugin<VideoTranscoderPlugin>('VideoTranscoder')
+
+/**
+ * 動画のファイルを、決めた画質の MP4 に作り直して output に書く。すでにその画質以下なら作らずに skipped を返す
+ */
+export async function transcodeVideoFile(
+  input: string,
+  output: string,
+  preset: { shortSide: number; video: number; audio: number },
+): Promise<{ skipped: boolean; size?: number }> {
+  return VideoTranscoder.transcode({
+    input: fullPath(input),
+    output: fullPath(output),
+    maxShortSide: preset.shortSide,
+    videoBitrate: preset.video,
+    audioBitrate: preset.audio,
+  })
 }
 
 /** 動画・写真のファイルの一覧（media/〇〇 の形） */

@@ -1,19 +1,41 @@
-/**
- * 端末の容量とアップロード時間を抑えるため、撮る時点で小さくする。
- * スマホ標準のカメラ（1080p・高画質）より、1分あたりの大きさが数分の1になる
- */
+import type { VideoQuality } from './videoStorage'
 
 /**
- * 720p・1.2Mbps。ラテアートの注ぎや手元の動きを確かめるには十分で、1分あたり約9MB。
- * 音声は 96kbps（64kbps だと Chrome の AAC エンコーダーが Internal Error で止まる）
+ * 端末の容量とアップロード時間を抑えるため、撮る時点で画質を決める。
+ * スマホ標準のカメラ（4K・高画質）より、1分あたりの大きさが数分の1になる
  */
-export const RECORDER_BITRATE = { video: 1_200_000, audio: 96_000 } as const
 
-export const CAMERA_CONSTRAINTS: MediaTrackConstraints = {
-  facingMode: { ideal: 'environment' },
-  width: { ideal: 1280 },
-  height: { ideal: 720 },
-  frameRate: { ideal: 30, max: 30 },
+export interface QualityPreset {
+  /** 短い辺の画素数（縦の動画なら横幅） */
+  shortSide: number
+  video: number
+  audio: number
+}
+
+/**
+ * - 標準：720p・1.2Mbps。ラテアートの注ぎや手元の動きを確かめるには十分で、30秒で約5MB
+ * - 高画質：1080p・6Mbps。SNS に出しても見劣りしない。30秒で約23MB
+ * 音声は 96kbps 以上（64kbps だと Chrome の AAC エンコーダーが Internal Error で止まる）
+ */
+export const QUALITY: Record<VideoQuality, QualityPreset> = {
+  standard: { shortSide: 720, video: 1_200_000, audio: 96_000 },
+  high: { shortSide: 1080, video: 6_000_000, audio: 128_000 },
+}
+
+/** 30秒の動画のおよその大きさ（MB）。設定画面で目安として出す */
+export function megabytesPer30s(quality: VideoQuality): number {
+  const { video, audio } = QUALITY[quality]
+  return Math.round(((video + audio) * 30) / 8 / 1_000_000)
+}
+
+export function cameraConstraints(quality: VideoQuality): MediaTrackConstraints {
+  const short = QUALITY[quality].shortSide
+  return {
+    facingMode: { ideal: 'environment' },
+    width: { ideal: Math.round((short * 16) / 9) },
+    height: { ideal: short },
+    frameRate: { ideal: 30, max: 30 },
+  }
 }
 
 /** 録画は5分まで（撮り忘れで大きくなりすぎないように） */
@@ -22,6 +44,9 @@ export const MAX_RECORDING_MS = 5 * 60 * 1000
 // iPhone の Safari は MP4（H.264）。YouTube もそのまま受け付ける
 const WITH_AUDIO = ['video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm']
 const VIDEO_ONLY = ['video/mp4;codecs=avc1.42E01E', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm']
+// 1080p は H.264 の Baseline（レベル 3.0）の上限を超えるので、高画質では High（レベル 4.0）を先に試す
+const HIGH_WITH_AUDIO = ['video/mp4;codecs=avc1.640028,mp4a.40.2', ...WITH_AUDIO]
+const HIGH_VIDEO_ONLY = ['video/mp4;codecs=avc1.640028', ...VIDEO_ONLY]
 
 /** 音を録らないときに音声コーデックを指定すると、録画を始められないブラウザがあるので分ける */
 /**
@@ -57,8 +82,13 @@ export function recorderSupports(type: string): boolean {
   return MediaRecorder.isTypeSupported(type) && !brokenTypes().some((b) => type.startsWith(b))
 }
 
-export function pickRecorderMimeType(isSupported: (type: string) => boolean, withAudio = true): string | undefined {
-  return (withAudio ? WITH_AUDIO : VIDEO_ONLY).find((t) => isSupported(t))
+export function pickRecorderMimeType(
+  isSupported: (type: string) => boolean,
+  withAudio = true,
+  quality: VideoQuality = 'standard',
+): string | undefined {
+  const list = quality === 'high' ? (withAudio ? HIGH_WITH_AUDIO : HIGH_VIDEO_ONLY) : withAudio ? WITH_AUDIO : VIDEO_ONLY
+  return list.find((t) => isSupported(t))
 }
 
 export function extensionFor(mimeType: string): string {

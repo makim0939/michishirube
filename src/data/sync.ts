@@ -86,7 +86,15 @@ async function readLocal(kind: EntityKind, id: string): Promise<{ updatedAt: num
 function toWire(kind: EntityKind, row: Record<string, unknown>): Record<string, unknown> {
   if (kind !== 'media') return row
   // 動画・写真の中身（とアプリのファイルの場所）とサムネイルは送らない（動画は YouTube、写真とサムネイルは別の API）
-  const { blob: _blob, file: _file, poster: _poster, posterEnd: _posterEnd, ...rest } = row
+  const {
+    blob: _blob,
+    file: _file,
+    optimized: _optimized,
+    optimizeTries: _optimizeTries,
+    poster: _poster,
+    posterEnd: _posterEnd,
+    ...rest
+  } = row
   return rest
 }
 
@@ -120,7 +128,11 @@ function mergeMedia(remote: Media, local: Media | undefined): { row: Media; repa
   if (remoteAt > localAt) return { row, repaired: false }
   if (local.blob) row.blob = local.blob
   // アプリでは中身がファイルにある。行を置き換えても、ファイルの場所を失わないようにする
-  if (local.file) row.file = local.file
+  if (local.file) {
+    row.file = local.file
+    if (local.optimized) row.optimized = local.optimized
+    if (local.optimizeTries) row.optimizeTries = local.optimizeTries
+  }
   if (local.poster) {
     row.poster = local.poster
     row.posterEnd = local.posterEnd

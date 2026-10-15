@@ -9,6 +9,9 @@ const files = vi.hoisted(() => ({
   listed: [] as string[],
   onWrite: undefined as undefined | ((path: string) => Promise<void>),
   onWipe: undefined as undefined | (() => Promise<void>),
+  transcoded: [] as { input: string; output: string; shortSide: number }[],
+  transcodeResult: { skipped: false, size: 1 } as { skipped: boolean; size?: number },
+  transcodeError: undefined as unknown,
 }))
 vi.mock('./files', () => ({
   usesFiles: true,
@@ -22,12 +25,19 @@ vi.mock('./files', () => ({
     files.deleted.push(path)
   },
   listContentFiles: async () => files.listed,
+  transcodeVideoFile: async (input: string, output: string, preset: { shortSide: number }) => {
+    files.transcoded.push({ input, output, shortSide: preset.shortSide })
+    if (files.transcodeError) throw files.transcodeError
+    return files.transcodeResult
+  },
   deleteAllContentFiles: async () => {
     await files.onWipe?.()
   },
 }))
 
-const { moveContentsToFiles, resetContentFiles, tidyContentFiles, watchContentFiles } = await import('./content')
+const { moveContentsToFiles, optimizeVideos, resetContentFiles, targetQuality, tidyContentFiles, watchContentFiles } =
+  await import('./content')
+const { setKeepHigh, setVideoQuality } = await import('./videoStorage')
 
 function media(over: Partial<Media> = {}): Media {
   return {
@@ -53,6 +63,8 @@ describe('動画・写真の中身をアプリのファイルへ移す', () => {
     files.listed = []
     files.onWrite = undefined
     files.onWipe = undefined
+    files.transcoded = []
+    files.transcodeResult = { skipped: false, size: 1 }
     watchContentFiles()
   })
 
@@ -144,6 +156,89 @@ describe('動画・写真の中身をアプリのファイルへ移す', () => {
     await db.media.add(media({ id: '1b2c-3d4e', blob: undefined, contentAt: 1700000000000 }))
     await tidyContentFiles()
     expect((await db.media.get('1b2c-3d4e'))?.file).toBe('media/1b2c-3d4e-1700000000000.mp4')
+  })
+})
+
+describe('動画の画質をそろえる', () => {
+  const DAY = 24 * 60 * 60 * 1000
+  const settings = { storage: 'device', quality: 'high', keepHigh: false, youtubePrivacy: 'unlisted' } as const
+
+  it('まだそろえていない動画は、いまの設定の画質にする', () => {
+    expect(targetQuality({ createdAt: 0 }, { ...settings, quality: 'standard' }, 0)).toBe('standard')
+    expect(targetQuality({ createdAt: 0 }, settings, 0)).toBe('high')
+  })
+
+  it('端末に置く高画質の動画は、日がたったら標準に軽くする（残す設定なら残す・YouTube なら軽くしない）', () => {
+    const old = { createdAt: 0, optimized: 'high' as const }
+    expect(targetQuality(old, settings, 1 * DAY)).toBe('high')
+    expect(targetQuality(old, settings, 4 * DAY)).toBe('standard')
+    expect(targetQuality(old, { ...settings, keepHigh: true }, 4 * DAY)).toBe('high')
+    expect(targetQuality(old, { ...settings, storage: 'youtube' }, 4 * DAY)).toBe('high')
+  })
+
+  it('標準にした動画を、高画質に戻そうとはしない', () => {
+    expect(targetQuality({ createdAt: 0, optimized: 'standard' }, settings, 0)).toBe('standard')
+  })
+
+  beforeEach(() => {
+    files.transcoded = []
+    files.deleted = []
+    files.transcodeResult = { skipped: false, size: 1 }
+    files.transcodeError = undefined
+    watchContentFiles()
+  })
+
+  it('作り直せなかったら次の起動でまた試し、3回失敗したら元のまま使う', async () => {
+    await db.media.add(media({ blob: undefined, file: 'media/m1-1.mp4', size: 100 }))
+    files.transcodeError = new Error('中断')
+    await optimizeVideos()
+    await optimizeVideos()
+    expect(await db.media.get('m1')).toMatchObject({ optimizeTries: 2 })
+    expect((await db.media.get('m1'))?.optimized).toBeUndefined()
+    await optimizeVideos()
+    expect(await db.media.get('m1')).toMatchObject({ optimized: 'standard', file: 'media/m1-1.mp4' })
+  })
+
+  it('作り直す仕組みが無いアプリでは、印を付けない', async () => {
+    await db.media.add(media({ blob: undefined, file: 'media/m1-1.mp4', size: 100 }))
+    files.transcodeError = { code: 'UNIMPLEMENTED' }
+    await optimizeVideos()
+    const row = await db.media.get('m1')
+    expect(row?.optimized).toBeUndefined()
+    expect(row?.optimizeTries).toBeUndefined()
+  })
+
+  it('作り直したら、新しいファイルに替えて前のファイルを消す（同期の対象にはしない）', async () => {
+    await setVideoQuality('standard')
+    await db.media.add(media({ blob: undefined, file: 'media/m1-1.mp4', size: 100 }))
+    await optimizeVideos()
+    expect(files.transcoded).toEqual([{ input: 'media/m1-1.mp4', output: 'media/m1-1-standard.mp4', shortSide: 720 }])
+    const row = await db.media.get('m1')
+    expect(row).toMatchObject({ file: 'media/m1-1-standard.mp4', size: 1, optimized: 'standard', updatedAt: 1 })
+    await settle()
+    expect(files.deleted).toEqual(['media/m1-1.mp4'])
+    // もうそろっているので、次は作り直さない
+    await optimizeVideos()
+    expect(files.transcoded).toHaveLength(1)
+  })
+
+  it('すでに軽い・作っても軽くならない動画は、元のまま使う', async () => {
+    await db.media.add(media({ blob: undefined, file: 'media/m1-1.mp4', size: 1 }))
+    files.transcodeResult = { skipped: false, size: 5 }
+    await optimizeVideos()
+    expect(await db.media.get('m1')).toMatchObject({ file: 'media/m1-1.mp4', optimized: 'standard' })
+    expect(files.deleted).toEqual(['media/m1-1-standard.mp4'])
+  })
+
+  it('高画質で残す設定を外すと、日がたった高画質の動画を標準に軽くする', async () => {
+    await setVideoQuality('high')
+    await setKeepHigh(true)
+    await db.media.add(media({ blob: undefined, file: 'media/m1-1.mp4', size: 100, optimized: 'high' }))
+    await optimizeVideos()
+    expect(files.transcoded).toHaveLength(0)
+    await setKeepHigh(false)
+    await optimizeVideos()
+    expect(files.transcoded.map((t) => t.output)).toEqual(['media/m1-1-standard.mp4'])
   })
 })
 

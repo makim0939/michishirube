@@ -7,6 +7,9 @@ import { Capacitor } from '@capacitor/core'
  */
 export const isNativeApp = Capacitor.isNativePlatform()
 
+/** Android のアプリ */
+export const isAndroidApp = Capacitor.getPlatform() === 'android'
+
 /** 公開している Web 版の場所（アプリからプライバシーポリシーなどを開くとき・https の場所が要るときに使う） */
 /**
  * Android の「戻る」（ボタン・端からのスワイプ）。何もしないとアプリが閉じるので、画面の履歴があれば1つ前の画面に戻る。

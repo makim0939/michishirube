@@ -1,6 +1,16 @@
 import type { Media } from '../domain/types'
 import { db } from './db'
-import { deleteAllContentFiles, deleteFile, listContentFiles, readBlobFile, usesFiles, writeBlobFile } from './files'
+import {
+  deleteAllContentFiles,
+  deleteFile,
+  listContentFiles,
+  readBlobFile,
+  transcodeVideoFile,
+  usesFiles,
+  writeBlobFile,
+} from './files'
+import { QUALITY } from './mediaPrep'
+import { getVideoSettings, type VideoQuality, type VideoSettings } from './videoStorage'
 
 export { ContentUnavailableError } from './files'
 
@@ -16,7 +26,15 @@ export function hasContent(m: Pick<Media, 'blob' | 'file'>): boolean {
 /** 中身を読む。無ければ undefined */
 export async function contentBlob(m: Pick<Media, 'blob' | 'file' | 'type'>): Promise<Blob | undefined> {
   if (m.blob) return m.blob
-  if (m.file) return readBlobFile(m.file, m.type)
+  if (m.file) return readBlobFile(m.file, fileType(m.file) ?? m.type)
+  return undefined
+}
+
+/** ファイルの拡張子から種類を決める（画質をそろえた動画は、元が WebM・MOV でも MP4 になっている） */
+function fileType(path: string): string | undefined {
+  if (path.endsWith('.mp4')) return 'video/mp4'
+  if (path.endsWith('.mov')) return 'video/quicktime'
+  if (path.endsWith('.webm')) return 'video/webm'
   return undefined
 }
 
@@ -36,7 +54,35 @@ export function contentPath(m: Pick<Media, 'id' | 'type' | 'contentAt' | 'create
 
 /** contentPath の名前から、どの動画・写真のファイルかを読む */
 export function contentIdOf(path: string): string | undefined {
-  return /^media\/(.+)-\d+\.[^.]+$/.exec(path)?.[1]
+  return /^media\/(.+?)-\d+(?:-(?:standard|high))?\.[^.]+$/.exec(path)?.[1]
+}
+
+/** 画質をそろえた動画のファイル名。中身を差し替えるたびに変わる（contentPath と同じ） */
+function optimizedPath(m: Pick<Media, 'id' | 'contentAt' | 'createdAt'>, quality: VideoQuality): string {
+  return `media/${m.id}-${m.contentAt ?? m.createdAt}-${quality}.mp4`
+}
+
+/** 画質をそろえるのに、この回数失敗したらあきらめる */
+const MAX_OPTIMIZE_TRIES = 3
+
+/** 高画質で端末に置く動画を、この日数がたったら標準に軽くする（SNS に出すのは撮ってすぐのことが多いので） */
+export const KEEP_HIGH_DAYS = 3
+
+/**
+ * その動画をどの画質にそろえるか。
+ * - まだそろえていない動画（撮った・アルバムから入れた）は、いまの設定の画質
+ * - そろえ済みの動画は、その画質のまま（標準を高画質に戻すことはできない）。ただし、端末に置く高画質の動画は、
+ *   「高画質のまま残す」にしていなければ、日がたったら標準に軽くする
+ */
+export function targetQuality(
+  m: Pick<Media, 'optimized' | 'contentAt' | 'createdAt'>,
+  settings: VideoSettings,
+  now: number,
+): VideoQuality {
+  const base = m.optimized ?? settings.quality
+  const old = (m.contentAt ?? m.createdAt) < now - KEEP_HIGH_DAYS * 24 * 60 * 60 * 1000
+  if (base === 'high' && settings.storage === 'device' && !settings.keepHigh && old) return 'standard'
+  return base
 }
 
 /** アプリのファイルに置いた動画・写真の大きさの合計（設定の使用量に出す） */
@@ -68,6 +114,59 @@ function enqueue(task: () => Promise<void>): Promise<void> {
 export function moveContentsToFiles(ids?: string[]): Promise<void> {
   if (!usesFiles) return Promise.resolve()
   return enqueue(() => moveNow(ids))
+}
+
+/**
+ * アプリで、ファイルの動画を決めた画質にそろえる（アルバムの大きな動画を軽くする・日がたった高画質の動画を軽くする）。
+ * 起動したとき・記録を保存したあと・設定を変えたときに呼ぶ（ids を省くと、全部を見る）
+ */
+export function optimizeVideos(ids?: string[]): Promise<void> {
+  if (!usesFiles) return Promise.resolve()
+  return enqueue(() => optimizeNow(ids))
+}
+
+async function optimizeNow(ids?: string[]) {
+  const settings = await getVideoSettings()
+  const now = Date.now()
+  const targets = ids ?? ((await db.media.filter((m) => m.type.startsWith('video/') && !!m.file).primaryKeys()) as string[])
+  for (const id of targets) {
+    const m = await db.media.get(id)
+    if (!m?.file || !m.type.startsWith('video/')) continue
+    const quality = targetQuality(m, settings, now)
+    if (m.optimized === quality) continue
+    const source = m.file
+    const out = optimizedPath(m, quality)
+    let result: { skipped: boolean; size?: number }
+    try {
+      result = await transcodeVideoFile(source, out, QUALITY[quality])
+    } catch (e) {
+      // 作り直す仕組みが入っていない（古いアプリなど）ときは、印を付けずにやめる（入ったらそろえる）
+      if ((e as { code?: string } | null)?.code === 'UNIMPLEMENTED') return
+      console.warn('動画の画質をそろえられませんでした', id, e)
+      // アプリが裏に回ったなどで止まったのかもしれないので、次に起動したときにまた試す。
+      // 何度も失敗する動画（端末が読めない形式など）は、元のまま使う（YouTube にもそのまま上げる）
+      const tries = (m.optimizeTries ?? 0) + 1
+      await db.media.update(id, tries >= MAX_OPTIMIZE_TRIES ? { optimized: m.optimized ?? quality } : { optimizeTries: tries })
+      continue
+    }
+    // 作り直しても軽くならなければ（もともと軽い動画）、元のまま使う
+    if (!result.skipped && result.size !== undefined && result.size >= m.size) {
+      await deleteFile(out)
+      result = { skipped: true }
+    }
+    const swapped = await db.transaction('rw', db.media, async () => {
+      const current = await db.media.get(id)
+      // 作り直しているあいだに、中身が差し替わった・消されたなら、作ったファイルは使わない
+      if (!current || current.file !== source) return false
+      // 中身はこの端末だけのものなので、同期の対象にしない（updatedAt も変えない）
+      await db.media.update(
+        id,
+        result.skipped ? { optimized: quality } : { file: out, size: result.size ?? current.size, optimized: quality },
+      )
+      return true
+    })
+    if (!result.skipped && !swapped) await deleteFile(out)
+  }
 }
 
 /** 動画・写真のファイルを全部消してから、IndexedDB に残っている中身をファイルに移し直す（バックアップから戻した・すべて削除したとき） */
