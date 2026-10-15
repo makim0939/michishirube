@@ -77,7 +77,13 @@ export async function shareFileNative(file: File) {
   const path = `${SHARE_DIR}/${file.name}`
   await writeBlobTo(path, Directory.Cache, file)
   const { uri } = await Filesystem.getUri({ path, directory: Directory.Cache })
-  await Share.share({ files: [uri] })
+  try {
+    await Share.share({ files: [uri] })
+  } catch (e) {
+    // 共有シートを閉じただけ（Android は、閉じると "Share canceled" で失敗として返す）なら、失敗ではない
+    if (/cancel/i.test(String((e as { message?: unknown } | null)?.message ?? e))) return
+    throw e
+  }
 }
 
 /**
