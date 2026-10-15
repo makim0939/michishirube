@@ -21,6 +21,8 @@ import { AlertIcon, CheckIcon } from './icons'
 
 // アプリの中では、公開しているページを Safari で開く（アプリに入れたファイルを開くと、アプリの画面が置き換わるため）
 const PRIVACY_URL = isNativeApp ? `${SITE_URL}privacy` : `${import.meta.env.BASE_URL}privacy.html`
+/** YouTube 利用規約（YouTube に動画を上げる機能には、この規約に沿うことの確認の表示が要る。携帯用のページがある） */
+const YOUTUBE_TERMS_URL = isNativeApp ? 'https://m.youtube.com/t/terms' : 'https://www.youtube.com/t/terms'
 
 /** Web 版で、Google の画面から戻ってきたら結果を受け取る（戻り先の URL に一度きりのコードが付いてくる） */
 function useWebAuthResult() {
@@ -146,7 +148,11 @@ function YoutubeSection() {
       )}
       <p className="muted small">
         設定の「動画」で保存先を YouTube にすると、動画をあなたの YouTube チャンネルに上げます（はじめは限定公開）。YouTube
-        の鍵はこの端末にだけ置くので、ほかの端末ではその端末で連携してください。
+        の鍵はこの端末にだけ置くので、ほかの端末ではその端末で連携してください。YouTube に上げる動画は、
+        <a href={YOUTUBE_TERMS_URL} target="_blank" rel="noopener noreferrer">
+          YouTube 利用規約
+        </a>
+        に沿った内容であることを、あなたが確認したものとみなされます。動画は「子ども向けではない」として上げます（変えるときは、YouTube で設定してください）。
       </p>
     </div>
   )
