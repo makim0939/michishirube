@@ -1523,8 +1523,20 @@ a.media.placeholder {
 }
 
 /* 注ぐ直前に見る「今回意識すること」 */
+/* 今回意識すること（と手本のボタン）。手本のボタンは、文が長くても押しやすい位置に */
+.recorder-sub {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.recorder-sub .btn {
+  flex: none;
+}
+
 .recorder-focus {
   align-self: flex-start;
+  min-width: 0;
   display: flex;
   align-items: baseline;
   gap: 8px;
@@ -1614,6 +1626,14 @@ a.media.placeholder {
   padding: 3px;
   border-radius: 999px;
   background: rgb(0 0 0 / 45%);
+}
+
+/* 画質の2択（上の「音あり」と同じ高さ） */
+.recorder-modes.small button {
+  min-width: 0;
+  min-height: 31px;
+  padding: 0 12px;
+  white-space: nowrap;
 }
 
 .recorder-modes button {

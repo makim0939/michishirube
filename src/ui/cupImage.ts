@@ -1,10 +1,64 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ensurePoster, needsLocalPoster, needsRemotePoster } from '../data/poster'
 import { contentBlob } from '../data/content'
 import { fetchPhoto } from '../data/sync'
 import { youtubeThumbnail } from '../data/youtube'
 import type { Media } from '../domain/types'
-import { isVideo, useObjectUrl } from './common'
+import { isVideo } from './common'
+
+/**
+ * 画面を開き直したとき（ホームに戻ったときなど）、読み込み済みの写真をすぐ出せるよう、読んだ中身と表示用の URL を覚えておく。
+ * 覚えていないと、戻るたびに「枠だけ → 写真」と切り替わってちらつく
+ */
+const CONTENT_CACHE_MAX = 80
+const contentCache = new Map<string, Blob>()
+
+function rememberContent(key: string, blob: Blob) {
+  contentCache.delete(key)
+  contentCache.set(key, blob)
+  while (contentCache.size > CONTENT_CACHE_MAX) contentCache.delete(contentCache.keys().next().value!)
+}
+
+/** 表示用の URL（Blob から作ったもの）。使っている画面が無くなっても、少しのあいだ残す */
+const URL_CACHE_MAX = 120
+const urlCache = new Map<string, { url: string; users: number }>()
+
+function urlFor(key: string, blob: Blob): string {
+  let entry = urlCache.get(key)
+  if (!entry) {
+    entry = { url: URL.createObjectURL(blob), users: 0 }
+    urlCache.set(key, entry)
+  }
+  return entry.url
+}
+
+/** 使われなくなった古い URL を、上限を超えた分だけ手放す（表示中のものは手放さない） */
+function trimUrls() {
+  for (const [key, entry] of urlCache) {
+    if (urlCache.size <= URL_CACHE_MAX) return
+    if (entry.users > 0) continue
+    URL.revokeObjectURL(entry.url)
+    urlCache.delete(key)
+  }
+}
+
+/**
+ * 写真の表示用 URL。key は中身が変われば変わるもの。画面を開き直しても、最初の描画から URL が入っている
+ * （useObjectUrl は、描画のあとで URL を作るので、開き直した直後に1コマだけ空になる）
+ */
+export function useImageUrl(blob: Blob | undefined, key: string | undefined): string | undefined {
+  const url = useMemo(() => (blob && key ? urlFor(key, blob) : undefined), [blob, key])
+  useEffect(() => {
+    const entry = key ? urlCache.get(key) : undefined
+    if (!entry) return
+    entry.users++
+    return () => {
+      entry.users--
+      trimUrls()
+    }
+  }, [key, url])
+  return url
+}
 
 /** 記録の動画・写真から、カップの絵として見せる1つを選ぶ（写真があれば写真、無ければ動画） */
 export function pickCupMedia(list: (Media | undefined)[]): Media | undefined {
@@ -30,15 +84,18 @@ export function useContent(media: Media | undefined): { blob?: Blob; loading: bo
   // blob が無ければ、読めなかった
   const key = id && source ? `${id}|${source}` : undefined
   const [loaded, setLoaded] = useState<{ key: string; blob?: Blob }>()
+  // 前に読んだ中身（画面を開き直したときに、読み直すあいだ空にならないように）
+  const cached = key ? contentCache.get(key) : undefined
 
   useEffect(() => {
-    if (!key || !media) return
+    if (!key || !media || contentCache.has(key)) return
     let cancelled = false
     const read = media.file
       ? contentBlob(media).catch((e: unknown) => (cloud ? fetchPhoto(media) : Promise.reject(e)))
       : fetchPhoto(media)
     read
       .then((b) => {
+        if (b) rememberContent(key, b)
         if (!cancelled) setLoaded({ key, blob: b })
       })
       .catch(() => {
@@ -55,6 +112,7 @@ export function useContent(media: Media | undefined): { blob?: Blob; loading: bo
   if (media.blob) return { blob: media.blob, loading: false }
   if (!key) return { loading: false }
   if (loaded?.key === key && loaded.blob) return { blob: loaded.blob, loading: false }
+  if (cached) return { blob: cached, loading: false }
   if (shown.current?.id === id) return { blob: shown.current.blob, loading: false }
   return { loading: loaded?.key !== key }
 }
@@ -96,7 +154,7 @@ export function useCupImageUrl(
   options: { upgrade?: boolean } = {},
 ): string | undefined {
   const blob = useCupImage(media, options)
-  const url = useObjectUrl(blob, media ? `${media.id}-${key}-${blob?.size ?? 0}` : undefined)
+  const url = useImageUrl(blob, media ? `${media.id}-${key}-${blob?.size ?? 0}` : undefined)
   if (url) return url
   return media && isVideo(media) && media.youtubeId ? youtubeThumbnail(media.youtubeId) : undefined
 }
