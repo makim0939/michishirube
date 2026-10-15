@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import {
   cameraConstraints,
   extensionFor,
+  judgeRecording,
   MAX_RECORDING_MS,
   markRecorderTypeBroken,
   pickRecorderMimeType,
@@ -18,9 +19,6 @@ const AUDIO_KEY = 'michishirube:recorder-audio'
 const MODE_KEY = 'michishirube:recorder-mode'
 
 type Mode = 'video' | 'photo'
-
-/** これより短い録画が空でも、「この形式では撮れない」とは決めない */
-const MIN_BROKEN_MS = 2000
 
 function formatElapsed(ms: number) {
   const s = Math.floor(ms / 1000)
@@ -88,6 +86,8 @@ export function Recorder({
   const preview = useRef<HTMLVideoElement>(null)
   const stream = useRef<MediaStream | null>(null)
   const recorder = useRef<MediaRecorder | null>(null)
+  /** 押して（または上限で）止めたか。録画が勝手に止まったら、この形式では撮れない合図 */
+  const stoppedByUser = useRef(false)
   const [audio, setAudio] = useState(() => readStorage('local', AUDIO_KEY) !== 'off')
   const [mode, setMode] = useState<Mode>(() => (readStorage('local', MODE_KEY) === 'photo' ? 'photo' : 'video'))
   const [showRefs, setShowRefs] = useState(false)
@@ -130,6 +130,7 @@ export function Recorder({
       })
     return () => {
       cancelled = true
+      stoppedByUser.current = true
       recorder.current?.state === 'recording' && recorder.current.stop()
       stream.current?.getTracks().forEach((t) => t.stop())
       stream.current = null
@@ -146,12 +147,18 @@ export function Recorder({
     if (startedAt === undefined) return
     const timer = setInterval(() => {
       setNow(Date.now())
-      if (Date.now() - startedAt >= MAX_RECORDING_MS) recorder.current?.stop()
+      if (Date.now() - startedAt >= MAX_RECORDING_MS) stopRecording()
     }, 250)
     return () => clearInterval(timer)
   }, [startedAt])
 
+  const stopRecording = () => {
+    stoppedByUser.current = true
+    recorder.current?.stop()
+  }
+
   const start = () => {
+    stoppedByUser.current = false
     const s = stream.current
     setNotice(undefined)
     const mimeType = pickRecorderMimeType(recorderSupports, audio, quality)
@@ -176,12 +183,13 @@ export function Recorder({
       setStartedAt(undefined)
       const type = r.mimeType || mimeType
       const blob = new Blob(chunks, { type: type.split(';')[0] })
-      if (blob.size === 0) {
+      const verdict = judgeRecording(blob.size, Date.now() - began, stoppedByUser.current)
+      if (verdict === 'too-short') {
         // 押してすぐ止めたなど、短すぎる録画が空なのは、形式のせいではない（もう一度撮れば撮れる）
-        if (Date.now() - began < MIN_BROKEN_MS) {
-          setNotice('短すぎて録画できませんでした。もう一度撮ってください')
-          return
-        }
+        setNotice('短すぎて録画できませんでした。もう一度撮ってください')
+        return
+      }
+      if (verdict === 'broken') {
         // この形式はこの端末では撮れない。ほかの形式があれば、次からそちらで撮る
         const container = mimeType.split(';')[0]
         const others = !!pickRecorderMimeType((t) => recorderSupports(t) && !t.startsWith(container), audio, quality)
@@ -395,7 +403,7 @@ export function Recorder({
               className={`record-button ${recording ? 'recording' : ''}`}
               disabled={!ready}
               aria-label={recording ? '録画を止める' : '録画を始める'}
-              onClick={() => (recording ? recorder.current?.stop() : start())}
+              onClick={() => (recording ? stopRecording() : start())}
             />
           )}
           {!recording && !error ? (
