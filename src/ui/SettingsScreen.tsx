@@ -20,10 +20,12 @@ import {
 import { megabytesPer30s } from '../data/mediaPrep'
 import { resumeUploads, youtubeStatus } from '../data/youtube'
 import { ConfirmButton, formatBytes, requestPersist, saveFile } from './common'
+import { clearImageCaches } from './imageCache'
 import { useAction, useToast } from './feedback'
 import { RoadmapSettings } from './RoadmapSettings'
 import { backHandler, go, href, type SettingsSection } from './router'
 import { SyncSettings } from './SyncSettings'
+import { forgetToday } from './TodayScreen'
 import { isNativeApp, SITE_URL } from '../platform'
 import { AlertIcon, BackIcon, CheckIcon, ForwardIcon } from './icons'
 
@@ -497,6 +499,9 @@ function DataPage() {
               // アプリでは、動画・写真のファイルも消し、記録の写しも空にする（次に開いたときに戻らないように）
               await resetContentFiles()
               await saveSnapshotNow()
+              // 覚えているホームの内容と写真も捨てる（削除したはずのものを、メモリにも画面にも残さない）
+              forgetToday()
+              clearImageCaches()
               toast.show('すべて削除しました')
               go('/')
             })

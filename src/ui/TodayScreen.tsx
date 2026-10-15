@@ -381,6 +381,11 @@ async function loadToday() {
  */
 let lastToday: Awaited<ReturnType<typeof loadToday>> | undefined
 
+/** 覚えているホームの内容を捨てる（「すべて削除」のとき。削除したはずの記録を、戻った瞬間に出さない） */
+export function forgetToday() {
+  lastToday = undefined
+}
+
 export function TodayScreen() {
   const data = useLiveQuery(
     async () => {
