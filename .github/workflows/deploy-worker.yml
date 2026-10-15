@@ -9,6 +9,7 @@ on:
     paths:
       - 'worker/**'
       - 'shared/**'
+      - 'public/privacy.html'
       - 'package.json'
       - 'pnpm-lock.yaml'
       - '.github/workflows/deploy-worker.yml'

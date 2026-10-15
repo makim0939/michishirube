@@ -4,6 +4,11 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
   "observability": { "enabled": true },
+  // アプリのドメイン。サーバー（/api/*）と、トップページ・プライバシーポリシー（site/）を同じドメインで配る。
+  // Google の審査には、ホームページとプライバシーポリシーが承認済みドメインにあることが要る。
+  // 前の URL（workers.dev）も動いたままにして、前の版のアプリがつながるようにする
+  "routes": [{ "pattern": "latte.makimura.me", "custom_domain": true }],
+  "assets": { "directory": "./site", "run_worker_first": ["/api/*"] },
   "vars": {
     // アプリを開くオリジン。カンマ区切り
     "ALLOWED_ORIGINS": "https://makim0939.github.io,http://localhost:5179,http://localhost:5180,capacitor://localhost,https://localhost"

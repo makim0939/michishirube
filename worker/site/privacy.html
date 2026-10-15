@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>プライバシーポリシー｜ラテ帳</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: system-ui, -apple-system, 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+        line-height: 1.75;
+      }
+      body {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 32px 16px 64px;
+        background: Canvas;
+        color: CanvasText;
+      }
+      h1 {
+        font-size: 1.5rem;
+      }
+      h2 {
+        font-size: 1.1rem;
+        margin-top: 2em;
+      }
+      .muted {
+        opacity: 0.7;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>ラテ帳 プライバシーポリシー</h1>
+    <p class="muted">最終更新日：2026年10月15日</p>
+
+    <p>
+      「ラテ帳」（旧称「ラテリエ」「道しるべ」。以下「本アプリ」）は、個人がラテアートなどの練習を記録するためのアプリです。このページでは、本アプリが扱う情報と、その保存先を説明します。
+    </p>
+
+    <h2>1. 扱う情報と保存先</h2>
+    <ul>
+      <li>
+        <strong>練習の記録・ロードマップ・写真・動画</strong>：利用者の端末に保存します（Web 版はブラウザの中（IndexedDB）、iPhone・Android のアプリはアプリの中のファイル）。ログインしていなければ、端末の外には送りません。
+      </li>
+      <li>
+        <strong>Google でログインした場合</strong>：ほかの端末でも同じ記録を使えるよう、次のものを本アプリのサーバー（作者が運営する Cloudflare Workers・D1）に保存します。
+        <ul>
+          <li>練習の記録（日時・結果・原因・メモ・次の一手）、型と分野（ロードマップ）、設定</li>
+          <li>動画・写真の情報（種類・大きさ・撮った日時・YouTube の動画 ID）</li>
+          <li>縮小した写真と、動画のサムネイル（できあがりの1コマ）</li>
+          <li>Google アカウントを見分けるための番号（Google の「sub」）と、ログイン中の端末を見分けるための値（ハッシュにして保存）</li>
+        </ul>
+        <strong>動画の中身、Google アカウントのメールアドレス・名前・パスワード、YouTube の認可情報は、サーバーに保存しません。</strong>
+        サーバーのデータは、通信を暗号化して送り、ログインした本人の端末からだけ読み書きできます。作者は、障害の調査など運営に必要な場合を除いて、利用者のデータを見ません。
+      </li>
+      <li>
+        <strong>YouTube と連携し、動画の保存先を YouTube にした場合</strong>：利用者が撮った練習の動画を、<strong>利用者自身の YouTube チャンネル</strong>にアップロードします。動画は端末から YouTube へ直接送り、本アプリのサーバーを通しません。公開範囲は、はじめは「限定公開」（URL を知っている人だけが見られ、検索や一覧には出ません）で、利用者が設定で「公開」（だれでも見られ、検索にも出ます）を選んだときだけ公開します。
+      </li>
+      <li>
+        <strong>YouTube の動画をアプリの中で表示・再生する場合</strong>：YouTube の再生の仕組み（YouTube IFrame Player API・youtube-nocookie.com）と、動画のサムネイル（i.ytimg.com）を読み込みます。このとき、IP アドレスやブラウザの種類などの通信に必要な情報が Google に送られます。iPhone・Android のアプリでは、YouTube の決まり（埋め込むページが https であること）のため、本アプリのサイト（GitHub Pages）にある再生用のページを挟んで再生します。このページにも、通信に必要な情報（IP アドレスなど）が送られます（GitHub が受け取ります）。動画の ID 以外の記録・写真は送りません。
+      </li>
+      <li>
+        <strong>文字の表示（フォント）</strong>：画面の文字の形（フォント）を Google Fonts から読み込みます。このとき、IP
+        アドレスやブラウザの種類などの通信に必要な情報が Google に送られます。練習の記録・写真・動画は送りません。一度読み込んだフォントは端末に保存し、次からはそれを使います。
+      </li>
+    </ul>
+
+    <h2>2. Google ユーザーデータの取り扱い</h2>
+    <ul>
+      <li>
+        本アプリが Google に求める権限は、ログインのための基本情報（<code>openid</code>・<code>email</code>）と、YouTube への動画のアップロード（<code>https://www.googleapis.com/auth/youtube.upload</code>）だけです。YouTube の権限は、利用者が YouTube と連携したときだけ求めます。
+      </li>
+      <li>
+        ログインで受け取るメールアドレスは、どのアカウントでログインしているかを端末に表示するためだけに使い、サーバーには保存しません。
+      </li>
+      <li>
+        YouTube の権限は、利用者が本アプリで撮った動画を、利用者自身のチャンネルへアップロードするためだけに使います。チャンネルの動画の一覧や視聴履歴など、ほかの情報は読み取りません。
+      </li>
+      <li>
+        YouTube の認可情報（リフレッシュトークン）は、連携した端末の中にだけ保存します。アップロードの前に、1時間で切れるアクセストークンに替えるため本アプリのサーバーに送りますが、サーバーには保存しません。
+      </li>
+      <li>
+        Google から受け取った情報を、第三者に提供・販売したり、広告に使ったり、人が読んだりすることはありません。本アプリによる
+        Google API から受け取った情報の利用と他のアプリへの転送は、
+        <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API サービスのユーザーデータに関するポリシー</a>
+        （限定的な使用の要件を含む）に従います。
+      </li>
+    </ul>
+
+    <h2>3. ログアウト・連携の解除・データの削除</h2>
+    <ul>
+      <li>「設定 → アカウント → ログアウト」で、その端末のログインを終えます（端末とサーバーの記録は残ります）。</li>
+      <li>
+        「設定 → アカウント → アカウントを削除」で、アカウントと、サーバーに保存したすべてのデータをすぐに削除します（端末の記録と、YouTube に上げた動画は残ります）。
+      </li>
+      <li>「設定 → アカウント → YouTube → 連携を解除」で、端末の認可情報を削除し、Google 側の許可も取り消します。</li>
+      <li>
+        Google アカウントの<a href="https://myaccount.google.com/permissions">サードパーティのアクセス</a>からも、いつでも許可を取り消せます。
+      </li>
+      <li>YouTube にアップロードした動画は、YouTube のアプリやサイトから削除できます。</li>
+      <li>端末のデータは「設定 → この端末のデータを削除」で削除できます。</li>
+    </ul>
+
+    <h2>4. 第三者への提供</h2>
+    <p>本アプリの作者は、利用者の情報を第三者に提供しません（法令に基づく場合を除く）。アクセス解析や広告のためのツールも使っていません。サーバーは Cloudflare（Workers・D1）を使っており、データは Cloudflare の設備に保存されます。</p>
+
+    <h2>5. お問い合わせ</h2>
+    <p>
+      <a href="https://github.com/makim0939/michishirube/issues">GitHub の Issues</a> からご連絡ください。
+    </p>
+
+    <p><a href="./">ラテ帳を開く</a></p>
+  </body>
+</html>

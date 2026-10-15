@@ -82,7 +82,7 @@ function StorageStatus() {
  * プライバシーポリシー。アプリの中では、公開しているページを Safari で開く
  * （アプリに入れたファイルを別の窓で開くと、アプリの画面が置き換わってしまうため）
  */
-const PRIVACY_URL = isNativeApp ? `${SITE_URL}privacy.html` : `${import.meta.env.BASE_URL}privacy.html`
+const PRIVACY_URL = isNativeApp ? `${SITE_URL}privacy` : `${import.meta.env.BASE_URL}privacy.html`
 
 
 const TITLES: Record<SettingsSection, string> = {
