@@ -79,6 +79,11 @@ export interface Media {
    * どちらにあるかは hasContent()、中身は contentBlob() で扱う
    */
   file?: string
+  /**
+   * アプリで、ファイルの動画をどの画質にそろえたか（同期しない）。まだなら undefined。
+   * アルバムの大きな動画や、日がたった高画質の動画を軽くするときに使う
+   */
+  optimized?: 'standard' | 'high'
   /** 動画のサムネイル（JPEG）。この端末にだけある */
   poster?: Blob
   /** poster が動画の最後のコマ（できあがりのカップ）か。この端末にだけある（同期しない） */

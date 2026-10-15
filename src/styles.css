@@ -3142,6 +3142,72 @@ a.notice {
   color: var(--muted);
 }
 
+/* 選ぶ項目の行（押した行に印を付ける）。下に短い説明を添える */
+.settings-row.choice {
+  appearance: none;
+  width: 100%;
+  border: none;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.settings-row.choice .icon {
+  color: var(--active);
+}
+
+.settings-sub {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.settings-list + .settings-list {
+  margin-top: 10px;
+}
+
+/* オン・オフの切り替え（iPhone のスイッチの形） */
+.switch {
+  appearance: none;
+  flex: none;
+  position: relative;
+  width: 46px;
+  height: 28px;
+  margin: 0;
+  border-radius: 14px;
+  background: var(--border);
+  transition: background 0.2s;
+  cursor: pointer;
+}
+
+.switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--surface);
+  transition: transform 0.2s;
+}
+
+.switch:checked {
+  background: var(--active);
+}
+
+.switch:checked::after {
+  transform: translateX(18px);
+}
+
+.switch:focus-visible {
+  outline: 2px solid var(--active);
+  outline-offset: 2px;
+}
+
 /* 設定の「ロードマップ」の分野（押すと、名前を変える・書き出す・消す） */
 .domain-row {
   flex-wrap: wrap;

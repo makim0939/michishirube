@@ -49,7 +49,7 @@ export function MediaItem({
       {blob ? (
         <MediaView
           blob={blob}
-          type={media.type}
+          type={blob.type || media.type}
           poster={media.poster}
           cacheKey={media.id}
           autoLoad={autoLoad}

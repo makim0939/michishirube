@@ -6,15 +6,17 @@ import { saveFile } from './common'
 import { useToast } from './feedback'
 import { ShareIcon } from './icons'
 
-function fileNameFor(media: Media): string {
+function fileNameFor(media: Media, type: string): string {
   const d = new Date(media.createdAt)
   const pad = (n: number) => String(n).padStart(2, '0')
   const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`
-  const ext = media.type.includes('mp4')
+  const ext = type.includes('mp4')
     ? 'mp4'
-    : media.type.includes('webm')
+    : type.includes('webm')
       ? 'webm'
-      : media.type.includes('png')
+      : type.includes('quicktime')
+        ? 'mov'
+        : type.includes('png')
         ? 'png'
         : 'jpg'
   return `latte-${stamp}.${ext}`
@@ -48,7 +50,9 @@ export async function shareFile(file: File): Promise<boolean> {
  */
 export function ShareMediaButton({ media, blob }: { media: Media; blob: Blob }) {
   const toast = useToast()
-  const name = fileNameFor(media)
+  // 画質をそろえた動画は、元が WebM・MOV でも MP4 になっているので、中身の種類で決める
+  const type = blob.type || media.type
+  const name = fileNameFor(media, type)
   const [ready, setReady] = useState<{ key: string; file: File }>()
   const [waiting, setWaiting] = useState(false)
   // 同じ中身の間は写し直さない（同期で media が読み直されても）
@@ -60,7 +64,7 @@ export function ShareMediaButton({ media, blob }: { media: Media; blob: Blob }) 
     let cancelled = false
     inMemory(latest.current)
       .then((b) => {
-        if (!cancelled) setReady({ key, file: new File([b], name, { type: media.type }) })
+        if (!cancelled) setReady({ key, file: new File([b], name, { type }) })
       })
       .catch(() => {
         // 写せなければ、押したときにもう一度試す
@@ -79,7 +83,7 @@ export function ShareMediaButton({ media, blob }: { media: Media; blob: Blob }) 
       setWaiting(true)
       try {
         const b = await inMemory(blob)
-        setReady({ key, file: new File([b], name, { type: media.type }) })
+        setReady({ key, file: new File([b], name, { type }) })
         toast.show('準備できました。もう一度押してください')
       } catch {
         toast.show('共有できませんでした', 'error')

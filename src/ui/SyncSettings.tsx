@@ -169,7 +169,7 @@ function YoutubeSection({ notice }: { notice?: string }) {
         </button>
       )}
       <p className="muted small">
-        設定の「動画の保存先」を YouTube にすると、動画を YouTube へ「限定公開」で上げます（URL を知っている人だけが見られます。URL はこのアプリの中にだけ残ります）。初回は「Google
+        設定の「動画」で保存先を YouTube にすると、動画を YouTube に上げます（はじめは「限定公開」で、URL を知っている人だけが見られます。「公開」にもできます）。初回は「Google
         はこのアプリを確認していません」と出るので、「詳細」→「（安全ではないページ）に移動」で進んでください。最後に「連携しました」と出たら、その画面を閉じてアプリに戻ってください。
       </p>
     </div>

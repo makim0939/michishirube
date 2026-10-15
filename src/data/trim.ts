@@ -1,5 +1,5 @@
 import { dlog, traceVideo } from '../debug'
-import { extensionFor, pickRecorderMimeType, RECORDER_BITRATE, recorderSupports } from './mediaPrep'
+import { extensionFor, pickRecorderMimeType, QUALITY, recorderSupports } from './mediaPrep'
 
 /**
  * 動画を切り取る・音を消す。指定した範囲を再生しながら、映像はキャンバス、音声は Web Audio 経由で録り直す
@@ -38,8 +38,6 @@ export function isLongEnough(recordedSeconds: number, range: TrimRange): boolean
   return recordedSeconds >= Math.min(wanted * 0.5, wanted - 0.3)
 }
 
-/** 録画の解像度の上限（元の動画と同じ 720p 相当） */
-const MAX_EDGE = 1280
 
 type VideoWithFrameCallback = HTMLVideoElement & {
   requestVideoFrameCallback?: (cb: (now: number, meta: { mediaTime: number }) => void) => number
@@ -56,7 +54,10 @@ export function startTrim(
   fileName: string,
   { muted = false }: { muted?: boolean } = {},
 ): TrimJob {
-  const mimeType = pickRecorderMimeType(recorderSupports, !muted)
+  // 元の動画の画質を保つ（高画質で撮った動画は高画質のまま、それ以外は標準に）
+  const quality = Math.min(video.videoWidth, video.videoHeight) > QUALITY.standard.shortSide ? 'high' : 'standard'
+  const preset = QUALITY[quality]
+  const mimeType = pickRecorderMimeType(recorderSupports, !muted, quality)
   if (!mimeType) {
     return { done: Promise.reject(new Error('この端末では動画を作り直せません')), cancel: () => {} }
   }
@@ -92,7 +93,7 @@ export function startTrim(
   })()
   // ------------------------------------------------------------------------------
 
-  const scale = Math.min(1, MAX_EDGE / Math.max(video.videoWidth, video.videoHeight))
+  const scale = Math.min(1, preset.shortSide / Math.min(video.videoWidth, video.videoHeight))
   const canvas = document.createElement('canvas')
   canvas.width = Math.round(video.videoWidth * scale) || 1280
   canvas.height = Math.round(video.videoHeight * scale) || 720
@@ -103,8 +104,8 @@ export function startTrim(
   ])
   const recorder = new MediaRecorder(stream, {
     mimeType,
-    videoBitsPerSecond: RECORDER_BITRATE.video,
-    ...(muted ? {} : { audioBitsPerSecond: RECORDER_BITRATE.audio }),
+    videoBitsPerSecond: preset.video,
+    ...(muted ? {} : { audioBitsPerSecond: preset.audio }),
   })
   const chunks: Blob[] = []
   recorder.ondataavailable = (e) => {

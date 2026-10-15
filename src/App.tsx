@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { moveContentsToFiles, tidyContentFiles, watchContentFiles } from './data/content'
+import { moveContentsToFiles, optimizeVideos, tidyContentFiles, watchContentFiles } from './data/content'
 import { initFiles } from './data/files'
 import { ensureSeeded } from './data/repo'
 import { restoreSnapshotIfEmpty, watchSnapshot } from './data/snapshot'
@@ -100,6 +100,8 @@ export function App() {
         // 画面の中の保存場所に残っている動画・写真があれば、ファイルへ移し、使われていないファイルを片付ける
         void moveContentsToFiles()
         void tidyContentFiles()
+        // 大きな動画・日がたった高画質の動画を、設定の画質にそろえる
+        void optimizeVideos()
         setReady(true)
       })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))

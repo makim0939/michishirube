@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  CAMERA_CONSTRAINTS,
+  cameraConstraints,
   extensionFor,
   MAX_RECORDING_MS,
   markRecorderTypeBroken,
   pickRecorderMimeType,
-  RECORDER_BITRATE,
+  QUALITY,
   recorderSupports,
 } from '../data/mediaPrep'
+import type { VideoQuality } from '../data/videoStorage'
 import { isWebUrl } from '../domain/template'
 import type { Reference } from '../domain/types'
 import { readStorage, writeStorage } from './storage'
@@ -64,6 +65,7 @@ export function Recorder({
   onAlbum,
   focus,
   references = [],
+  quality,
 }: {
   /** video は録画（写真だけのときは無い）、photo はできあがりの写真（スキップしたら無い） */
   onDone: (video: File | undefined, photo?: File) => void
@@ -76,6 +78,8 @@ export function Recorder({
   focus?: string
   /** 手本の動画・記事 */
   references?: Reference[]
+  /** 撮る画質（設定の「画質」） */
+  quality: VideoQuality
 }) {
   const preview = useRef<HTMLVideoElement>(null)
   const stream = useRef<MediaStream | null>(null)
@@ -102,7 +106,7 @@ export function Recorder({
     let cancelled = false
     setReady(false)
     navigator.mediaDevices
-      .getUserMedia({ video: CAMERA_CONSTRAINTS, audio: withAudio })
+      .getUserMedia({ video: cameraConstraints(quality), audio: withAudio })
       .then((s) => {
         if (cancelled) {
           s.getTracks().forEach((t) => t.stop())
@@ -126,7 +130,7 @@ export function Recorder({
       stream.current?.getTracks().forEach((t) => t.stop())
       stream.current = null
     }
-  }, [withAudio])
+  }, [withAudio, quality])
 
   // できあがりを撮る画面に切り替えたら、開いているカメラをそのまま映す
   useEffect(() => {
@@ -146,15 +150,15 @@ export function Recorder({
   const start = () => {
     const s = stream.current
     setNotice(undefined)
-    const mimeType = pickRecorderMimeType(recorderSupports, audio)
+    const mimeType = pickRecorderMimeType(recorderSupports, audio, quality)
     if (!s || !mimeType) return
     const chunks: Blob[] = []
     let r: MediaRecorder
     try {
       r = new MediaRecorder(s, {
         mimeType,
-        videoBitsPerSecond: RECORDER_BITRATE.video,
-        ...(audio ? { audioBitsPerSecond: RECORDER_BITRATE.audio } : {}),
+        videoBitsPerSecond: QUALITY[quality].video,
+        ...(audio ? { audioBitsPerSecond: QUALITY[quality].audio } : {}),
       })
     } catch {
       setError('この端末では録画を始められませんでした。標準のカメラを使ってください。')
@@ -170,7 +174,7 @@ export function Recorder({
       if (blob.size === 0) {
         // この形式はこの端末では撮れない。ほかの形式があれば、次からそちらで撮る
         const container = mimeType.split(';')[0]
-        const others = !!pickRecorderMimeType((t) => recorderSupports(t) && !t.startsWith(container), audio)
+        const others = !!pickRecorderMimeType((t) => recorderSupports(t) && !t.startsWith(container), audio, quality)
         if (others) {
           markRecorderTypeBroken(mimeType)
           setNotice('この端末に合う録画の形式に切り替えました。もう一度撮ってください')

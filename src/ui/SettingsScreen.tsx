@@ -2,11 +2,21 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { estimateBackupSize, exportBackup, importBackup, type BackupPart } from '../data/backup'
 import { db } from '../data/db'
-import { contentFilesSize, resetContentFiles } from '../data/content'
+import { contentFilesSize, KEEP_HIGH_DAYS, optimizeVideos, resetContentFiles } from '../data/content'
 import { saveSnapshotNow } from '../data/snapshot'
 import { getSyncConfig, getSyncStatus } from '../data/sync'
 import { TIDY_AFTER_DAYS } from '../data/tidy'
-import { getVideoStorage, setVideoStorage, type VideoStorage } from '../data/videoStorage'
+import {
+  getVideoSettings,
+  setKeepHigh,
+  setVideoQuality,
+  setVideoStorage,
+  setYoutubePrivacy,
+  type VideoQuality,
+  type VideoStorage,
+  type YoutubePrivacy,
+} from '../data/videoStorage'
+import { megabytesPer30s } from '../data/mediaPrep'
 import { resumeUploads, youtubeStatus } from '../data/youtube'
 import { ConfirmButton, formatBytes, requestPersist, saveFile } from './common'
 import { useAction, useToast } from './feedback'
@@ -73,13 +83,9 @@ function StorageStatus() {
  */
 const PRIVACY_URL = isNativeApp ? `${SITE_URL}privacy.html` : `${import.meta.env.BASE_URL}privacy.html`
 
-const STORAGE_CHOICES: { value: VideoStorage; label: string }[] = [
-  { value: 'device', label: 'この端末' },
-  { value: 'youtube', label: 'YouTube' },
-]
 
 const TITLES: Record<SettingsSection, string> = {
-  storage: '動画の保存先',
+  storage: '動画',
   sync: 'クラウド同期',
   backup: 'バックアップ',
   roadmaps: 'ロードマップ',
@@ -122,13 +128,13 @@ function Row({ to, label, value, warn }: { to: SettingsSection; label: string; v
 
 function SettingsHome() {
   const data = useLiveQuery(async () => {
-    const [storage, config, status, domains] = await Promise.all([
-      getVideoStorage(),
+    const [video, config, status, domains] = await Promise.all([
+      getVideoSettings(),
       getSyncConfig(),
       getSyncStatus(),
       db.domains.count(),
     ])
-    return { storage, config, status, domains }
+    return { video, config, status, domains }
   })
   if (!data) return null
   const sync = !data.config ? '使っていません' : data.status.error ? '同期できていません' : 'つながっています'
@@ -141,7 +147,11 @@ function SettingsHome() {
       <section className="section">
         <h2>記録の保存</h2>
         <ul className="settings-list">
-          <Row to="storage" label="動画の保存先" value={data.storage === 'device' ? 'この端末' : 'YouTube'} />
+          <Row
+            to="storage"
+            label="動画"
+            value={`${data.video.storage === 'device' ? 'この端末' : 'YouTube'}・${data.video.quality === 'high' ? '高画質' : '標準'}`}
+          />
           <Row to="sync" label="クラウド同期" value={sync} warn={!!data.config && !!data.status.error} />
           <Row to="backup" label="バックアップ" />
         </ul>
@@ -177,11 +187,41 @@ function SettingsHome() {
   )
 }
 
+/** 選ぶ項目の1行（iPhone の設定と同じく、選んでいる行に印を付ける） */
+function Choice({
+  label,
+  sub,
+  selected,
+  onSelect,
+}: {
+  label: string
+  sub: string
+  selected: boolean
+  onSelect: () => void
+}) {
+  return (
+    <li>
+      <button type="button" className="settings-row choice" role="radio" aria-checked={selected} onClick={onSelect}>
+        <span className="settings-label">
+          {label}
+          <span className="settings-sub">{sub}</span>
+        </span>
+        {selected && <CheckIcon size={18} />}
+      </button>
+    </li>
+  )
+}
+
+/**
+ * 動画の設定：保存先（この端末・YouTube）と画質（標準・高画質）。YouTube のときは公開範囲も。
+ * 説明は各行の短い一言だけにし、選んだときの結果はトーストで知らせる
+ */
 function StoragePage() {
   const run = useAction()
   const toast = useToast()
-  const storage = useLiveQuery(getVideoStorage)
-  if (!storage) return null
+  const settings = useLiveQuery(getVideoSettings)
+  if (!settings) return null
+  const { storage, quality, keepHigh, youtubePrivacy } = settings
 
   const changeStorage = async (value: VideoStorage) => {
     await setVideoStorage(value)
@@ -199,32 +239,107 @@ function StoragePage() {
     } else {
       toast.show('これから撮る動画は、この端末にだけ置きます')
     }
+    void optimizeVideos()
   }
+
+  const changeQuality = async (value: VideoQuality) => {
+    await setVideoQuality(value)
+    toast.show(value === 'high' ? 'これから撮る動画は高画質になります' : 'これから撮る動画は標準の画質になります')
+    void optimizeVideos()
+  }
+
+  const changeKeepHigh = async (value: boolean) => {
+    await setKeepHigh(value)
+    toast.show(value ? '高画質の動画を、そのまま残します' : `${KEEP_HIGH_DAYS}日たった高画質の動画を、標準に軽くします`)
+    void optimizeVideos()
+  }
+
+  const changePrivacy = async (value: YoutubePrivacy) => {
+    await setYoutubePrivacy(value)
+    toast.show(value === 'public' ? 'これから上げる動画は、だれでも見られます' : 'これから上げる動画は、限定公開になります')
+  }
+
+  const select = (fn: () => Promise<void>) => () => run(fn)
 
   return (
     <>
       <section className="section">
-        <div className="segmented">
-          {STORAGE_CHOICES.map((c) => (
-            <button
-              key={c.value}
-              type="button"
-              className={storage === c.value ? 'selected' : ''}
-              aria-pressed={storage === c.value}
-              onClick={() => {
-                if (storage !== c.value) run(() => changeStorage(c.value))
-              }}
-            >
-              {c.label}
-            </button>
-          ))}
-        </div>
-        <p className="muted small">
-          {storage === 'device'
-            ? '動画はこの端末にだけ置きます。30秒の動画100本で、約0.5GBです。'
-            : `YouTube に限定公開で上げ、${TIDY_AFTER_DAYS}日たったら端末から消します。消えたあともアプリの中で見られますが、切り取りなどの編集はできません。YouTube との連携は「クラウド同期」から行います。`}
-        </p>
+        <h2>保存先</h2>
+        <ul className="settings-list" role="radiogroup" aria-label="保存先">
+          <Choice
+            label="この端末"
+            sub="端末にだけ置きます"
+            selected={storage === 'device'}
+            onSelect={select(() => (storage === 'device' ? Promise.resolve() : changeStorage('device')))}
+          />
+          <Choice
+            label="YouTube"
+            sub={`上げて${TIDY_AFTER_DAYS}日たったら端末から消します。端末の容量をほとんど使いません`}
+            selected={storage === 'youtube'}
+            onSelect={select(() => (storage === 'youtube' ? Promise.resolve() : changeStorage('youtube')))}
+          />
+        </ul>
       </section>
+
+      <section className="section">
+        <h2>画質</h2>
+        <ul className="settings-list" role="radiogroup" aria-label="画質">
+          <Choice
+            label="標準"
+            sub={`720p・30秒で約${megabytesPer30s('standard')}MB（100杯で約${megabytesPer30s('standard') / 10}GB）`}
+            selected={quality === 'standard'}
+            onSelect={select(() => (quality === 'standard' ? Promise.resolve() : changeQuality('standard')))}
+          />
+          <Choice
+            label="高画質"
+            sub={`1080p・30秒で約${megabytesPer30s('high')}MB。SNS に出す人向け`}
+            selected={quality === 'high'}
+            onSelect={select(() => (quality === 'high' ? Promise.resolve() : changeQuality('high')))}
+          />
+        </ul>
+        {/* 端末に置く高画質の動画は、撮ってすぐ（SNS に出すとき）だけ高画質にして、あとは軽くできる。軽くするのはアプリだけ */}
+        {quality === 'high' && storage === 'device' && isNativeApp && (
+          <ul className="settings-list">
+            <li>
+              <label className="settings-row">
+                <span className="settings-label">
+                  高画質のまま残す
+                  <span className="settings-sub">
+                    {keepHigh ? 'ずっと高画質で置きます' : `${KEEP_HIGH_DAYS}日たったら標準に軽くします（SNS には撮ってすぐ出せます）`}
+                  </span>
+                </span>
+                <input
+                  type="checkbox"
+                  className="switch"
+                  checked={keepHigh}
+                  onChange={(e) => run(() => changeKeepHigh(e.target.checked))}
+                />
+              </label>
+            </li>
+          </ul>
+        )}
+      </section>
+
+      {storage === 'youtube' && (
+        <section className="section">
+          <h2>YouTube の公開範囲</h2>
+          <ul className="settings-list" role="radiogroup" aria-label="YouTube の公開範囲">
+            <Choice
+              label="限定公開"
+              sub="URL を知っている人だけ見られます"
+              selected={youtubePrivacy === 'unlisted'}
+              onSelect={select(() => (youtubePrivacy === 'unlisted' ? Promise.resolve() : changePrivacy('unlisted')))}
+            />
+            <Choice
+              label="公開"
+              sub="だれでも見られ、検索にも出ます。練習を発信したい人向け"
+              selected={youtubePrivacy === 'public'}
+              onSelect={select(() => (youtubePrivacy === 'public' ? Promise.resolve() : changePrivacy('public')))}
+            />
+          </ul>
+        </section>
+      )}
+
       <section className="section">
         <h2>端末の容量</h2>
         <StorageStatus />
