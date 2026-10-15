@@ -19,6 +19,9 @@ const MODE_KEY = 'michishirube:recorder-mode'
 
 type Mode = 'video' | 'photo'
 
+/** これより短い録画が空でも、「この形式では撮れない」とは決めない */
+const MIN_BROKEN_MS = 2000
+
 function formatElapsed(ms: number) {
   const s = Math.floor(ms / 1000)
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
@@ -154,6 +157,7 @@ export function Recorder({
     const mimeType = pickRecorderMimeType(recorderSupports, audio, quality)
     if (!s || !mimeType) return
     const chunks: Blob[] = []
+    const began = Date.now()
     let r: MediaRecorder
     try {
       r = new MediaRecorder(s, {
@@ -173,6 +177,11 @@ export function Recorder({
       const type = r.mimeType || mimeType
       const blob = new Blob(chunks, { type: type.split(';')[0] })
       if (blob.size === 0) {
+        // 押してすぐ止めたなど、短すぎる録画が空なのは、形式のせいではない（もう一度撮れば撮れる）
+        if (Date.now() - began < MIN_BROKEN_MS) {
+          setNotice('短すぎて録画できませんでした。もう一度撮ってください')
+          return
+        }
         // この形式はこの端末では撮れない。ほかの形式があれば、次からそちらで撮る
         const container = mimeType.split(';')[0]
         const others = !!pickRecorderMimeType((t) => recorderSupports(t) && !t.startsWith(container), audio, quality)

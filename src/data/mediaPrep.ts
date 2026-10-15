@@ -1,3 +1,4 @@
+import { isIosDevice } from '../platform'
 import type { VideoQuality } from './videoStorage'
 
 /**
@@ -77,9 +78,24 @@ export function markRecorderTypeBroken(mimeType: string) {
   }
 }
 
-/** この端末で録画に使える形式か（使えると答えても、空になった形式は外す） */
+/**
+ * この端末で録画に使える形式か（使えると答えても、空になった形式は外す）。
+ * iPhone・iPad は MP4 だけ。WebM で録画すると、切り取り・画質の作り直し・共有・保存が全部できなくなるので、
+ * 「空になった形式」の記録（Android 向け）も使わない（1回の失敗で、ずっと WebM になってしまわないように）
+ */
 export function recorderSupports(type: string): boolean {
+  if (isIosDevice()) return type.startsWith('video/mp4') && MediaRecorder.isTypeSupported(type)
   return MediaRecorder.isTypeSupported(type) && !brokenTypes().some((b) => type.startsWith(b))
+}
+
+/** 前の版で iPhone に残った「MP4 は空になる」という記録を消す（iPhone では使わないので、残す意味がない） */
+export function forgetBrokenTypesOnIos() {
+  if (!isIosDevice()) return
+  try {
+    localStorage.removeItem(BROKEN_KEY)
+  } catch {
+    // 消せなければ、そのまま（iPhone では使わない）
+  }
 }
 
 export function pickRecorderMimeType(

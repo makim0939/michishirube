@@ -18,7 +18,7 @@ import { readStorage, writeStorage } from './storage'
 import { PatternImage } from './PatternImage'
 import { recommendLabel } from './skillLabels'
 import { LIGHT_LABEL, lightFor, lightUrl, type Light } from './world'
-import { isNativeApp } from '../platform'
+import { isIosDevice, isNativeApp } from '../platform'
 
 const HINT_KEY = 'michishirube:install-hint-dismissed'
 /** メイン写真を探しにいく、新しい記録の数 */
@@ -65,14 +65,6 @@ function isStandalone() {
   )
 }
 
-function isIos() {
-  // iPadOS の Safari は Mac として名乗るので、タッチ対応かどうかでも判定する
-  return (
-    /iPhone|iPad|iPod/.test(navigator.userAgent) ||
-    (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1)
-  )
-}
-
 /**
  * 気にしてほしいことを1行だけ出す。同期の失敗 → ホーム画面に追加（閉じられる）の順に大事。
  * ホーム画面に追加しないと Safari が記録を消すことがあるので、同期をつないでいなくても先に出す。
@@ -98,7 +90,7 @@ function Notice() {
     )
   }
   // アプリ（ストアから入れたもの）では、ホーム画面に追加する必要はない
-  if (!hintHidden && !isNativeApp && isIos() && !isStandalone()) {
+  if (!hintHidden && !isNativeApp && isIosDevice() && !isStandalone()) {
     return (
       <div className="notice">
         <AlertIcon size={18} />
