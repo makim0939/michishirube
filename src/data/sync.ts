@@ -415,10 +415,6 @@ export async function fetchPhoto(media: Media): Promise<Blob | undefined> {
 
 // ---- 接続 ----
 
-/**
- * 同期を始める。サーバーにすでにデータがあれば（2台目の端末）、この端末の初期データ（updatedAt が 0）は捨ててから受け取る。
- * サーバーが空なら（1台目）、この端末のデータを全部送る
- */
 /** この端末で中身を読める動画・写真か。アプリでは、行にファイルの場所があっても、ファイルが無いことがある */
 async function readableContent(): Promise<(m: Media) => boolean> {
   const files = usesFiles ? new Set(await listContentFiles().catch(() => [])) : undefined
@@ -443,6 +439,10 @@ async function recheckCloudFlags() {
   })
 }
 
+/**
+ * 同期を始める。サーバーにすでにデータがあれば（2台目の端末）、この端末の初期データ（updatedAt が 0）は捨ててから受け取る。
+ * サーバーが空なら（1台目）、この端末のデータを全部送る
+ */
 export async function connectWithConfig(config: SyncConfig): Promise<{ firstDevice: boolean }> {
   // 分野・型は、あとで書き直されると後ろのページに移るので、見つかるか最後のページまで見る
   let firstDevice = true
