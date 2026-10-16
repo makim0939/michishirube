@@ -255,11 +255,14 @@ function RecentCup({
   name?: string
 }) {
   const url = useCupImageUrl(media, 'thumb')
+  // 電波が無いなどで画像（YouTube のサムネイルなど）を読めなかったら、壊れた画像の印ではなく空の丸にする
+  const [failedUrl, setFailedUrl] = useState<string>()
+  const shown = url && url !== failedUrl ? url : undefined
   return (
     <li>
       {/* 押すと、その1杯の動画・写真と理由を見返せる */}
       <a className="recent-cup" href={href(`/cup/${record.id}`)} aria-label={`${name ? `${name} ` : ''}${label}の詳細`}>
-        {url ? <img src={url} alt="" /> : <span className="recent-empty" aria-hidden="true" />}
+        {shown ? <img src={shown} alt="" onError={() => setFailedUrl(shown)} /> : <span className="recent-empty" aria-hidden="true" />}
         <span className="recent-no">
           {label}
           {record.outcome && ` ${OUTCOME_MARK[record.outcome]}`}
