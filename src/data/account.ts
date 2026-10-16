@@ -251,11 +251,12 @@ export async function deleteAccount(): Promise<boolean> {
   }
   if (!res.ok && res.status !== 401) throw new SyncError(`削除できませんでした（${res.status}）`, res.status)
   await forgetConnection()
-  // サーバーの写真は消えたので、置いた印も消す
+  if (!res.ok) return false
+  // サーバーの写真は消えたので、置いた印も消す（消せたか分からないときは残す。同じアカウントに戻れば、そのまま取ってこられる）
   await db.media.toCollection().modify((m) => {
     delete m.cloudPhoto
     delete m.cloudPoster
     delete m.cloudPosterEnd
   })
-  return res.ok
+  return true
 }

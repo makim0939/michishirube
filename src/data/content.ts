@@ -230,8 +230,14 @@ async function sweepNow() {
   for (const { id, candidates } of lost) {
     const found = candidates.find((c) => listed.has(c.path))
     if (!found) continue
-    await db.media.update(id, found.optimized ? { file: found.path, optimized: found.optimized } : { file: found.path })
-    used.add(found.path)
+    const linked = await db.transaction('rw', db.media, async () => {
+      // ファイルの一覧を読むあいだに、同期などで行が変わった（中身が来た・差し替わった・消された）なら、つなぎ直さない
+      const current = await db.media.get(id)
+      if (!current || current.file || current.blob || current.optimized || contentPath(current) !== candidates[0].path) return false
+      await db.media.update(id, found.optimized ? { file: found.path, optimized: found.optimized } : { file: found.path })
+      return true
+    })
+    if (linked) used.add(found.path)
   }
   for (const path of listed) {
     if (!used.has(path) && known.has(contentIdOf(path) ?? '')) await deleteFile(path)

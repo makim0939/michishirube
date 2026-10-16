@@ -13,7 +13,8 @@ import { db } from '../data/db'
 import { getSyncConfig, getSyncStatus, runSync } from '../data/sync'
 import { getVideoStorage } from '../data/videoStorage'
 import { connectYoutube, disconnectYoutube, resumeUploads, saveYoutubeKey, youtubeStatus, type YoutubeStatus } from '../data/youtube'
-import { ConfirmButton, formatAgo, formatDate } from './common'
+import { ConfirmButton, formatAgo, formatBytes, formatDate } from './common'
+import { PHOTO_QUOTA_BYTES } from '../../shared/protocol'
 import { useAction, useToast } from './feedback'
 import { replace } from './router'
 import { isNativeApp, SITE_URL, YOUTUBE_TERMS_URL } from '../platform'
@@ -197,9 +198,14 @@ export function SyncSettings({ notice }: { notice?: string }) {
                 : '同期しています…'}
             {pending > 0 && `（送っていない変更が ${pending} 件）`}
           </p>
+          {!!status.tooLarge && (
+            <p className="muted small">
+              大きすぎて送れない記録・型が {status.tooLarge} 件あります。メモや説明を短くすると送ります。
+            </p>
+          )}
           {status.photosFull && (
             <p className="muted small">
-              サーバーに置ける写真の量（50MB）を超えたため、写真の一部をほかの端末に送れていません。いらない写真・記録を消すと、あとでまた送ります。
+              サーバーに置ける写真の量（{formatBytes(PHOTO_QUOTA_BYTES)}）を超えたため、写真の一部をほかの端末に送れていません。いらない写真・記録を消すと、あとでまた送ります。
             </p>
           )}
           <div className="row wrap">

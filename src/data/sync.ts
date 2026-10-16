@@ -4,6 +4,7 @@ import { PHOTO_MAX_BYTES, posterPhotoId, SYNC_LIMITS } from '../../shared/protoc
 import { DEFAULT_SETTINGS, type Media, type Settings } from '../domain/types'
 import { ContentUnavailableError, contentBlob, hasContent, moveContentsToFiles } from './content'
 import { db } from './db'
+import { listContentFiles, usesFiles } from './files'
 
 /**
  * サーバー（Cloudflare Worker + D1）との同期。Google でログインした人のデータだけをやり取りする（account.ts）。
@@ -27,6 +28,8 @@ export interface SyncStatus {
   error?: string
   /** サーバーに置ける写真の量を超えて、置けていない写真がある */
   photosFull?: boolean
+  /** 大きすぎて送れない記録・型の数 */
+  tooLarge?: number
 }
 
 const CONFIG_KEY = 'sync:config'
@@ -47,6 +50,11 @@ export class SyncError extends Error {
 
 export async function getSyncConfig(): Promise<SyncConfig | undefined> {
   return (await db.meta.get(CONFIG_KEY))?.value as SyncConfig | undefined
+}
+
+/** 始めたときと同じログインのままか（ログアウトしたら、ログインし直していても、前の同期は続けない） */
+async function stillConnected(config: SyncConfig): Promise<boolean> {
+  return (await getSyncConfig())?.token === config.token
 }
 
 async function setStatus(status: SyncStatus) {
@@ -222,9 +230,10 @@ async function doSync() {
     await uploadPhotos(config)
     await uploadPosters(config)
     // 送りきるまで、または受け取りきるまで繰り返す（上限つき）
+    let tooLarge = 0
     for (let round = 0; round < 50; round++) {
       // 同期の途中でログアウト・すべて削除したら、受け取ったものを書き戻さずにやめる
-      if (!(await getSyncConfig())) return
+      if (!(await stillConnected(config))) return
       const since = ((await db.meta.get(CURSOR_KEY))?.value as number | undefined) ?? 0
       const outbox = await db.outbox.limit(SYNC_LIMITS.maxChanges).toArray()
       const changes: EntityChange[] = []
@@ -251,7 +260,8 @@ async function doSync() {
         })
       ).json()) as SyncResponse
 
-      if (!(await getSyncConfig())) return
+      if (!(await stillConnected(config))) return
+      tooLarge = outbox.length - sent.length
       await applyRemote(res.changes)
       await db.transaction('rw', db.outbox, db.meta, async () => {
         // 送っている間にまた変わったものは、次の回で送る
@@ -264,10 +274,14 @@ async function doSync() {
       // 送れないもの（大きすぎる）だけが残っていたら、終わり
       if (!res.more && (await db.outbox.count()) <= outbox.length - sent.length) break
     }
-    await setStatus({ lastSyncedAt: Date.now(), ...((await photosFull()) ? { photosFull: true } : {}) })
+    await setStatus({
+      lastSyncedAt: Date.now(),
+      ...((await photosFull()) ? { photosFull: true } : {}),
+      ...(tooLarge > 0 ? { tooLarge } : {}),
+    })
   } catch (e) {
     // ログアウトしたあとに失敗を書き戻さない（次にログインしたとき、前の失敗が出ないように）
-    if (await getSyncConfig()) await setStatus({ ...(await getSyncStatus()), error: e instanceof Error ? e.message : String(e) })
+    if (await stillConnected(config)) await setStatus({ ...(await getSyncStatus()), error: e instanceof Error ? e.message : String(e) })
     throw e
   }
 }
@@ -291,7 +305,7 @@ async function uploadPhotos(config: SyncConfig) {
     .toArray()
   for (const m of targets) {
     // ログアウトしたら、残りは送らない
-    if (!(await getSyncConfig())) return
+    if (!(await stillConnected(config))) return
     try {
       const body = await contentBlob(m)
       if (!body) continue
@@ -333,7 +347,7 @@ async function uploadPosters(config: SyncConfig) {
     )
     .toArray()
   for (const m of targets) {
-    if (!(await getSyncConfig())) return
+    if (!(await stillConnected(config))) return
     try {
       await api(config, `/api/photos/${encodeURIComponent(posterPhotoId(m.id))}`, {
         method: 'PUT',
@@ -384,6 +398,9 @@ export async function fetchPhoto(media: Media): Promise<Blob | undefined> {
  * サーバーが空なら（1台目）、この端末のデータを全部送る
  */
 export async function connectWithConfig(config: SyncConfig): Promise<{ firstDevice: boolean }> {
+  // アプリでは、行にファイルの場所があっても、ファイルが無いことがある（読めるものだけを「中身がある」とする）
+  const files = usesFiles ? new Set(await listContentFiles().catch(() => [])) : undefined
+  const readable = (m: Media) => !!m.blob || (!!m.file && (!files || files.has(m.file)))
   // 分野・型は、あとで書き直されると後ろのページに移るので、見つかるか最後のページまで見る
   let firstDevice = true
   for (let since = 0, round = 0; round < 50; round++) {
@@ -415,7 +432,7 @@ export async function connectWithConfig(config: SyncConfig): Promise<{ firstDevi
     // 前に別のアカウントでつないでいたかもしれないので、この端末に中身のある写真・サムネイルは置き直す
     // （サーバーにしか中身が無いものの印は残す。同じアカウントなら、そのまま取ってこられる）
     await db.media.toCollection().modify((m) => {
-      if (hasContent(m)) delete m.cloudPhoto
+      if (readable(m)) delete m.cloudPhoto
       if (m.poster) {
         delete m.cloudPoster
         delete m.cloudPosterEnd

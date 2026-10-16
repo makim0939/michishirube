@@ -1,6 +1,6 @@
 import {
   isEntityKind,
-  posterPhotoId,
+  POSTER_SUFFIX,
   SYNC_LIMITS,
   type EntityChange,
   type SyncRequest,
@@ -95,7 +95,7 @@ export function writeStatements(db: D1Database, userId: string, changes: EntityC
           `DELETE FROM user_photos WHERE user_id = ?1 AND id IN (
              SELECT id FROM user_entities WHERE user_id = ?1 AND kind = 'media' AND deleted = 1 AND id IN (${list})
              UNION ALL
-             SELECT id || '${posterPhotoId('')}' FROM user_entities WHERE user_id = ?1 AND kind = 'media' AND deleted = 1 AND id IN (${list})
+             SELECT id || '${POSTER_SUFFIX}' FROM user_entities WHERE user_id = ?1 AND kind = 'media' AND deleted = 1 AND id IN (${list})
            )`,
         )
         .bind(userId, ...ids),

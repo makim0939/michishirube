@@ -131,8 +131,9 @@ describe('同期が止まらないようにする', () => {
     await connectWithConfig({ url: 'https://api.example', token: 't' })
     expect(server.rows.has(`skill:${big}`)).toBe(false)
     expect(server.rows.get(`skill:${small}`)?.deleted).toBe(false)
-    // 送れなかったものは「送っていない変更」に残る
+    // 送れなかったものは「送っていない変更」に残り、設定に知らせる
     expect((await db.outbox.toArray()).map((e) => e.id)).toEqual([big])
+    expect((await getSyncStatus()).tooLarge).toBe(1)
   })
 
   it('ログインし直したら、中身のある写真は置き直し、サーバーにしか無い写真の印は残す', async () => {

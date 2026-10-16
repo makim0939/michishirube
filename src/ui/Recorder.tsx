@@ -141,7 +141,8 @@ export function Recorder({
 
   useEffect(() => {
     const onVisibility = () => {
-      if (document.visibilityState === 'hidden' && recorder.current?.state === 'recording') hiddenWhileRecording.current = true
+      // OS が先に録画を止めてから隠れることもあるので、録画の状態は見ない（撮り始めるたびに戻す）
+      if (document.visibilityState === 'hidden') hiddenWhileRecording.current = true
     }
     document.addEventListener('visibilitychange', onVisibility)
     return () => document.removeEventListener('visibilitychange', onVisibility)
