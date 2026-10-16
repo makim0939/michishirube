@@ -6,6 +6,7 @@ import { usesFiles } from './files'
 import { db, markDirty, mediaByIndex } from './db'
 import { authorizeWithGoogle } from './account'
 import { api, getSyncConfig, SyncError, type SyncConfig } from './sync'
+import { SITE_URL } from '../platform'
 import { getVideoSettings, getVideoStorage, type YoutubePrivacy } from './videoStorage'
 
 /**
@@ -128,7 +129,8 @@ export async function videoMeta(media: Media): Promise<VideoMeta> {
   if (record?.causes?.length) lines.push(`原因：${record.causes.join('・')}`)
   if (record?.reason) lines.push(`メモ：${record.reason}`)
   if (record?.nextAction) lines.push(`次の一手：${record.nextAction}`)
-  lines.push('', 'ラテ帳で記録')
+  // 説明欄のリンクから、アプリの紹介ページに来てもらう
+  lines.push('', 'ラテ帳で記録', SITE_URL)
   // YouTube のタイトルは100文字まで
   return {
     title: title.slice(0, 100),
