@@ -31,8 +31,6 @@ const HERO_SLIDES = 6
 const RECENT = 12
 /** 次のおすすめは、数を絞って出す（全部は型の画面で） */
 const RECOMMEND = 3
-/** 練習中の型は、最近練習した順にこの数まで先に出す（残りは「見る」で開く。撮るボタンまで何度もスクロールしないように） */
-const PRACTICE_SHOWN = 3
 
 const WEEKDAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
 
@@ -423,7 +421,6 @@ export function forgetToday() {
 }
 
 export function TodayScreen() {
-  const [showAllPractices, setShowAllPractices] = useState(false)
   const data = useLiveQuery(
     async () => {
       lastToday = await loadToday()
@@ -457,14 +454,9 @@ export function TodayScreen() {
               </span>
             </div>
             <div className="practice-list">
-              {(showAllPractices ? data.practices : data.practices.slice(0, PRACTICE_SHOWN)).map((p) => (
+              {data.practices.map((p) => (
                 <PracticeBlock key={p.skill.id} practice={p} />
               ))}
-              {!showAllPractices && data.practices.length > PRACTICE_SHOWN && (
-                <button className="btn practice-more" onClick={() => setShowAllPractices(true)}>
-                  ほかの練習中の型を見る（{data.practices.length - PRACTICE_SHOWN}）
-                </button>
-              )}
             </div>
           </>
         ) : data.skillCount > 0 ? (
