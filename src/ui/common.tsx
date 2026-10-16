@@ -29,14 +29,32 @@ const DAY = 24 * 60 * 60 * 1000
 
 export const formatDate = formatDateTime
 
-export function formatAgo(ts: number, now = Date.now()): string {
+/** 今日から何日前か（今日は 0） */
+function daysAgo(ts: number, now: number): number {
   const startOfToday = new Date(now).setHours(0, 0, 0, 0)
-  if (ts >= startOfToday) return '今日'
-  const days = Math.ceil((startOfToday - ts) / DAY)
+  return ts >= startOfToday ? 0 : Math.ceil((startOfToday - ts) / DAY)
+}
+
+export function formatAgo(ts: number, now = Date.now()): string {
+  const days = daysAgo(ts, now)
+  if (days === 0) return '今日'
   if (days === 1) return '昨日'
   if (days < 30) return `${days}日前`
   const d = new Date(ts)
   return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`
+}
+
+const WEEKDAYS_JA = ['日', '月', '火', '水', '木', '金', '土']
+
+/**
+ * 「昨日」「3日前」のような言い方（formatAgo）に添える、日付と曜日（10/13（火））。
+ * 言い方が日付そのもの（30日以上前）のときは、添えるものが無いので undefined
+ */
+export function formatAgoDate(ts: number, now = Date.now()): string | undefined {
+  if (daysAgo(ts, now) >= 30) return undefined
+  const d = new Date(ts)
+  const year = d.getFullYear() === new Date(now).getFullYear() ? '' : `${d.getFullYear()}/`
+  return `${year}${d.getMonth() + 1}/${d.getDate()}（${WEEKDAYS_JA[d.getDay()]}）`
 }
 
 export function formatBytes(n: number): string {

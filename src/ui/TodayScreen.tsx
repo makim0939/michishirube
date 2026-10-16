@@ -5,6 +5,7 @@ import { db } from '../data/db'
 import { cupNumbers, practicingSkillIds, recordedSkillIds, recordsOf } from '../data/repo'
 import { getSyncConfig, getSyncStatus } from '../data/sync'
 import { uploadBacklog } from '../data/videoStorage'
+import { isYoutubeConnected } from '../data/youtube'
 import { computeStates, indexById, practiceOrder, prereqsDone, sortByDepth } from '../domain/logic'
 import type { Media, PracticeRecord, Skill } from '../domain/types'
 import { recentForm, type RecentForm } from '../domain/form'
@@ -78,6 +79,7 @@ function Notice() {
   const data = useLiveQuery(async () => ({
     config: await getSyncConfig(),
     status: await getSyncStatus(),
+    connected: await isYoutubeConnected(),
     // YouTube に上げる設定の端末だけ数える（端末に置く設定なら、上げないので待ちにならない）
     backlog: await uploadBacklog(),
   }))
@@ -119,6 +121,18 @@ function Notice() {
     )
   }
   if (data.backlog.waiting > 0) {
+    // 連携していないと、待っていても上がらない。「開いている間に上げます」と言わず、何をすればよいかを伝える
+    if (!data.connected) {
+      return (
+        <a className="notice" href={href('/settings/sync')}>
+          <AlertIcon size={18} />
+          <span>
+            動画 {data.backlog.waiting} 本が YouTube に上がっていません。「アカウント」で
+            {isLoggedIn(data.config) ? '' : 'ログインして、'}連携してください
+          </span>
+        </a>
+      )
+    }
     return (
       <p className="notice quiet">YouTube へのアップ待ちの動画が {data.backlog.waiting} 本あります（開いている間に上げます）</p>
     )
@@ -460,7 +474,6 @@ export function TodayScreen() {
             // はじめて開いたとき：最初の1杯へ、迷わず進めるボタンを1つだけ出す
             <div className="sheet-empty first-run">
               <h2>まずは1杯、撮ってみましょう</h2>
-              <p>撮ると、練習中の型としてここに並び、次の一手とこれまでの杯を見返せます。</p>
               <a className="btn primary shoot" href={href(`/record/${data.available[0].id}`)}>
                 <CameraIcon size={20} />
                 {splitName(data.available[0].name).main}を記録する

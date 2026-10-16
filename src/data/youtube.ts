@@ -33,6 +33,11 @@ async function refreshToken(): Promise<string | undefined> {
   return (await db.meta.get(REFRESH_KEY))?.value as string | undefined
 }
 
+/** この端末が YouTube と連携している（鍵を持っている）か。通信しないので、画面の表示に使える */
+export async function isYoutubeConnected(): Promise<boolean> {
+  return !!(await refreshToken())
+}
+
 /** ログインしていなければ undefined */
 export async function youtubeStatus(): Promise<YoutubeStatus | undefined> {
   const config = await getSyncConfig()
