@@ -232,6 +232,8 @@ async function doSync(): Promise<void> {
   const config = await getSyncConfig()
   if (!config) return
   const recheck = !!(await db.meta.get(RECHECK_PHOTOS_KEY))
+  // 見直す前の印は、前のアカウントのものかもしれない。中身のある写真・サムネイルの印は送らない（見直して置けたら送る）
+  const readable = recheck ? await readableContent() : undefined
   try {
     if (!recheck) {
       await uploadPhotos(config)
@@ -250,6 +252,13 @@ async function doSync(): Promise<void> {
         const local = await readLocal(entry.kind, entry.id)
         if (local) {
           const data = toWire(entry.kind, local as Record<string, unknown>)
+          if (readable && entry.kind === 'media') {
+            if (readable(local as Media)) delete data.cloudPhoto
+            if ((local as Media).poster) {
+              delete data.cloudPoster
+              delete data.cloudPosterEnd
+            }
+          }
           // サーバーが受け付けない大きさのもの（とても長いメモなど）は送らない。送ると全体が断られ、ほかの変更もずっと送れなくなる。
           // outbox には残すので、「送っていない変更」に数えられる（短くすれば送る）
           if (JSON.stringify(data).length > SYNC_LIMITS.maxEntityBytes) continue
@@ -410,14 +419,18 @@ export async function fetchPhoto(media: Media): Promise<Blob | undefined> {
  * 同期を始める。サーバーにすでにデータがあれば（2台目の端末）、この端末の初期データ（updatedAt が 0）は捨ててから受け取る。
  * サーバーが空なら（1台目）、この端末のデータを全部送る
  */
+/** この端末で中身を読める動画・写真か。アプリでは、行にファイルの場所があっても、ファイルが無いことがある */
+async function readableContent(): Promise<(m: Media) => boolean> {
+  const files = usesFiles ? new Set(await listContentFiles().catch(() => [])) : undefined
+  return (m) => !!m.blob || (!!m.file && (!files || files.has(m.file)))
+}
+
 /**
  * この端末に中身のある写真・サムネイルは、サーバーに置き直す
  * （サーバーにしか中身が無いものの印は残す。同じアカウントなら、そのまま取ってこられる）
  */
 async function recheckCloudFlags() {
-  // アプリでは、行にファイルの場所があっても、ファイルが無いことがある（読めるものだけを「中身がある」とする）
-  const files = usesFiles ? new Set(await listContentFiles().catch(() => [])) : undefined
-  const readable = (m: Media) => !!m.blob || (!!m.file && (!files || files.has(m.file)))
+  const readable = await readableContent()
   await db.transaction('rw', db.media, db.meta, async () => {
     await db.media.toCollection().modify((m) => {
       if (readable(m)) delete m.cloudPhoto

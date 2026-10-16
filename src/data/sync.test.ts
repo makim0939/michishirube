@@ -136,6 +136,32 @@ describe('同期が止まらないようにする', () => {
     expect((await getSyncStatus()).tooLarge).toBe(1)
   })
 
+  it('別のアカウントでログインし直したら、前のアカウントで置いた写真の印を送らない（置けなかったら印は付かない）', async () => {
+    const first = fakeServer()
+    vi.stubGlobal('fetch', first.fetch)
+    const domainId = await createDomain('ピアノ')
+    const recordId = await addRecord({
+      skillId: await createSkill(domainId, input('A')),
+      reason: 'x',
+      nextAction: '',
+      files: [new Blob(['photo'], { type: 'image/jpeg' })],
+    })
+    await connectWithConfig({ url: 'https://api.example', token: 't' })
+    const [m] = await db.media.where('recordId').equals(recordId).toArray()
+    expect(m.cloudPhoto).toBe(true)
+    await logout()
+    // 別のアカウント（写真はまだ無く、置ける量もいっぱい）
+    const second = fakeServer()
+    const base = second.fetch.getMockImplementation()!
+    second.fetch.mockImplementation(async (url: string, init?: RequestInit) =>
+      init?.method === 'PUT' ? Response.json({ error: 'quota' }, { status: 413 }) : base(url, init),
+    )
+    vi.stubGlobal('fetch', second.fetch)
+    await connectWithConfig({ url: 'https://api.example', token: 't2' })
+    expect((second.rows.get(`media:${m.id}`)?.data as { cloudPhoto?: boolean }).cloudPhoto).toBeUndefined()
+    expect((await db.media.get(m.id))?.cloudPhoto).toBeUndefined()
+  })
+
   it('ログインし直しても、ほかの端末で差し替えた写真を、この端末の古い写真で上書きしない', async () => {
     const server = fakeServer()
     vi.stubGlobal('fetch', server.fetch)
