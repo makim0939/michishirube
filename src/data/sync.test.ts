@@ -136,6 +136,34 @@ describe('同期が止まらないようにする', () => {
     expect((await getSyncStatus()).tooLarge).toBe(1)
   })
 
+  it('ログインし直しても、ほかの端末で差し替えた写真を、この端末の古い写真で上書きしない', async () => {
+    const server = fakeServer()
+    vi.stubGlobal('fetch', server.fetch)
+    const domainId = await createDomain('ピアノ')
+    const recordId = await addRecord({
+      skillId: await createSkill(domainId, input('A')),
+      reason: 'x',
+      nextAction: '',
+      files: [new Blob(['photo'], { type: 'image/jpeg' })],
+    })
+    await connectWithConfig({ url: 'https://api.example', token: 't' })
+    const [m] = await db.media.where('recordId').equals(recordId).toArray()
+    await logout()
+    // ほかの端末で写真を差し替えた
+    const row = server.rows.get(`media:${m.id}`)!
+    server.rows.set(`media:${m.id}`, {
+      ...row,
+      updatedAt: m.updatedAt + 1000,
+      data: { ...(row.data as object), contentAt: (m.contentAt ?? 0) + 1000, cloudPhoto: true },
+      seq: 1000,
+    })
+    const puts = () => server.fetch.mock.calls.filter(([url, init]) => init?.method === 'PUT' && String(url).endsWith(m.id)).length
+    const before = puts()
+    await connectWithConfig({ url: 'https://api.example', token: 't2' })
+    expect(puts()).toBe(before)
+    expect((await db.media.get(m.id))?.contentAt).toBe((m.contentAt ?? 0) + 1000)
+  })
+
   it('ログインし直したら、中身のある写真は置き直し、サーバーにしか無い写真の印は残す', async () => {
     const server = fakeServer()
     vi.stubGlobal('fetch', server.fetch)

@@ -38,6 +38,11 @@ const STATUS_KEY = 'sync:status'
 /** 写真の置ける量を超えた時刻。しばらくは写真を送らない（断られる写真を、同期のたびに送り直さないように） */
 const PHOTOS_FULL_KEY = 'sync:photos-full'
 const PHOTOS_FULL_RETRY_MS = 24 * 60 * 60 * 1000
+/**
+ * ログインし直したあと、写真・サムネイルをサーバーに置いた印を見直す（前に別のアカウントでつないでいたかもしれない）。
+ * サーバーの内容を受け取りきってから見直す（先に置くと、ほかの端末で差し替えた写真を、この端末の古い写真で上書きしてしまう）
+ */
+const RECHECK_PHOTOS_KEY = 'sync:recheck-photos'
 
 export class SyncError extends Error {
   constructor(
@@ -223,12 +228,15 @@ export function runSync(): Promise<void> {
   return running
 }
 
-async function doSync() {
+async function doSync(): Promise<void> {
   const config = await getSyncConfig()
   if (!config) return
+  const recheck = !!(await db.meta.get(RECHECK_PHOTOS_KEY))
   try {
-    await uploadPhotos(config)
-    await uploadPosters(config)
+    if (!recheck) {
+      await uploadPhotos(config)
+      await uploadPosters(config)
+    }
     // 送りきるまで、または受け取りきるまで繰り返す（上限つき）
     let tooLarge = 0
     for (let round = 0; round < 50; round++) {
@@ -273,6 +281,11 @@ async function doSync() {
       })
       // 送れないもの（大きすぎる）だけが残っていたら、終わり
       if (!res.more && (await db.outbox.count()) <= outbox.length - sent.length) break
+    }
+    if (recheck) {
+      await recheckCloudFlags()
+      // 見直した写真・サムネイルを置いて、もう一度送る
+      return await doSync()
     }
     await setStatus({
       lastSyncedAt: Date.now(),
@@ -397,10 +410,27 @@ export async function fetchPhoto(media: Media): Promise<Blob | undefined> {
  * 同期を始める。サーバーにすでにデータがあれば（2台目の端末）、この端末の初期データ（updatedAt が 0）は捨ててから受け取る。
  * サーバーが空なら（1台目）、この端末のデータを全部送る
  */
-export async function connectWithConfig(config: SyncConfig): Promise<{ firstDevice: boolean }> {
+/**
+ * この端末に中身のある写真・サムネイルは、サーバーに置き直す
+ * （サーバーにしか中身が無いものの印は残す。同じアカウントなら、そのまま取ってこられる）
+ */
+async function recheckCloudFlags() {
   // アプリでは、行にファイルの場所があっても、ファイルが無いことがある（読めるものだけを「中身がある」とする）
   const files = usesFiles ? new Set(await listContentFiles().catch(() => [])) : undefined
   const readable = (m: Media) => !!m.blob || (!!m.file && (!files || files.has(m.file)))
+  await db.transaction('rw', db.media, db.meta, async () => {
+    await db.media.toCollection().modify((m) => {
+      if (readable(m)) delete m.cloudPhoto
+      if (m.poster) {
+        delete m.cloudPoster
+        delete m.cloudPosterEnd
+      }
+    })
+    await db.meta.delete(RECHECK_PHOTOS_KEY)
+  })
+}
+
+export async function connectWithConfig(config: SyncConfig): Promise<{ firstDevice: boolean }> {
   // 分野・型は、あとで書き直されると後ろのページに移るので、見つかるか最後のページまで見る
   let firstDevice = true
   for (let since = 0, round = 0; round < 50; round++) {
@@ -429,15 +459,8 @@ export async function connectWithConfig(config: SyncConfig): Promise<{ firstDevi
     }
     // 接続前にたまった印は、下で全件を積み直すので消す（捨てた初期データの削除を送らないように）
     await db.outbox.clear()
-    // 前に別のアカウントでつないでいたかもしれないので、この端末に中身のある写真・サムネイルは置き直す
-    // （サーバーにしか中身が無いものの印は残す。同じアカウントなら、そのまま取ってこられる）
-    await db.media.toCollection().modify((m) => {
-      if (readable(m)) delete m.cloudPhoto
-      if (m.poster) {
-        delete m.cloudPoster
-        delete m.cloudPosterEnd
-      }
-    })
+    // 前に別のアカウントでつないでいたかもしれないので、受け取りきったあとに写真を置いた印を見直す
+    await db.meta.put({ key: RECHECK_PHOTOS_KEY, value: true })
     // 端末に残っているものは全部送る（サーバーのほうが新しいものは上書きされない）
     const all = [
       ...(await db.domains.toCollection().primaryKeys()).map((id) => ({ kind: 'domain' as const, id: id as string })),
@@ -450,12 +473,15 @@ export async function connectWithConfig(config: SyncConfig): Promise<{ firstDevi
     await db.meta.put({ key: CONFIG_KEY, value: config })
     await db.meta.put({ key: CURSOR_KEY, value: 0 })
   })
+  // 前のログインの同期が動いていたら、止まるのを待ってから、このログインで同期する
+  // （runSync は動いている同期を返すので、そのままだと前のログインの同期を待つことになる）
+  while (running) await running.catch(() => {})
   await runSync()
   return { firstDevice }
 }
 
 export async function disconnectSync() {
-  await db.meta.bulkDelete([CONFIG_KEY, CURSOR_KEY, STATUS_KEY, PHOTOS_FULL_KEY])
+  await db.meta.bulkDelete([CONFIG_KEY, CURSOR_KEY, STATUS_KEY, PHOTOS_FULL_KEY, RECHECK_PHOTOS_KEY])
   // 動いている同期が終わるのを待つ（このあと端末のデータを消しても、受け取ったものが書き戻されないように）。
   // 同期は次の区切りで止まる。電波が悪くて終わらなくても、長くは待たない
   if (running) await Promise.race([running.catch(() => {}), new Promise((r) => setTimeout(r, 5000))])

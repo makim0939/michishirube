@@ -5,7 +5,7 @@ import { db } from '../data/db'
 import { contentFilesSize, KEEP_HIGH_DAYS, optimizeVideos, resetContentFiles } from '../data/content'
 import { saveSnapshotNow } from '../data/snapshot'
 import { isLoggedIn, logout } from '../data/account'
-import { getSyncConfig, getSyncStatus } from '../data/sync'
+import { getSyncConfig, getSyncStatus, runSync } from '../data/sync'
 import { TIDY_AFTER_DAYS } from '../data/tidy'
 import {
   getVideoSettings,
@@ -495,9 +495,11 @@ function DataPage() {
         <ConfirmButton
           className="btn ghost"
           confirmLabel="すべて削除する"
-          message="この端末のロードマップ・記録・動画・写真・設定をすべて削除し、ログインも解除します。サーバーの記録・写真と YouTube の動画は消えないので、ログインし直せば戻ります。この端末にだけある動画（YouTube に上げていないもの）は戻りません。"
+          message="この端末のロードマップ・記録・動画・写真・設定をすべて削除し、ログインも解除します。サーバーの記録・写真と YouTube の動画は消えないので、ログインし直せば戻ります。この端末にだけある動画（YouTube に上げていないもの）と、まだ送れていない変更は戻りません。"
           onConfirm={() =>
             run(async () => {
+              // 送っていない変更があれば、先に送っておく（電波が悪ければ、長くは待たない）
+              await Promise.race([runSync().catch(() => {}), new Promise((r) => setTimeout(r, 5000))])
               // サーバーのログインも終える（端末の印を消すだけだと、トークンがサーバーで使えるまま残る）
               await logout()
               await db.transaction('rw', [db.domains, db.skills, db.records, db.media, db.meta, db.outbox], async () => {
