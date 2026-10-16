@@ -176,8 +176,6 @@ function HeroSlide({
   return (
     <div className="hero-slide">
       <img className="hero-image" src={url ?? lightUrl(light)} alt={url ? label : ''} />
-      {/* 押すと、その1杯の動画・写真とメモを見返せる（下の小さな杯と同じ行き先） */}
-      {url && <a className="hero-link" href={href(`/cup/${recordId}`)} aria-label={`${label}の詳細`} />}
       {url && (
         <div className="hero-caption">
           {slide.first && <span className="hero-first">はじまりの1杯</span>}
