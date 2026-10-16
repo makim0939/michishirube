@@ -234,7 +234,9 @@ export async function deleteAccount() {
   } catch {
     throw new SyncError('サーバーにつながりません。電波を確認してください')
   }
-  if (!res.ok && res.status !== 401) throw new SyncError(`削除できませんでした（${res.status}）`, res.status)
+  // ログインが切れていると、サーバーでは何も消えていない。消えたことにせず、ログインし直してもらう
+  if (res.status === 401) throw new SyncError('ログインが切れています。ログインし直してから、もう一度削除してください', 401)
+  if (!res.ok) throw new SyncError(`削除できませんでした（${res.status}）`, res.status)
   await disconnectSync()
   await forgetYoutubeKey()
   // 写真をサーバーに置いた印も消す（次にログインしたら置き直す）

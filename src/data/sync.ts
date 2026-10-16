@@ -223,18 +223,16 @@ async function doSync() {
       const changes: EntityChange[] = []
       for (const entry of outbox) {
         const local = await readLocal(entry.kind, entry.id)
-        changes.push(
-          local
-            ? {
-                kind: entry.kind,
-                id: entry.id,
-                updatedAt: local.updatedAt,
-                deleted: false,
-                data: toWire(entry.kind, local as Record<string, unknown>),
-              }
-            : // 端末に無い＝消した。消した時刻を updatedAt として送る
-              { kind: entry.kind, id: entry.id, updatedAt: entry.at, deleted: true },
-        )
+        if (local) {
+          const data = toWire(entry.kind, local as Record<string, unknown>)
+          // サーバーが受け付けない大きさのもの（とても長いメモなど）は送らない。
+          // 送ると全体が断られ、ほかの変更もずっと送れなくなる（この端末には残る。短くすればまた送る）
+          if (JSON.stringify(data).length > SYNC_LIMITS.maxEntityBytes) continue
+          changes.push({ kind: entry.kind, id: entry.id, updatedAt: local.updatedAt, deleted: false, data })
+        } else {
+          // 端末に無い＝消した。消した時刻を updatedAt として送る
+          changes.push({ kind: entry.kind, id: entry.id, updatedAt: entry.at, deleted: true })
+        }
       }
       const res = (await (
         await api(config, '/api/sync', {
@@ -280,6 +278,8 @@ async function uploadPhotos(config: SyncConfig) {
     } catch (e) {
       // 電波が無いときは同期ごと止める。サーバーが受け付けない写真・端末にファイルが無い写真は飛ばして、ほかの同期を続ける
       if ((e instanceof SyncError && e.status === 400) || e instanceof ContentUnavailableError) continue
+      // サーバーに置ける量を超えたら、写真は置かずに、記録などの同期を続ける
+      if (e instanceof SyncError && e.status === 413) return
       throw e
     }
     await db.transaction('rw', db.media, db.outbox, async () => {
@@ -313,6 +313,7 @@ async function uploadPosters(config: SyncConfig) {
       })
     } catch (e) {
       if (e instanceof SyncError && e.status === 400) continue
+      if (e instanceof SyncError && e.status === 413) return
       throw e
     }
     await db.transaction('rw', db.media, db.outbox, async () => {
@@ -326,7 +327,8 @@ async function uploadPosters(config: SyncConfig) {
 export async function fetchPoster(media: Media): Promise<Blob | undefined> {
   const config = await getSyncConfig()
   if (!config || !media.cloudPoster) return undefined
-  const poster = await (await api(config, `/api/photos/${encodeURIComponent(posterPhotoId(media.id))}`)).blob()
+  // 同じ id のまま中身が置き直されるので、HTTP のキャッシュ（前の版のサーバーは1年残させていた）を使わない
+  const poster = await (await api(config, `/api/photos/${encodeURIComponent(posterPhotoId(media.id))}`, { cache: 'no-store' })).blob()
   // サムネイルは小さいので、次からは端末から出す（同期の対象にはしない）
   await db.media.update(media.id, { poster, posterEnd: !!media.cloudPosterEnd })
   return poster
@@ -336,7 +338,7 @@ export async function fetchPoster(media: Media): Promise<Blob | undefined> {
 export async function fetchPhoto(media: Media): Promise<Blob | undefined> {
   const config = await getSyncConfig()
   if (!config || !media.cloudPhoto) return undefined
-  const blob = await (await api(config, `/api/photos/${encodeURIComponent(media.id)}`)).blob()
+  const blob = await (await api(config, `/api/photos/${encodeURIComponent(media.id)}`, { cache: 'no-store' })).blob()
   // 写真は小さいので、次からは端末から出す（同期の対象にはしない）。アプリではファイルに移す
   await db.media.update(media.id, { blob })
   void moveContentsToFiles([media.id])
@@ -350,14 +352,23 @@ export async function fetchPhoto(media: Media): Promise<Blob | undefined> {
  * サーバーが空なら（1台目）、この端末のデータを全部送る
  */
 export async function connectWithConfig(config: SyncConfig): Promise<{ firstDevice: boolean }> {
-  const first = (await (
-    await api(config, '/api/sync', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ since: 0, changes: [] }),
-    })
-  ).json()) as SyncResponse
-  const firstDevice = !first.changes.some((c) => !c.deleted && (c.kind === 'domain' || c.kind === 'skill'))
+  // 分野・型は、あとで書き直されると後ろのページに移るので、見つかるか最後のページまで見る
+  let firstDevice = true
+  for (let since = 0, round = 0; round < 50; round++) {
+    const page = (await (
+      await api(config, '/api/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ since, changes: [] }),
+      })
+    ).json()) as SyncResponse
+    if (page.changes.some((c) => !c.deleted && (c.kind === 'domain' || c.kind === 'skill'))) {
+      firstDevice = false
+      break
+    }
+    if (!page.more) break
+    since = page.cursor
+  }
 
   await db.transaction('rw', [db.domains, db.skills, db.records, db.media, db.meta, db.outbox], async () => {
     if (!firstDevice) {

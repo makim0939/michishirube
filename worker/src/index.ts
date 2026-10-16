@@ -109,8 +109,9 @@ app.get('/api/photos/:id', async (c) => {
     .bind(c.get('userId'), c.req.param('id'))
     .first<{ type: string; data: ArrayBuffer | number[] }>()
   if (!row) return c.json({ error: 'not_found' }, 404)
-  // D1 は BLOB を数値の配列で返すことがあるので、どちらでもバイト列に直す
-  return new Response(new Uint8Array(row.data), { headers: { 'Content-Type': row.type, 'Cache-Control': 'private, max-age=31536000' } })
+  // D1 は BLOB を数値の配列で返すことがあるので、どちらでもバイト列に直す。
+  // 同じ id のまま中身を置き直す（写真の差し替え・動画を切り取ったあとのサムネイル）ので、キャッシュさせない（端末は受け取ったら自分で持つ）
+  return new Response(new Uint8Array(row.data), { headers: { 'Content-Type': row.type, 'Cache-Control': 'private, no-store' } })
 })
 
 // ---- アカウント ----

@@ -93,6 +93,65 @@ describe('同期', () => {
   })
 })
 
+describe('同期が止まらないようにする', () => {
+  it('写真の置ける量を超えても、記録の同期は続ける', async () => {
+    const server = fakeServer()
+    const base = server.fetch.getMockImplementation()!
+    server.fetch.mockImplementation(async (url: string, init?: RequestInit) =>
+      new URL(url).pathname.startsWith('/api/photos/') && init?.method === 'PUT'
+        ? Response.json({ error: 'quota' }, { status: 413 })
+        : base(url, init),
+    )
+    vi.stubGlobal('fetch', server.fetch)
+    const domainId = await createDomain('ピアノ')
+    const recordId = await addRecord({
+      skillId: await createSkill(domainId, input('A')),
+      reason: 'x',
+      nextAction: '',
+      files: [new Blob(['photo'], { type: 'image/jpeg' })],
+    })
+    await connectWithConfig({ url: 'https://api.example', token: 't' })
+    expect(server.rows.get(`record:${recordId}`)?.deleted).toBe(false)
+    expect(await db.outbox.count()).toBe(0)
+  })
+
+  it('サーバーが受け付けない大きさのものは送らず、ほかの変更は送る', async () => {
+    const server = fakeServer()
+    vi.stubGlobal('fetch', server.fetch)
+    const domainId = await createDomain('ピアノ')
+    const big = await createSkill(domainId, { ...input('大きい'), description: 'あ'.repeat(70 * 1024) })
+    const small = await createSkill(domainId, input('小さい'))
+    await connectWithConfig({ url: 'https://api.example', token: 't' })
+    expect(server.rows.has(`skill:${big}`)).toBe(false)
+    expect(server.rows.get(`skill:${small}`)?.deleted).toBe(false)
+  })
+
+  it('分野・型が後ろのページにあっても、2台目と分かる', async () => {
+    const server = fakeServer()
+    const base = server.fetch.getMockImplementation()!
+    // 1ページに1件だけ返すサーバー
+    server.fetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (new URL(url).pathname !== '/api/sync') return base(url, init)
+      const body = JSON.parse(String(init?.body)) as { since: number; changes: unknown[] }
+      if (body.changes.length > 0) return base(url, init)
+      const all = [...server.rows.values()].filter((r) => r.seq > body.since).sort((a, b) => a.seq - b.seq)
+      return Response.json({ cursor: all[0]?.seq ?? body.since, more: all.length > 1, changes: all.slice(0, 1) })
+    })
+    vi.stubGlobal('fetch', server.fetch)
+    server.rows.set('record:r', { kind: 'record', id: 'r', updatedAt: 5, deleted: false, data: { id: 'r' }, seq: 1 })
+    server.rows.set('domain:remote', {
+      kind: 'domain',
+      id: 'remote',
+      updatedAt: 5,
+      deleted: false,
+      data: { id: 'remote', name: 'ラテアート', order: 1, createdAt: 1 },
+      seq: 2,
+    })
+    await ensureSeeded()
+    expect(await connectWithConfig({ url: 'https://api.example', token: 't' })).toEqual({ firstDevice: false })
+  })
+})
+
 describe('動画のサムネイル', () => {
   it('サムネイルをサーバーに置き、cloudPoster を立てて同期する', async () => {
     const server = fakeServer()

@@ -4,7 +4,7 @@ import { estimateBackupSize, exportBackup, importBackup, type BackupPart } from 
 import { db } from '../data/db'
 import { contentFilesSize, KEEP_HIGH_DAYS, optimizeVideos, resetContentFiles } from '../data/content'
 import { saveSnapshotNow } from '../data/snapshot'
-import { isLoggedIn } from '../data/account'
+import { isLoggedIn, logout } from '../data/account'
 import { getSyncConfig, getSyncStatus } from '../data/sync'
 import { TIDY_AFTER_DAYS } from '../data/tidy'
 import {
@@ -498,6 +498,8 @@ function DataPage() {
           message="この端末のロードマップ・記録・動画・写真・設定をすべて削除し、ログインも解除します。サーバーと YouTube のデータは消えないので、ログインし直せば戻ります。"
           onConfirm={() =>
             run(async () => {
+              // サーバーのログインも終える（端末の印を消すだけだと、トークンがサーバーで使えるまま残る）
+              await logout()
               await db.transaction('rw', [db.domains, db.skills, db.records, db.media, db.meta, db.outbox], async () => {
                 await Promise.all([db.domains.clear(), db.skills.clear(), db.records.clear(), db.media.clear()])
                 await Promise.all([db.meta.clear(), db.outbox.clear()])

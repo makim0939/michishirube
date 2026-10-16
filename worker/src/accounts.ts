@@ -85,7 +85,12 @@ export async function deleteUser(db: D1Database, userId: string) {
  */
 export async function claimLegacy(db: D1Database, userId: string): Promise<number> {
   const results = await db.batch([
-    db.prepare("UPDATE OR IGNORE user_entities SET user_id = ?1 WHERE user_id = 'legacy'").bind(userId),
+    // seq は今の最大より後ろに付け直す（このアカウントのほかの端末は、すでにもっと先まで受け取っているので、古い番号のままだと届かない）
+    db
+      .prepare(
+        "UPDATE OR IGNORE user_entities SET user_id = ?1, seq = seq + (SELECT COALESCE(MAX(seq), 0) FROM user_entities) WHERE user_id = 'legacy'",
+      )
+      .bind(userId),
     db.prepare("UPDATE OR IGNORE user_photos SET user_id = ?1 WHERE user_id = 'legacy'").bind(userId),
     db.prepare("DELETE FROM user_entities WHERE user_id = 'legacy'"),
     db.prepare("DELETE FROM user_photos WHERE user_id = 'legacy'"),

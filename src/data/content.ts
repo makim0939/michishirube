@@ -206,17 +206,26 @@ export function tidyContentFiles(): Promise<void> {
 async function sweepNow() {
   const known = new Set<string>()
   const used = new Set<string>()
-  const relinkable = new Map<string, string>()
+  const relinkable = new Map<string, { id: string; optimized?: VideoQuality }>()
   await db.media.each((m) => {
     known.add(m.id)
     if (m.file) used.add(m.file)
-    else if (!m.blob) relinkable.set(contentPath(m), m.id)
+    else if (!m.blob) {
+      relinkable.set(contentPath(m), { id: m.id })
+      // 画質をそろえた動画は、元のファイルと入れ替わっている
+      if (m.type.startsWith('video/')) {
+        for (const quality of ['standard', 'high'] as const) relinkable.set(optimizedPath(m, quality), { id: m.id, optimized: quality })
+      }
+    }
   })
+  const relinked = new Set<string>()
   for (const path of await listContentFiles()) {
     if (used.has(path)) continue
-    const id = relinkable.get(path)
-    if (id) await db.media.update(id, { file: path })
-    else if (known.has(contentIdOf(path) ?? '')) await deleteFile(path)
+    const link = relinkable.get(path)
+    if (link && !relinked.has(link.id)) {
+      relinked.add(link.id)
+      await db.media.update(link.id, link.optimized ? { file: path, optimized: link.optimized } : { file: path })
+    } else if (known.has(contentIdOf(path) ?? '')) await deleteFile(path)
   }
 }
 
