@@ -18,7 +18,7 @@ import {
   type YoutubePrivacy,
 } from '../data/videoStorage'
 import { megabytesPer30s } from '../data/mediaPrep'
-import { resumeUploads, youtubeStatus } from '../data/youtube'
+import { isYoutubeConnected, resumeUploads } from '../data/youtube'
 import { ConfirmButton, formatBytes, requestPersist, saveFile } from './common'
 import { clearImageCaches } from './imageCache'
 import { useAction, useToast } from './feedback'
@@ -217,6 +217,38 @@ function Choice({
 }
 
 /**
+ * 保存先を YouTube にしたときの、連携の状態。連携するまでは上がらず、動画は端末に残る。
+ * 連携はログインのあとの画面（アカウント）にあるので、どちらが足りないかと、そこへの行き方を出しておく
+ */
+function YoutubeLinkState() {
+  const state = useLiveQuery(async () => ({
+    loggedIn: isLoggedIn(await getSyncConfig()),
+    connected: await isYoutubeConnected(),
+  }))
+  if (!state) return null
+  if (state.connected) {
+    return (
+      <p className="status-line small">
+        <CheckIcon size={16} />
+        YouTube と連携しています。
+      </p>
+    )
+  }
+  return (
+    <div className="stack">
+      <p className="status-line small">
+        <AlertIcon size={16} />
+        {state.loggedIn ? 'YouTube との連携がまだです。' : 'ログインと YouTube との連携がまだです。'}
+        連携するまで、動画は端末に置かれます。
+      </p>
+      <a className="btn small" href={href('/settings/sync')}>
+        {state.loggedIn ? 'YouTube と連携する' : 'ログインして連携する'}
+      </a>
+    </div>
+  )
+}
+
+/**
  * 動画の設定：保存先（この端末・YouTube）と画質（標準・高画質）。YouTube のときは公開範囲も。
  * 説明は各行の短い一言だけにし、選んだときの結果はトーストで知らせる
  */
@@ -230,15 +262,16 @@ function StoragePage() {
   const changeStorage = async (value: VideoStorage) => {
     await setVideoStorage(value)
     if (value === 'youtube') {
-      // 連携していなければ上げられないので、そのことを伝える（連携すると上げ始める）
-      const connected = await youtubeStatus()
-        .then((s) => !!s?.connected)
-        .catch(() => false)
-      if (connected) {
+      // 連携していなければ上げられないので、そのことを伝える（連携すると上げ始める）。
+      // 連携の鍵はこの端末にあるので、通信せずに分かる（電波が無くても、連携済みを「未連携」と言わない）
+      if (await isYoutubeConnected()) {
         toast.show('動画を YouTube に上げ始めます')
         void resumeUploads().catch(() => {})
-      } else {
+      } else if (isLoggedIn(await getSyncConfig())) {
         toast.show('「アカウント」で YouTube と連携すると、動画を上げ始めます')
+      } else {
+        // YouTube の連携は、Google でログインしたあとの画面にある
+        toast.show('YouTube に上げるには、「アカウント」でログインして、YouTube と連携してください')
       }
     } else {
       toast.show('これから撮る動画は、この端末にだけ置きます')
@@ -290,6 +323,7 @@ function StoragePage() {
           </a>
           に沿った内容であることを、あなたが確認したものとみなされます。
         </p>
+        {storage === 'youtube' && <YoutubeLinkState />}
       </section>
 
       <section className="section">

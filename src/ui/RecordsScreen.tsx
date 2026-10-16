@@ -4,7 +4,7 @@ import { db } from '../data/db'
 import { cupNumbers, recordedSkillIds } from '../data/repo'
 import { getVideoStorage } from '../data/videoStorage'
 import type { Media } from '../domain/types'
-import { formatAgo, splitName } from './common'
+import { formatAgo, formatAgoDate, splitName } from './common'
 import { type Cup, CupGrid } from './CupGrid'
 import { pickCupMedia } from './cupImage'
 import { href } from './router'
@@ -18,11 +18,13 @@ export function RecordsScreen() {
   const [skillFilter, setSkillFilter] = useState<string>('')
 
   const data = useLiveQuery(async () => {
-    const [skills, domains, total] = await Promise.all([
+    const [skills, domains, all] = await Promise.all([
       db.skills.toArray(),
       db.domains.toArray(),
       db.records.orderBy('createdAt').count(),
     ])
+    // 型で絞り込んでいるときは、その型の杯数（見出しの数が、並んでいる杯と合うように）
+    const total = skillFilter ? await db.records.where('skillId').equals(skillFilter).count() : all
     const query = skillFilter
       ? db.records.where('[skillId+createdAt]').between([skillFilter, -Infinity], [skillFilter, Infinity]).reverse()
       : db.records.orderBy('createdAt').reverse()
@@ -47,7 +49,7 @@ export function RecordsScreen() {
   const more = data.records.length > limit
 
   // 日付の見出しで区切る
-  const groups: { label: string; cups: Cup[] }[] = []
+  const groups: { label: string; date?: string; cups: Cup[] }[] = []
   for (const r of shown) {
     const label = formatAgo(r.createdAt)
     const cup: Cup = {
@@ -58,7 +60,7 @@ export function RecordsScreen() {
       failed: data.uploads && (r.mediaIds ?? []).some((id) => mediaById.get(id)?.upload === 'failed'),
     }
     if (groups.at(-1)?.label === label) groups.at(-1)!.cups.push(cup)
-    else groups.push({ label, cups: [cup] })
+    else groups.push({ label, date: formatAgoDate(r.createdAt), cups: [cup] })
   }
 
   return (
@@ -98,7 +100,11 @@ export function RecordsScreen() {
       ) : (
         groups.map((g) => (
           <section key={g.label} className="section">
-            <h2>{g.label}</h2>
+            {/* 「3日前」だけだと、いつの杯か分からなくなるので、日付と曜日を添える */}
+            <h2>
+              {g.label}
+              {g.date && <span className="day-date">{g.date}</span>}
+            </h2>
             <CupGrid cups={g.cups} />
           </section>
         ))
