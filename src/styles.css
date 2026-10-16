@@ -3388,3 +3388,9 @@ h1.wordmark {
 .practice-more {
   align-self: center;
 }
+
+.sheet-empty.first-run .sub-link {
+  /* 見た目は変えずに、押せる範囲を 44px 以上にする */
+  padding: 12px 10px;
+  margin: -6px 0;
+}
