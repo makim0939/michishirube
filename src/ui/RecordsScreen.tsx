@@ -1,7 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useState } from 'react'
 import { db } from '../data/db'
-import { cupNumbers } from '../data/repo'
+import { cupNumbers, recordedSkillIds } from '../data/repo'
 import { getVideoStorage } from '../data/videoStorage'
 import type { Media } from '../domain/types'
 import { formatAgo, splitName } from './common'
@@ -29,9 +29,8 @@ export function RecordsScreen() {
     const records = await query.limit(limit + 1).toArray()
     const mediaIds = records.slice(0, limit).flatMap((r) => r.mediaIds ?? [])
     const media = (await db.media.bulkGet(mediaIds)).filter((m): m is Media => !!m)
-    // 記録のある型だけを絞り込みの候補にする。
-    // iPhone の Safari は、記録が0件のときに重複なしのカーソル（uniqueKeys）を開けずに落ちるので、キーを全部読んでまとめる
-    const recorded = new Set((await db.records.orderBy('skillId').keys()) as string[])
+    // 記録のある型だけを絞り込みの候補にする
+    const recorded = await recordedSkillIds()
     const numbers = await cupNumbers(records.slice(0, limit))
     // アップの失敗は、保存先が YouTube のときだけ知らせる
     const uploads = (await getVideoStorage()) === 'youtube'

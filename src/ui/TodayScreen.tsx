@@ -2,7 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useRef, useState } from 'react'
 import { isLoggedIn } from '../data/account'
 import { db } from '../data/db'
-import { cupNumbers, practicingSkillIds, recordsOf } from '../data/repo'
+import { cupNumbers, practicingSkillIds, recordedSkillIds, recordsOf } from '../data/repo'
 import { getSyncConfig, getSyncStatus } from '../data/sync'
 import { computeStates, indexById, practiceOrder, prereqsDone, sortByDepth } from '../domain/logic'
 import type { Media, PracticeRecord, Skill } from '../domain/types'
@@ -298,13 +298,7 @@ function PracticeBlock({ practice }: { practice: Practice }) {
 
 /** ホームに出す内容を読み込む */
 async function loadToday() {
-  const [skills, practicing, recordedKeys] = await Promise.all([
-    db.skills.toArray(),
-    practicingSkillIds(),
-    // iPhone の Safari は、重複なしのカーソルが使えないので、キーを全部読んでまとめる
-    db.records.orderBy('skillId').keys(),
-  ])
-  const recorded = new Set(recordedKeys as string[])
+  const [skills, practicing, recorded] = await Promise.all([db.skills.toArray(), practicingSkillIds(), recordedSkillIds()])
   const byId = indexById(skills)
   const states = computeStates(skills, practicing)
   // 練習中＝最近記録した型（「できた」の型も、続けて練習していれば出す）

@@ -335,8 +335,14 @@ export function Recorder({
         {/* 注ぐ直前に見たい、今回意識すること。手本のボタンは、今回の有無や長さで動かないよう、いつも左端に置く */}
         {(focus || (references.length > 0 && !recording)) && (
           <div className="recorder-sub">
-            {references.length > 0 && !recording && (
-              <button className={`btn small${showRefs ? ' on' : ''}`} onClick={() => setShowRefs(!showRefs)}>
+            {/* 録画中も場所は空けておく（「今回」が左へ動かないように） */}
+            {references.length > 0 && (
+              <button
+                className={`btn small${showRefs ? ' on' : ''}`}
+                style={recording ? { visibility: 'hidden' } : undefined}
+                disabled={recording}
+                onClick={() => setShowRefs(!showRefs)}
+              >
                 手本
               </button>
             )}

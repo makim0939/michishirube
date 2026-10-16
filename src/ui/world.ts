@@ -34,7 +34,7 @@ export function patternFor(name: string): Pattern | undefined {
   if (n.includes('チューリップ')) {
     if (/[3３]段|三段/.test(n)) return 'tulip3'
     if (/[4４]段|四段/.test(n)) return 'tulip4'
-    // 「ハート・チューリップを連続で…」のような練習もチューリップの絵にする
+    // 「チューリップ」だけなら、基本の2段の絵にする
     return 'tulip2'
   }
   if (n.includes('ハート')) return 'heart'

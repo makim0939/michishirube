@@ -1,7 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { db } from '../data/db'
-import { practicingSkillIds, recordsOf } from '../data/repo'
+import { practicingSkillIds, recordedSkillIds, recordsOf } from '../data/repo'
 import { recentForm, type RecentForm } from '../domain/form'
 import { computeStates, indexById, practiceOrder, sortByDepth } from '../domain/logic'
 import { formatAgo, splitName } from './common'
@@ -29,14 +29,12 @@ export function MapScreen({ domainId }: { domainId?: string }) {
   }
 
   const data = useLiveQuery(async () => {
-    const [domains, allSkills, practicing, recordedKeys] = await Promise.all([
+    const [domains, allSkills, practicing, recorded] = await Promise.all([
       db.domains.orderBy('order').toArray(),
       db.skills.toArray(),
       practicingSkillIds(),
-      // iPhone の Safari は、重複なしのカーソルが使えないので、キーを全部読んでまとめる
-      db.records.orderBy('skillId').keys(),
+      recordedSkillIds(),
     ])
-    const recorded = new Set(recordedKeys as string[])
     // タブから開いたときは、最後に見ていた分野を出す
     const wanted = domainId ?? readStorage('local', LAST_DOMAIN_KEY)
     const current = domains.find((d) => d.id === wanted) ?? domains[0]

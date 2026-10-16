@@ -8,18 +8,9 @@
       "description": "ピッチャーを高い位置から細く注いでミルクを沈め、下げて広げたら、最後に持ち上げて細い流れで真ん中を切る。注ぐ高さと切りを身につける、すべての柄の土台。\n目安：毎日練習して1週間ほど。\n参考：業務用の研修カリキュラムでは「6ozカップで6回中4回、ハートと分かる形」が合格基準。",
       "criteria": "中央に左右対称のハートが、10回中8回描ける",
       "sources": [
-        {
-          "title": "Barista Life: How to learn latte art（10回中8回の基準）",
-          "url": "https://baristalife.co/blogs/blog/learn-latte-art"
-        },
-        {
-          "title": "Roasters.app: 12週間のラテアート研修カリキュラム（6回中4回の基準）",
-          "url": "https://roasters.app/business/latte-art-training-12-week-curriculum"
-        },
-        {
-          "title": "Coffee Parts: Heart / Tulip / Rosetta / Swan / Wave（難易度順・習得期間の目安）",
-          "url": "https://know.coffeeparts.com.au/glossary/heart-tulip-rosetta-swan-wave-stacked-tulip"
-        }
+        { "title": "Barista Life: How to learn latte art（10回中8回の基準）", "url": "https://baristalife.co/blogs/blog/learn-latte-art" },
+        { "title": "Roasters.app: 12週間のラテアート研修カリキュラム（6回中4回の基準）", "url": "https://roasters.app/business/latte-art-training-12-week-curriculum" },
+        { "title": "Coffee Parts: Heart / Tulip / Rosetta / Swan / Wave（難易度順・習得期間の目安）", "url": "https://know.coffeeparts.com.au/glossary/heart-tulip-rosetta-swan-wave-stacked-tulip" }
       ]
     },
     {
@@ -28,22 +19,11 @@
       "description": "ドットを置いて一度止め、次の注ぎで前の層に押し込むように重ねてから切る。注ぎを「止めて、また始める」動きを身につける。まずは2段、慣れたら3段以上に増やす（層同士が混ざらないよう、1回ごとの注ぎ量と止めるタイミングをそろえる）。\n目安：毎日練習して1か月ほど。",
       "criteria": "きれいな2段のチューリップが、6ozと8ozのどちらのカップでも6回中4回描ける",
       "sources": [
-        {
-          "title": "Roasters.app: 12週間のラテアート研修カリキュラム（6回中4回の基準）",
-          "url": "https://roasters.app/business/latte-art-training-12-week-curriculum"
-        },
-        {
-          "title": "Coffee Parts: Heart / Tulip / Rosetta / Swan / Wave（習得期間の目安）",
-          "url": "https://know.coffeeparts.com.au/glossary/heart-tulip-rosetta-swan-wave-stacked-tulip"
-        },
-        {
-          "title": "Barista Life: How to learn latte art（3層を混ぜずに重ねる基準）",
-          "url": "https://baristalife.co/blogs/blog/learn-latte-art"
-        }
+        { "title": "Roasters.app: 12週間のラテアート研修カリキュラム（6回中4回の基準）", "url": "https://roasters.app/business/latte-art-training-12-week-curriculum" },
+        { "title": "Coffee Parts: Heart / Tulip / Rosetta / Swan / Wave（習得期間の目安）", "url": "https://know.coffeeparts.com.au/glossary/heart-tulip-rosetta-swan-wave-stacked-tulip" },
+        { "title": "Barista Life: How to learn latte art（3層を混ぜずに重ねる基準）", "url": "https://baristalife.co/blogs/blog/learn-latte-art" }
       ],
-      "prereqs": [
-        "heart"
-      ]
+      "prereqs": ["heart"]
     },
     {
       "key": "rosetta",
@@ -51,22 +31,11 @@
       "description": "ドットを広げたら、ピッチャーを左右に小刻みに振りながら手前へ引き、最後に切る。ハート・チューリップ・ロゼッタの中で、安定させるのが最も難しい。\n目安：安定して描けるまで3〜6か月。\n参考：業務用の研修カリキュラムでは「6回中3回、ロゼッタと分かる形」が合格基準。",
       "criteria": "左右それぞれに6枚以上の葉がはっきり出る",
       "sources": [
-        {
-          "title": "Barista Life: How to learn latte art（左右6枚以上の基準）",
-          "url": "https://baristalife.co/blogs/blog/learn-latte-art"
-        },
-        {
-          "title": "Roasters.app: 12週間のラテアート研修カリキュラム（チューリップの後に練習・6回中3回）",
-          "url": "https://roasters.app/business/latte-art-training-12-week-curriculum"
-        },
-        {
-          "title": "Coffee Parts: Heart / Tulip / Rosetta / Swan / Wave（習得期間の目安）",
-          "url": "https://know.coffeeparts.com.au/glossary/heart-tulip-rosetta-swan-wave-stacked-tulip"
-        }
+        { "title": "Barista Life: How to learn latte art（左右6枚以上の基準）", "url": "https://baristalife.co/blogs/blog/learn-latte-art" },
+        { "title": "Roasters.app: 12週間のラテアート研修カリキュラム（チューリップの後に練習・6回中3回）", "url": "https://roasters.app/business/latte-art-training-12-week-curriculum" },
+        { "title": "Coffee Parts: Heart / Tulip / Rosetta / Swan / Wave（習得期間の目安）", "url": "https://know.coffeeparts.com.au/glossary/heart-tulip-rosetta-swan-wave-stacked-tulip" }
       ],
-      "prereqs": [
-        "tulip"
-      ]
+      "prereqs": ["tulip"]
     },
     {
       "key": "layer-heart",
@@ -74,9 +43,7 @@
       "description": "ハートを中心から外へ、細い層を何枚も重ねて注ぐ。\n※出典に合格基準がないので、達成条件は自分で決めて書き換える。",
       "criteria": "（出典に基準なし）自分で決めて書き換える",
       "sources": [],
-      "prereqs": [
-        "heart"
-      ]
+      "prereqs": ["heart"]
     },
     {
       "key": "wing-tulip",
@@ -84,14 +51,9 @@
       "description": "研修カリキュラムで、基本の柄の後に練習する上級の柄として挙げられている。\n※出典に合格基準がないので、達成条件は自分で決めて書き換える。",
       "criteria": "（出典に基準なし）自分で決めて書き換える",
       "sources": [
-        {
-          "title": "Roasters.app: 12週間のラテアート研修カリキュラム（11〜12週目の上級の柄）",
-          "url": "https://roasters.app/business/latte-art-training-12-week-curriculum"
-        }
+        { "title": "Roasters.app: 12週間のラテアート研修カリキュラム（11〜12週目の上級の柄）", "url": "https://roasters.app/business/latte-art-training-12-week-curriculum" }
       ],
-      "prereqs": [
-        "tulip"
-      ]
+      "prereqs": ["tulip"]
     },
     {
       "key": "wave",
@@ -99,14 +61,9 @@
       "description": "チューリップを、層をさらに多く重ねて波のように見せる形。止めて重ねる動きを、より細かく安定させる。\n※出典に合格基準がないので、達成条件は自分で決めて書き換える。",
       "criteria": "（出典に基準なし）自分で決めて書き換える",
       "sources": [
-        {
-          "title": "Coffee Parts: Heart / Tulip / Rosetta / Swan / Wave（Wave = 層を重ねたチューリップ）",
-          "url": "https://know.coffeeparts.com.au/glossary/heart-tulip-rosetta-swan-wave-stacked-tulip"
-        }
+        { "title": "Coffee Parts: Heart / Tulip / Rosetta / Swan / Wave（Wave = 層を重ねたチューリップ）", "url": "https://know.coffeeparts.com.au/glossary/heart-tulip-rosetta-swan-wave-stacked-tulip" }
       ],
-      "prereqs": [
-        "tulip"
-      ]
+      "prereqs": ["tulip"]
     },
     {
       "key": "swan",
@@ -114,18 +71,10 @@
       "description": "ロゼッタに、首を描くための注ぎを足した形。挙げた柄の中で最も難しい部類。\n※出典に合格基準がないので、達成条件は自分で決めて書き換える。",
       "criteria": "（出典に基準なし）自分で決めて書き換える",
       "sources": [
-        {
-          "title": "Coffee Parts: Heart / Tulip / Rosetta / Swan / Wave（ロゼッタ＋首の注ぎ）",
-          "url": "https://know.coffeeparts.com.au/glossary/heart-tulip-rosetta-swan-wave-stacked-tulip"
-        },
-        {
-          "title": "Roasters.app: 12週間のラテアート研修カリキュラム（11〜12週目の上級の柄）",
-          "url": "https://roasters.app/business/latte-art-training-12-week-curriculum"
-        }
+        { "title": "Coffee Parts: Heart / Tulip / Rosetta / Swan / Wave（ロゼッタ＋首の注ぎ）", "url": "https://know.coffeeparts.com.au/glossary/heart-tulip-rosetta-swan-wave-stacked-tulip" },
+        { "title": "Roasters.app: 12週間のラテアート研修カリキュラム（11〜12週目の上級の柄）", "url": "https://roasters.app/business/latte-art-training-12-week-curriculum" }
       ],
-      "prereqs": [
-        "rosetta"
-      ]
+      "prereqs": ["rosetta"]
     }
   ]
 }

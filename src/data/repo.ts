@@ -233,6 +233,14 @@ export async function practicingSkillIds(now = Date.now()): Promise<Set<string>>
   return practicingFrom(recent, last)
 }
 
+/**
+ * 記録のある型の id。
+ * iPhone の Safari は、記録が0件のときに重複なしのカーソル（uniqueKeys）を開けずに落ちるので、キーを全部読んでまとめる
+ */
+export async function recordedSkillIds(): Promise<Set<string>> {
+  return new Set((await db.records.orderBy('skillId').keys()) as string[])
+}
+
 /** 達成にして、達成を目指せるようになったスキルを返す（解除演出に使う） */
 export async function achieveSkill(id: string): Promise<{ skill: Skill; unlocked: Skill[] }> {
   return db.transaction('rw', db.skills, db.outbox, async () => {
