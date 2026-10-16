@@ -194,7 +194,7 @@ ul {
 }
 
 .btn.small {
-  min-height: 36px;
+  min-height: 44px;
   padding: 6px 14px;
   border-radius: 999px;
   font-size: 0.88rem;
@@ -1055,6 +1055,8 @@ select:focus {
   grid-template-columns: repeat(4, 1fr);
   height: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px));
   padding-bottom: env(safe-area-inset-bottom, 0px);
+  /* 背景と上線は全幅のまま、4つのタブの並びだけ本文（.main）と同じ最大幅に寄せる */
+  padding-inline: max(0px, calc((100% - 680px) / 2));
   background: color-mix(in srgb, var(--surface) 92%, transparent);
   backdrop-filter: blur(12px);
   border-top: 1px solid var(--border);
@@ -1969,6 +1971,7 @@ video.media.playing {
   /* 中の重なり（z-index）を写真の中だけに閉じ込め、下のシートより手前に出さない */
   isolation: isolate;
   height: min(400px, 46vh);
+  height: min(400px, 46svh);
   /* .main の余白を打ち消して、画面の端まで写真を出す */
   margin: calc(-1 * (env(safe-area-inset-top, 0px) + 12px)) -16px 0;
   overflow: hidden;
@@ -1988,10 +1991,10 @@ video.media.playing {
   inset: 0;
   background: linear-gradient(
     180deg,
-    rgb(18 11 6 / 48%) 0%,
-    rgb(18 11 6 / 0%) 32%,
+    rgb(18 11 6 / 58%) 0%,
+    rgb(18 11 6 / 0%) 34%,
     rgb(18 11 6 / 0%) 60%,
-    rgb(18 11 6 / 42%) 100%
+    rgb(18 11 6 / 52%) 100%
   );
 }
 
@@ -2021,9 +2024,13 @@ video.media.playing {
 .wordmark-ja {
   font-family: var(--font-mincho);
   font-weight: 500;
-  font-size: 10px;
-  letter-spacing: 0.5em;
+  font-size: 11px;
+  letter-spacing: 0.42em;
   line-height: 1;
+}
+
+.hero-top {
+  text-shadow: 0 1px 8px rgb(0 0 0 / 55%), 0 0 2px rgb(0 0 0 / 35%);
 }
 
 .hero-date {
@@ -2038,7 +2045,7 @@ video.media.playing {
   display: flex;
   flex-direction: column;
   color: #faf7f2;
-  text-shadow: 0 1px 10px rgb(0 0 0 / 45%);
+  text-shadow: 0 1px 10px rgb(0 0 0 / 60%), 0 0 2px rgb(0 0 0 / 35%);
   font-size: 0.74rem;
   letter-spacing: 0.14em;
 }
@@ -2072,6 +2079,13 @@ video.media.playing {
 
 .sheet-head h2 {
   margin: 0;
+}
+
+/* 見た目の位置はそのまま、縦の余白でタップ領域を44px以上にする（同量の負のmarginで相殺） */
+.sheet-head a {
+  display: inline-block;
+  padding: 13px 6px;
+  margin: -13px -6px;
 }
 
 .sheet-empty {
@@ -2493,6 +2507,22 @@ a.notice {
   padding-top: 10px;
 }
 
+/* 320px幅：型名と杯数が幅を取り合って1文字だけ折り返さないよう、字間と大きさを少し詰める */
+@media (max-width: 360px) {
+  .practice-head {
+    gap: 8px;
+  }
+
+  .practice-name {
+    font-size: 1.2rem;
+    letter-spacing: 0.02em;
+  }
+
+  .practice-count strong {
+    font-size: 1.4rem;
+  }
+}
+
 /* ---- 1杯の詳細 ---- */
 
 .cup-head {
@@ -2845,16 +2875,34 @@ a.notice {
   background: var(--border);
 }
 
+/* 色だけに頼らず形でも区別する：◎＝丸、△＝上向きの三角、✕＝バツ */
 .form-dot.is-good {
   background: var(--done);
 }
 
 .form-dot.is-meh {
+  border-radius: 0;
   background: var(--gold);
+  clip-path: polygon(50% 6%, 100% 92%, 0 92%);
 }
 
 .form-dot.is-bad {
+  border-radius: 0;
   background: var(--danger);
+  clip-path: polygon(
+    20% 0,
+    50% 30%,
+    80% 0,
+    100% 20%,
+    70% 50%,
+    100% 80%,
+    80% 100%,
+    50% 70%,
+    20% 100%,
+    0 80%,
+    30% 50%,
+    0 20%
+  );
 }
 
 .form-dot.is-unmarked {
@@ -2889,6 +2937,11 @@ a.notice {
 
 .practice-title .form-dots {
   margin-top: 6px;
+}
+
+.practice-title .form-dot {
+  width: 11px;
+  height: 11px;
 }
 
 .type-card-body .form-dots {
