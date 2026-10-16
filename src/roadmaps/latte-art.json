@@ -56,16 +56,6 @@
       "prereqs": ["tulip"]
     },
     {
-      "key": "wave",
-      "name": "ウェーブ（スタックドチューリップ）",
-      "description": "チューリップを、層をさらに多く重ねて波のように見せる形。止めて重ねる動きを、より細かく安定させる。\n※出典に合格基準がないので、達成条件は自分で決めて書き換える。",
-      "criteria": "（出典に基準なし）自分で決めて書き換える",
-      "sources": [
-        { "title": "Coffee Parts: Heart / Tulip / Rosetta / Swan / Wave（Wave = 層を重ねたチューリップ）", "url": "https://know.coffeeparts.com.au/glossary/heart-tulip-rosetta-swan-wave-stacked-tulip" }
-      ],
-      "prereqs": ["tulip"]
-    },
-    {
       "key": "swan",
       "name": "スワン",
       "description": "ロゼッタに、首を描くための注ぎを足した形。挙げた柄の中で最も難しい部類。\n※出典に合格基準がないので、達成条件は自分で決めて書き換える。",
