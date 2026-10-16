@@ -142,6 +142,16 @@ function CelebrationOverlay({
   )
 }
 
+/**
+ * トーストを出しておく時間。短い一言は2.5秒、エラーとボタン付きは5秒を下限に、
+ * 長い文は読み終えられるよう文字数に応じて延ばす（上限は8秒。トーストは下の操作を邪魔しない）
+ */
+export function toastDuration(message: string, tone: 'ok' | 'error', hasAction: boolean): number {
+  const floor = tone === 'error' || hasAction ? 5000 : 2500
+  const reading = 1500 + message.length * 100
+  return Math.min(Math.max(floor, reading), 8000)
+}
+
 export function FeedbackProvider({ children }: { children: ReactNode }) {
   const [toast, setToast] = useState<{
     message: string
@@ -153,7 +163,7 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!toast) return
-    const timer = setTimeout(() => setToast(null), toast.tone === 'error' || toast.action ? 5000 : 2500)
+    const timer = setTimeout(() => setToast(null), toastDuration(toast.message, toast.tone, !!toast.action))
     return () => clearTimeout(timer)
   }, [toast])
 

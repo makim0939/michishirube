@@ -4,6 +4,8 @@ import { isLoggedIn } from '../data/account'
 import { db } from '../data/db'
 import { cupNumbers, practicingSkillIds, recordedSkillIds, recordsOf } from '../data/repo'
 import { getSyncConfig, getSyncStatus } from '../data/sync'
+import { getVideoStorage } from '../data/videoStorage'
+import { isYoutubeConnected } from '../data/youtube'
 import { computeStates, indexById, practiceOrder, prereqsDone, sortByDepth } from '../domain/logic'
 import type { Media, PracticeRecord, Skill } from '../domain/types'
 import { recentForm, type RecentForm } from '../domain/form'
@@ -72,12 +74,17 @@ function isStandalone() {
  */
 function Notice() {
   const [hintHidden, setHintHidden] = useState(() => readStorage('local', HINT_KEY) === '1')
-  const data = useLiveQuery(async () => ({
-    config: await getSyncConfig(),
-    status: await getSyncStatus(),
-    uploads: await db.media.where('upload').anyOf('pending', 'uploading').count(),
-    failed: await db.media.where('upload').equals('failed').count(),
-  }))
+  const data = useLiveQuery(async () => {
+    // 保存先が端末なら上げないので、アップ待ち・失敗は数えない（YouTube を使っていない人に、YouTube の案内を出さない）
+    const youtube = (await getVideoStorage()) === 'youtube'
+    return {
+      config: await getSyncConfig(),
+      status: await getSyncStatus(),
+      connected: await isYoutubeConnected(),
+      uploads: youtube ? await db.media.where('upload').anyOf('pending', 'uploading').count() : 0,
+      failed: youtube ? await db.media.where('upload').equals('failed').count() : 0,
+    }
+  })
   if (!data) return null
 
   // Google でログインしていない端末（端末だけで使う人・前の版の接続）には、同期の失敗を出さない
@@ -114,6 +121,18 @@ function Notice() {
     )
   }
   if (data.uploads > 0) {
+    // 連携していないと、待っていても上がらない。「開いている間に上げます」と言わず、何をすればよいかを伝える
+    if (!data.connected) {
+      return (
+        <a className="notice" href={href('/settings/sync')}>
+          <AlertIcon size={18} />
+          <span>
+            動画 {data.uploads} 本が YouTube に上がっていません。「アカウント」で
+            {isLoggedIn(data.config) ? '' : 'ログインして、'}連携してください
+          </span>
+        </a>
+      )
+    }
     return <p className="notice quiet">YouTube へのアップ待ちの動画が {data.uploads} 本あります（開いている間に上げます）</p>
   }
   return null
@@ -135,13 +154,12 @@ type Slide = {
 function HeroSlide({ slide, light, now }: { slide: Slide; light: Light; now: Date }) {
   const blob = useCupImage(slide.media)
   const url = useImageUrl(blob, slide.media ? `${slide.media.id}-hero-${blob?.size ?? 0}` : undefined)
+  const label = `No.${slide.number} ${slide.skillName ? splitName(slide.skillName).main : ''}`.trim()
   return (
     <div className="hero-slide">
-      <img
-        className="hero-image"
-        src={url ?? lightUrl(light)}
-        alt={url ? `No.${slide.number} ${slide.skillName ? splitName(slide.skillName).main : ''}` : ''}
-      />
+      {/* 自分の1杯の写真は、押すとその1杯の詳細を開ける（小さな杯の一覧と同じ）。光の絵のあいだは、押せない */}
+      <img className="hero-image" src={url ?? lightUrl(light)} alt={url ? label : ''} />
+      {url && <a className="hero-link" href={href(`/cup/${slide.record.id}`)} aria-label={`${label}の詳細`} />}
       {url && (
         <div className="hero-caption">
           {slide.first && <span className="hero-first">はじまりの1杯</span>}
