@@ -68,13 +68,6 @@ h2 {
   margin-bottom: 8px;
 }
 
-/* カップ帳の日付の見出しで、「3日前」に添える日付と曜日 */
-.day-date {
-  margin-left: 1em;
-  letter-spacing: 0.08em;
-  font-weight: 400;
-}
-
 ul {
   list-style: none;
   margin: 0;
@@ -2796,14 +2789,6 @@ a.notice {
   z-index: 2;
 }
 
-/* 写真全体を押せるようにする。文字・影は pointer-events: none なので、そのまま下のリンクに届く。めくる指の動きは邪魔しない */
-.hero-link {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  display: block;
-}
-
 .hero-first {
   align-self: flex-start;
   margin-bottom: 6px;
@@ -2903,34 +2888,16 @@ a.notice {
   background: var(--border);
 }
 
-/* 色だけに頼らず形でも区別する：◎＝丸、△＝上向きの三角、✕＝バツ */
 .form-dot.is-good {
   background: var(--done);
 }
 
 .form-dot.is-meh {
-  border-radius: 0;
   background: var(--gold);
-  clip-path: polygon(50% 6%, 100% 92%, 0 92%);
 }
 
 .form-dot.is-bad {
-  border-radius: 0;
   background: var(--danger);
-  clip-path: polygon(
-    20% 0,
-    50% 30%,
-    80% 0,
-    100% 20%,
-    70% 50%,
-    100% 80%,
-    80% 100%,
-    50% 70%,
-    20% 100%,
-    0 80%,
-    30% 50%,
-    0 20%
-  );
 }
 
 .form-dot.is-unmarked {
@@ -2965,11 +2932,6 @@ a.notice {
 
 .practice-title .form-dots {
   margin-top: 6px;
-}
-
-.practice-title .form-dot {
-  width: 11px;
-  height: 11px;
 }
 
 .type-card-body .form-dots {
@@ -3362,11 +3324,6 @@ div.notice > a {
 }
 
 /* ---- 今日（レビュー対応）：ヒーローのリンク・題字・ほかの型の杯の型名・はじめての画面 ---- */
-
-.hero-link:focus-visible {
-  outline: 3px solid #faf7f2;
-  outline-offset: -6px;
-}
 
 /* 題字は h1 にしたが、見た目は以前の span と同じにする */
 h1.wordmark {

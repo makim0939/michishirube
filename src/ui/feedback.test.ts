@@ -13,12 +13,14 @@ describe('toastDuration', () => {
 
   it('長い文は、読み終えられるよう文字数に応じて延ばす', () => {
     const message = 'YouTube に上げるには、「アカウント」でログインして、YouTube と連携してください'
-    expect(toastDuration(message, 'ok', false)).toBe(1500 + message.length * 100)
-    expect(toastDuration(message, 'ok', false)).toBeGreaterThan(5000)
+    // 40字ほどの案内なら、5秒前後
+    expect(toastDuration(message, 'ok', false)).toBe(1500 + message.length * 80)
+    expect(toastDuration(message, 'ok', false)).toBeGreaterThan(4000)
+    expect(toastDuration(message, 'ok', false)).toBeLessThan(6000)
   })
 
-  it('どれだけ長くても8秒まで', () => {
-    expect(toastDuration('あ'.repeat(300), 'ok', false)).toBe(8000)
-    expect(toastDuration('あ'.repeat(300), 'error', false)).toBe(8000)
+  it('どれだけ長くても6秒まで', () => {
+    expect(toastDuration('あ'.repeat(300), 'ok', false)).toBe(6000)
+    expect(toastDuration('あ'.repeat(300), 'error', false)).toBe(6000)
   })
 })

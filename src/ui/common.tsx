@@ -44,19 +44,6 @@ export function formatAgo(ts: number, now = Date.now()): string {
   return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`
 }
 
-const WEEKDAYS_JA = ['日', '月', '火', '水', '木', '金', '土']
-
-/**
- * 「昨日」「3日前」のような言い方（formatAgo）に添える、日付と曜日（10/13（火））。
- * 言い方が日付そのもの（30日以上前）のときは、添えるものが無いので undefined
- */
-export function formatAgoDate(ts: number, now = Date.now()): string | undefined {
-  if (daysAgo(ts, now) >= 30) return undefined
-  const d = new Date(ts)
-  const year = d.getFullYear() === new Date(now).getFullYear() ? '' : `${d.getFullYear()}/`
-  return `${year}${d.getMonth() + 1}/${d.getDate()}（${WEEKDAYS_JA[d.getDay()]}）`
-}
-
 export function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`
   if (n < 1024 ** 2) return `${(n / 1024).toFixed(0)} KB`
