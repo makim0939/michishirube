@@ -266,7 +266,8 @@ async function doSync() {
     }
     await setStatus({ lastSyncedAt: Date.now(), ...((await photosFull()) ? { photosFull: true } : {}) })
   } catch (e) {
-    await setStatus({ ...(await getSyncStatus()), error: e instanceof Error ? e.message : String(e) })
+    // ログアウトしたあとに失敗を書き戻さない（次にログインしたとき、前の失敗が出ないように）
+    if (await getSyncConfig()) await setStatus({ ...(await getSyncStatus()), error: e instanceof Error ? e.message : String(e) })
     throw e
   }
 }
@@ -307,6 +308,8 @@ async function uploadPhotos(config: SyncConfig) {
       throw e
     }
     await db.transaction('rw', db.media, db.outbox, async () => {
+      // 送っているあいだに写真を差し替えたら、印を立てない（新しい写真を次に送る）
+      if ((await db.media.get(m.id))?.contentAt !== m.contentAt) return
       await db.media.update(m.id, { cloudPhoto: true, updatedAt: Date.now() })
       await db.outbox.put({ kind: 'media', id: m.id, at: Date.now() })
     })
@@ -343,6 +346,9 @@ async function uploadPosters(config: SyncConfig) {
       throw e
     }
     await db.transaction('rw', db.media, db.outbox, async () => {
+      // 送っているあいだにサムネイルを作り直したら、印を立てない（新しいものを次に送る）
+      const current = await db.media.get(m.id)
+      if (!current || current.contentAt !== m.contentAt || !!current.posterEnd !== !!m.posterEnd) return
       await db.media.update(m.id, { cloudPoster: true, cloudPosterEnd: !!m.posterEnd, updatedAt: Date.now() })
       await db.outbox.put({ kind: 'media', id: m.id, at: Date.now() })
     })
@@ -406,6 +412,15 @@ export async function connectWithConfig(config: SyncConfig): Promise<{ firstDevi
     }
     // 接続前にたまった印は、下で全件を積み直すので消す（捨てた初期データの削除を送らないように）
     await db.outbox.clear()
+    // 前に別のアカウントでつないでいたかもしれないので、この端末に中身のある写真・サムネイルは置き直す
+    // （サーバーにしか中身が無いものの印は残す。同じアカウントなら、そのまま取ってこられる）
+    await db.media.toCollection().modify((m) => {
+      if (hasContent(m)) delete m.cloudPhoto
+      if (m.poster) {
+        delete m.cloudPoster
+        delete m.cloudPosterEnd
+      }
+    })
     // 端末に残っているものは全部送る（サーバーのほうが新しいものは上書きされない）
     const all = [
       ...(await db.domains.toCollection().primaryKeys()).map((id) => ({ kind: 'domain' as const, id: id as string })),
@@ -424,8 +439,9 @@ export async function connectWithConfig(config: SyncConfig): Promise<{ firstDevi
 
 export async function disconnectSync() {
   await db.meta.bulkDelete([CONFIG_KEY, CURSOR_KEY, STATUS_KEY, PHOTOS_FULL_KEY])
-  // 動いている同期が終わるのを待つ（このあと端末のデータを消しても、受け取ったものが書き戻されないように）
-  await running?.catch(() => {})
+  // 動いている同期が終わるのを待つ（このあと端末のデータを消しても、受け取ったものが書き戻されないように）。
+  // 同期は次の区切りで止まる。電波が悪くて終わらなくても、長くは待たない
+  if (running) await Promise.race([running.catch(() => {}), new Promise((r) => setTimeout(r, 5000))])
 }
 
 // ---- 自動で同期する ----

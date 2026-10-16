@@ -170,8 +170,8 @@ async function optimizeNow(ids?: string[]) {
     }
     const swapped = await db.transaction('rw', db.media, async () => {
       const current = await db.media.get(id)
-      // 作り直しているあいだに、中身が差し替わった・消されたなら、作ったファイルは使わない
-      if (!current || current.file !== source) return false
+      // 作り直しているあいだに、中身が差し替わった（切り取ったなど）・消されたなら、作ったファイルは使わない
+      if (!current || current.file !== source || current.contentAt !== m.contentAt) return false
       // 中身はこの端末だけのものなので、同期の対象にしない（updatedAt も変えない）
       await db.media.update(
         id,
@@ -211,7 +211,8 @@ async function sweepNow() {
   await db.media.each((m) => {
     known.add(m.id)
     if (m.file) used.add(m.file)
-    else if (!m.blob) {
+    // 画質をそろえ済みなのに中身が無いのは、YouTube に上げ終えて端末から消した動画（つなぎ直さない）
+    else if (!m.blob && !m.optimized) {
       // 元のファイルがあれば元を使う（画質をそろえる途中で止まると、書きかけのファイルが残っていることがある）。
       // そろえ終えると元は消え、高画質から標準へ軽くする途中なら、高画質のほうが書き終わっている
       lost.push({

@@ -169,6 +169,14 @@ describe('動画・写真の中身をアプリのファイルへ移す', () => {
     expect(files.deleted).toEqual(['media/both-5-standard.mp4'])
   })
 
+  it('YouTube に上げ終えて端末から消した動画は、ファイルが残っていてもつなぎ直さない', async () => {
+    await db.media.add(media({ id: 'tidied', blob: undefined, contentAt: 5, optimized: 'standard' }))
+    files.listed = ['media/tidied-5-standard.mp4']
+    await tidyContentFiles()
+    expect((await db.media.get('tidied'))?.file).toBeUndefined()
+    expect(files.deleted).toEqual(['media/tidied-5-standard.mp4'])
+  })
+
   it('まだ行の無いファイルは消さない（同期などで行が戻ってきたら、つなぎ直せるように）', async () => {
     files.listed = ['media/1b2c-3d4e-1700000000000.mp4']
     await tidyContentFiles()

@@ -135,7 +135,7 @@ describe('同期が止まらないようにする', () => {
     expect((await db.outbox.toArray()).map((e) => e.id)).toEqual([big])
   })
 
-  it('ログアウトしたら、写真をサーバーに置いた印を消す（別のアカウントでも置き直す）', async () => {
+  it('ログインし直したら、中身のある写真は置き直し、サーバーにしか無い写真の印は残す', async () => {
     const server = fakeServer()
     vi.stubGlobal('fetch', server.fetch)
     const domainId = await createDomain('ピアノ')
@@ -148,8 +148,15 @@ describe('同期が止まらないようにする', () => {
     await connectWithConfig({ url: 'https://api.example', token: 't' })
     const [m] = await db.media.where('recordId').equals(recordId).toArray()
     expect(m.cloudPhoto).toBe(true)
+    // ほかの端末で撮った写真（この端末には中身が無い）
+    await db.media.add({ ...m, id: 'remote-only', blob: undefined, cloudPhoto: true })
     await logout()
-    expect((await db.media.get(m.id))?.cloudPhoto).toBeUndefined()
+    const puts = () => server.fetch.mock.calls.filter(([url, init]) => init?.method === 'PUT' && String(url).endsWith(m.id)).length
+    const before = puts()
+    await connectWithConfig({ url: 'https://api.example', token: 't2' })
+    expect(puts()).toBe(before + 1)
+    expect((await db.media.get(m.id))?.cloudPhoto).toBe(true)
+    expect((await db.media.get('remote-only'))?.cloudPhoto).toBe(true)
   })
 
   it('分野・型が後ろのページにあっても、2台目と分かる', async () => {

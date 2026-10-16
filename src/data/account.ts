@@ -211,18 +211,10 @@ export async function loginWithGoogle(): Promise<{ firstDevice: boolean } | null
   return result?.kind === 'login' ? completeLogin(result) : null
 }
 
-/**
- * つながりを切り、この端末の YouTube の鍵と、写真をサーバーに置いた印を消す
- * （次に別のアカウント・作り直したアカウントでログインしても、写真を置き直すように）
- */
+/** つながりを切り、この端末の YouTube の鍵を消す（写真をサーバーに置いた印は、次にログインしたときに見直す） */
 async function forgetConnection() {
   await disconnectSync()
   await forgetYoutubeKey()
-  await db.media.toCollection().modify((m) => {
-    delete m.cloudPhoto
-    delete m.cloudPoster
-    delete m.cloudPosterEnd
-  })
 }
 
 /** この端末のログインを終える。端末の記録はそのまま残る */
@@ -230,9 +222,16 @@ export async function logout() {
   const config = await getSyncConfig()
   if (config) {
     // ログインした端末がつないでいるサーバー（独自ドメインにする前にログインした端末は、前の URL）に送る
-    await fetch(`${serverOf(config)}/api/session`, { method: 'DELETE', headers: { Authorization: `Bearer ${config.token}` } }).catch(
-      () => {},
-    )
+    // 電波が悪くても、ログアウト（とすべて削除）が止まらないよう、長くは待たない
+    const abort = new AbortController()
+    const timer = setTimeout(() => abort.abort(), 5000)
+    await fetch(`${serverOf(config)}/api/session`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${config.token}` },
+      signal: abort.signal,
+    })
+      .catch(() => {})
+      .finally(() => clearTimeout(timer))
   }
   await forgetConnection()
 }
@@ -252,5 +251,11 @@ export async function deleteAccount(): Promise<boolean> {
   }
   if (!res.ok && res.status !== 401) throw new SyncError(`削除できませんでした（${res.status}）`, res.status)
   await forgetConnection()
+  // サーバーの写真は消えたので、置いた印も消す
+  await db.media.toCollection().modify((m) => {
+    delete m.cloudPhoto
+    delete m.cloudPoster
+    delete m.cloudPosterEnd
+  })
   return res.ok
 }

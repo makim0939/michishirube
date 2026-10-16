@@ -51,7 +51,8 @@ export function MediaItem({
           blob={blob}
           type={blob.type || media.type}
           poster={media.poster}
-          cacheKey={media.id}
+          // 同じ id のまま中身が差し替わる（切り取った・ほかの端末で写真を替えた）ので、中身ごとに分ける
+          cacheKey={`${media.id}-${media.contentAt ?? media.createdAt}`}
           autoLoad={autoLoad}
           videoRef={playerRef && ((el) => playerRef(el ? videoControl(el) : null))}
         />
