@@ -8,7 +8,8 @@
     <link rel="canonical" href="https://latte.makimura.me/" />
     <link rel="icon" href="/favicon.ico" />
     <link rel="apple-touch-icon" href="/icon.png" />
-    <meta name="theme-color" content="#faf7f2" />
+    <meta name="theme-color" content="#faf7f2" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#1d1814" media="(prefers-color-scheme: dark)" />
     <meta property="og:type" content="website" />
     <meta property="og:title" content="ラテ帳｜ラテアートの練習帳" />
     <meta property="og:description" content="ラテアートの練習を、1杯ずつ撮って残す記録帳。◎△✕とひとことだけ。" />
@@ -168,10 +169,10 @@
           align-items: center;
           gap: 72px;
         }
-        .feature:nth-of-type(even) {
+        .feature.flip {
           grid-template-columns: auto 1fr;
         }
-        .feature:nth-of-type(even) .phone {
+        .feature.flip .phone {
           order: -1;
         }
       }
@@ -210,7 +211,7 @@
         </figure>
       </section>
 
-      <section class="feature">
+      <section class="feature flip">
         <div>
           <h2>注いで、撮って、ひとこと。</h2>
           <p>記録を始めると、すぐカメラが開きます。動画と、できあがりの1枚。◎△✕を選んで、うまくいかなかった原因をタップするだけ。メモは、書きたいときだけで大丈夫です。記録は、カップ帳に1杯ずつ並びます。</p>
@@ -230,7 +231,7 @@
         </figure>
       </section>
 
-      <section class="feature">
+      <section class="feature flip">
         <div>
           <h2>次の一手が、手元に残る。</h2>
           <p>毎回、次の一手をひとつ決めておくと、次に撮るときカメラの上に出ます。つまずきやすいところは、記録から自動でまとめます。</p>
@@ -243,7 +244,7 @@
       <section class="feature">
         <div>
           <h2>型の道すじで、次の練習が決まる。</h2>
-          <p>ハート、チューリップ、ロゼッタ。10の型を、やさしい順に並べています。どの型からでも始められます。</p>
+          <p>ハート、チューリップ、ロゼッタ、スワン。型は、おすすめの順につながった道すじになっています。どの型からでも始められます。</p>
         </div>
         <figure class="phone">
           <img src="/img/types.webp" width="780" height="1272" alt="型の一覧。練習中のロゼッタ、ハート、チューリップと、直近の結果の点" loading="lazy" decoding="async" />
