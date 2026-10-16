@@ -1,7 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { db } from '../data/db'
-import { practicingSkillIds, recordsOf } from '../data/repo'
+import { practicingSkillIds, recordedSkillIds, recordsOf } from '../data/repo'
 import { recentForm, type RecentForm } from '../domain/form'
 import { computeStates, indexById, practiceOrder, sortByDepth } from '../domain/logic'
 import { formatAgo, splitName } from './common'
@@ -29,10 +29,11 @@ export function MapScreen({ domainId }: { domainId?: string }) {
   }
 
   const data = useLiveQuery(async () => {
-    const [domains, allSkills, practicing] = await Promise.all([
+    const [domains, allSkills, practicing, recorded] = await Promise.all([
       db.domains.orderBy('order').toArray(),
       db.skills.toArray(),
       practicingSkillIds(),
+      recordedSkillIds(),
     ])
     // タブから開いたときは、最後に見ていた分野を出す
     const wanted = domainId ?? readStorage('local', LAST_DOMAIN_KEY)
@@ -45,7 +46,7 @@ export function MapScreen({ domainId }: { domainId?: string }) {
       const last = records[0]?.createdAt ?? 0
       stats.set(s.id, { count: records.length, form: recentForm(records), last })
     }
-    return { domains, current, skills, stats, practicing }
+    return { domains, current, skills, stats, practicing, recorded }
   }, [domainId])
 
   const currentId = data?.current?.id
@@ -54,7 +55,7 @@ export function MapScreen({ domainId }: { domainId?: string }) {
   }, [currentId])
 
   if (!data) return null
-  const { domains, current, skills, stats, practicing } = data
+  const { domains, current, skills, stats, practicing, recorded } = data
   const states = computeStates(skills, practicing)
   const byId = indexById(skills)
   const ordered = sortByDepth(skills)
@@ -178,7 +179,7 @@ export function MapScreen({ domainId }: { domainId?: string }) {
                   <PatternImage name={s.name} />
                   <span className="type-row-text">
                     <span className="type-name">{splitName(s.name).main}</span>
-                    <span className="muted small">{recommendLabel(s, byId, practicing)}</span>
+                    <span className="muted small">{recommendLabel(s, byId, practicing, recorded)}</span>
                   </span>
                 </a>
               </li>
