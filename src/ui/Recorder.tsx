@@ -88,6 +88,8 @@ export function Recorder({
   const recorder = useRef<MediaRecorder | null>(null)
   /** 押して（または上限で）止めたか。録画が勝手に止まったら、この形式では撮れない合図 */
   const stoppedByUser = useRef(false)
+  /** 録画中に画面が隠れた（電話・アプリの切り替え）。そのせいで止まったのなら、形式のせいにしない */
+  const hiddenWhileRecording = useRef(false)
   const [audio, setAudio] = useState(() => readStorage('local', AUDIO_KEY) !== 'off')
   const [mode, setMode] = useState<Mode>(() => (readStorage('local', MODE_KEY) === 'photo' ? 'photo' : 'video'))
   const [showRefs, setShowRefs] = useState(false)
@@ -137,6 +139,14 @@ export function Recorder({
     }
   }, [withAudio, quality])
 
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden' && recorder.current?.state === 'recording') hiddenWhileRecording.current = true
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => document.removeEventListener('visibilitychange', onVisibility)
+  }, [])
+
   // できあがりを撮る画面に切り替えたら、開いているカメラをそのまま映す
   useEffect(() => {
     if (finished && preview.current && stream.current) preview.current.srcObject = stream.current
@@ -159,6 +169,7 @@ export function Recorder({
 
   const start = () => {
     stoppedByUser.current = false
+    hiddenWhileRecording.current = false
     const s = stream.current
     setNotice(undefined)
     const mimeType = pickRecorderMimeType(recorderSupports, audio, quality)
@@ -187,6 +198,11 @@ export function Recorder({
       if (verdict === 'too-short') {
         // 押してすぐ止めたなど、短すぎる録画が空なのは、形式のせいではない（もう一度撮れば撮れる）
         setNotice('短すぎて録画できませんでした。もう一度撮ってください')
+        return
+      }
+      if (verdict === 'broken' && (hiddenWhileRecording.current || document.visibilityState === 'hidden')) {
+        // 電話・アプリの切り替えで止まった。形式のせいではない
+        setNotice('録画が中断されました。もう一度撮ってください')
         return
       }
       if (verdict === 'broken') {

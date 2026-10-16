@@ -83,14 +83,21 @@ export function writeStatements(db: D1Database, userId: string, changes: EntityC
       )
       .bind(...params)
   })
-  // メディアを消したら、サーバーに置いた写真・動画のサムネイルも消す
-  const removedMedia = changes
-    .filter((c) => c.kind === 'media' && c.deleted)
-    .flatMap((c) => [c.id, posterPhotoId(c.id)])
+  // メディアを消したら、サーバーに置いた写真・動画のサムネイルも消す。
+  // 削除が古くて負けた（ほかの端末があとで書き直した）ときは、行が残るので消さない
+  const removedMedia = changes.filter((c) => c.kind === 'media' && c.deleted).map((c) => c.id)
   for (const ids of chunks(removedMedia, IDS_PER_STATEMENT)) {
+    // 2か所で同じ id を使うので、番号付きで束縛する（?1 は利用者）
+    const list = ids.map((_, i) => `?${i + 2}`).join(', ')
     statements.push(
       db
-        .prepare(`DELETE FROM user_photos WHERE user_id = ? AND id IN (${ids.map(() => '?').join(', ')})`)
+        .prepare(
+          `DELETE FROM user_photos WHERE user_id = ?1 AND id IN (
+             SELECT id FROM user_entities WHERE user_id = ?1 AND kind = 'media' AND deleted = 1 AND id IN (${list})
+             UNION ALL
+             SELECT id || '${posterPhotoId('')}' FROM user_entities WHERE user_id = ?1 AND kind = 'media' AND deleted = 1 AND id IN (${list})
+           )`,
+        )
         .bind(userId, ...ids),
     )
   }

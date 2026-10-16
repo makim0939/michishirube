@@ -197,6 +197,11 @@ export function SyncSettings({ notice }: { notice?: string }) {
                 : '同期しています…'}
             {pending > 0 && `（送っていない変更が ${pending} 件）`}
           </p>
+          {status.photosFull && (
+            <p className="muted small">
+              サーバーに置ける写真の量（50MB）を超えたため、写真の一部をほかの端末に送れていません。いらない写真・記録を消すと、あとでまた送ります。
+            </p>
+          )}
           <div className="row wrap">
             <button
               className="btn small"
@@ -238,8 +243,11 @@ export function SyncSettings({ notice }: { notice?: string }) {
           message="アカウントと、サーバーに置いた記録・写真をすべて削除します。元に戻せません。この端末の記録と、YouTube に上げた動画は残ります。"
           onConfirm={() =>
             run(async () => {
-              await deleteAccount()
-              toast.show('アカウントを削除しました')
+              toast.show(
+                (await deleteAccount())
+                  ? 'アカウントを削除しました'
+                  : 'ログインが切れていたため、削除できたか確かめられませんでした。ほかの端末で削除していなければ、ログインし直してから削除してください',
+              )
             })
           }
         >

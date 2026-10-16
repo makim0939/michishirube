@@ -4,7 +4,8 @@ import { db } from './db'
 import { pickRecorderMimeType } from './mediaPrep'
 import { addRecord, createDomain, createSkill, ensureSeeded } from './repo'
 import { getVideoStorage, setVideoStorage, setYoutubePrivacy } from './videoStorage'
-import { applyRemote, connectWithConfig, runSync } from './sync'
+import { applyRemote, connectWithConfig, getSyncStatus, runSync } from './sync'
+import { logout } from './account'
 import { selectVideosToDrop } from './tidy'
 import { uploadVideo, videoMeta, youtubePlayable } from './youtube'
 
@@ -113,6 +114,12 @@ describe('同期が止まらないようにする', () => {
     await connectWithConfig({ url: 'https://api.example', token: 't' })
     expect(server.rows.get(`record:${recordId}`)?.deleted).toBe(false)
     expect(await db.outbox.count()).toBe(0)
+    expect((await getSyncStatus()).photosFull).toBe(true)
+    // 断られる写真を、同期のたびに送り直さない
+    const puts = () => server.fetch.mock.calls.filter(([, init]) => init?.method === 'PUT').length
+    const before = puts()
+    await runSync()
+    expect(puts()).toBe(before)
   })
 
   it('サーバーが受け付けない大きさのものは送らず、ほかの変更は送る', async () => {
@@ -124,6 +131,25 @@ describe('同期が止まらないようにする', () => {
     await connectWithConfig({ url: 'https://api.example', token: 't' })
     expect(server.rows.has(`skill:${big}`)).toBe(false)
     expect(server.rows.get(`skill:${small}`)?.deleted).toBe(false)
+    // 送れなかったものは「送っていない変更」に残る
+    expect((await db.outbox.toArray()).map((e) => e.id)).toEqual([big])
+  })
+
+  it('ログアウトしたら、写真をサーバーに置いた印を消す（別のアカウントでも置き直す）', async () => {
+    const server = fakeServer()
+    vi.stubGlobal('fetch', server.fetch)
+    const domainId = await createDomain('ピアノ')
+    const recordId = await addRecord({
+      skillId: await createSkill(domainId, input('A')),
+      reason: 'x',
+      nextAction: '',
+      files: [new Blob(['photo'], { type: 'image/jpeg' })],
+    })
+    await connectWithConfig({ url: 'https://api.example', token: 't' })
+    const [m] = await db.media.where('recordId').equals(recordId).toArray()
+    expect(m.cloudPhoto).toBe(true)
+    await logout()
+    expect((await db.media.get(m.id))?.cloudPhoto).toBeUndefined()
   })
 
   it('分野・型が後ろのページにあっても、2台目と分かる', async () => {

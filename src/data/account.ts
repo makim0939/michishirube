@@ -211,6 +211,20 @@ export async function loginWithGoogle(): Promise<{ firstDevice: boolean } | null
   return result?.kind === 'login' ? completeLogin(result) : null
 }
 
+/**
+ * つながりを切り、この端末の YouTube の鍵と、写真をサーバーに置いた印を消す
+ * （次に別のアカウント・作り直したアカウントでログインしても、写真を置き直すように）
+ */
+async function forgetConnection() {
+  await disconnectSync()
+  await forgetYoutubeKey()
+  await db.media.toCollection().modify((m) => {
+    delete m.cloudPhoto
+    delete m.cloudPoster
+    delete m.cloudPosterEnd
+  })
+}
+
 /** この端末のログインを終える。端末の記録はそのまま残る */
 export async function logout() {
   const config = await getSyncConfig()
@@ -220,29 +234,23 @@ export async function logout() {
       () => {},
     )
   }
-  await disconnectSync()
-  await forgetYoutubeKey()
+  await forgetConnection()
 }
 
-/** アカウントと、サーバーに置いたデータをすべて消す。端末の記録はそのまま残る */
-export async function deleteAccount() {
+/**
+ * アカウントと、サーバーに置いたデータをすべて消す。端末の記録はそのまま残る。
+ * ログインが切れていた（ほかの端末で削除した・長く使わなかった）ときは、消せたか分からないので false を返す（この端末のログインは終える）
+ */
+export async function deleteAccount(): Promise<boolean> {
   const config = await getSyncConfig()
-  if (!config) return
+  if (!config) return false
   let res: Response
   try {
     res = await fetch(`${serverOf(config)}/api/account`, { method: 'DELETE', headers: { Authorization: `Bearer ${config.token}` } })
   } catch {
     throw new SyncError('サーバーにつながりません。電波を確認してください')
   }
-  // ログインが切れていると、サーバーでは何も消えていない。消えたことにせず、ログインし直してもらう
-  if (res.status === 401) throw new SyncError('ログインが切れています。ログインし直してから、もう一度削除してください', 401)
-  if (!res.ok) throw new SyncError(`削除できませんでした（${res.status}）`, res.status)
-  await disconnectSync()
-  await forgetYoutubeKey()
-  // 写真をサーバーに置いた印も消す（次にログインしたら置き直す）
-  await db.media.toCollection().modify((m) => {
-    delete m.cloudPhoto
-    delete m.cloudPoster
-    delete m.cloudPosterEnd
-  })
+  if (!res.ok && res.status !== 401) throw new SyncError(`削除できませんでした（${res.status}）`, res.status)
+  await forgetConnection()
+  return res.ok
 }

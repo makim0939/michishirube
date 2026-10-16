@@ -206,26 +206,34 @@ export function tidyContentFiles(): Promise<void> {
 async function sweepNow() {
   const known = new Set<string>()
   const used = new Set<string>()
-  const relinkable = new Map<string, { id: string; optimized?: VideoQuality }>()
+  /** 中身の無い行と、つなぎ直す候補のファイル名（よいものから順に） */
+  const lost: { id: string; candidates: { path: string; optimized?: VideoQuality }[] }[] = []
   await db.media.each((m) => {
     known.add(m.id)
     if (m.file) used.add(m.file)
     else if (!m.blob) {
-      relinkable.set(contentPath(m), { id: m.id })
-      // 画質をそろえた動画は、元のファイルと入れ替わっている
-      if (m.type.startsWith('video/')) {
-        for (const quality of ['standard', 'high'] as const) relinkable.set(optimizedPath(m, quality), { id: m.id, optimized: quality })
-      }
+      // 元のファイルがあれば元を使う（画質をそろえる途中で止まると、書きかけのファイルが残っていることがある）。
+      // そろえ終えると元は消え、高画質から標準へ軽くする途中なら、高画質のほうが書き終わっている
+      lost.push({
+        id: m.id,
+        candidates: [
+          { path: contentPath(m) },
+          ...(m.type.startsWith('video/')
+            ? (['high', 'standard'] as const).map((quality) => ({ path: optimizedPath(m, quality), optimized: quality }))
+            : []),
+        ],
+      })
     }
   })
-  const relinked = new Set<string>()
-  for (const path of await listContentFiles()) {
-    if (used.has(path)) continue
-    const link = relinkable.get(path)
-    if (link && !relinked.has(link.id)) {
-      relinked.add(link.id)
-      await db.media.update(link.id, link.optimized ? { file: path, optimized: link.optimized } : { file: path })
-    } else if (known.has(contentIdOf(path) ?? '')) await deleteFile(path)
+  const listed = new Set(await listContentFiles())
+  for (const { id, candidates } of lost) {
+    const found = candidates.find((c) => listed.has(c.path))
+    if (!found) continue
+    await db.media.update(id, found.optimized ? { file: found.path, optimized: found.optimized } : { file: found.path })
+    used.add(found.path)
+  }
+  for (const path of listed) {
+    if (!used.has(path) && known.has(contentIdOf(path) ?? '')) await deleteFile(path)
   }
 }
 

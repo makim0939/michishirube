@@ -159,6 +159,16 @@ describe('動画・写真の中身をアプリのファイルへ移す', () => {
     expect(files.deleted).toEqual([])
   })
 
+  it('元のファイルと、画質をそろえる途中のファイルが両方あれば、元につなぎ直す', async () => {
+    await db.media.add(media({ id: 'both', blob: undefined, contentAt: 5 }))
+    files.listed = ['media/both-5-standard.mp4', 'media/both-5.mp4']
+    await tidyContentFiles()
+    const row = await db.media.get('both')
+    expect(row?.file).toBe('media/both-5.mp4')
+    expect(row?.optimized).toBeUndefined()
+    expect(files.deleted).toEqual(['media/both-5-standard.mp4'])
+  })
+
   it('まだ行の無いファイルは消さない（同期などで行が戻ってきたら、つなぎ直せるように）', async () => {
     files.listed = ['media/1b2c-3d4e-1700000000000.mp4']
     await tidyContentFiles()

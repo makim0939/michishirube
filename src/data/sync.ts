@@ -25,11 +25,16 @@ export interface SyncConfig {
 export interface SyncStatus {
   lastSyncedAt?: number
   error?: string
+  /** サーバーに置ける写真の量を超えて、置けていない写真がある */
+  photosFull?: boolean
 }
 
 const CONFIG_KEY = 'sync:config'
 const CURSOR_KEY = 'sync:cursor'
 const STATUS_KEY = 'sync:status'
+/** 写真の置ける量を超えた時刻。しばらくは写真を送らない（断られる写真を、同期のたびに送り直さないように） */
+const PHOTOS_FULL_KEY = 'sync:photos-full'
+const PHOTOS_FULL_RETRY_MS = 24 * 60 * 60 * 1000
 
 export class SyncError extends Error {
   constructor(
@@ -218,21 +223,25 @@ async function doSync() {
     await uploadPosters(config)
     // 送りきるまで、または受け取りきるまで繰り返す（上限つき）
     for (let round = 0; round < 50; round++) {
+      // 同期の途中でログアウト・すべて削除したら、受け取ったものを書き戻さずにやめる
+      if (!(await getSyncConfig())) return
       const since = ((await db.meta.get(CURSOR_KEY))?.value as number | undefined) ?? 0
       const outbox = await db.outbox.limit(SYNC_LIMITS.maxChanges).toArray()
       const changes: EntityChange[] = []
+      const sent: typeof outbox = []
       for (const entry of outbox) {
         const local = await readLocal(entry.kind, entry.id)
         if (local) {
           const data = toWire(entry.kind, local as Record<string, unknown>)
-          // サーバーが受け付けない大きさのもの（とても長いメモなど）は送らない。
-          // 送ると全体が断られ、ほかの変更もずっと送れなくなる（この端末には残る。短くすればまた送る）
+          // サーバーが受け付けない大きさのもの（とても長いメモなど）は送らない。送ると全体が断られ、ほかの変更もずっと送れなくなる。
+          // outbox には残すので、「送っていない変更」に数えられる（短くすれば送る）
           if (JSON.stringify(data).length > SYNC_LIMITS.maxEntityBytes) continue
           changes.push({ kind: entry.kind, id: entry.id, updatedAt: local.updatedAt, deleted: false, data })
         } else {
           // 端末に無い＝消した。消した時刻を updatedAt として送る
           changes.push({ kind: entry.kind, id: entry.id, updatedAt: entry.at, deleted: true })
         }
+        sent.push(entry)
       }
       const res = (await (
         await api(config, '/api/sync', {
@@ -242,31 +251,46 @@ async function doSync() {
         })
       ).json()) as SyncResponse
 
+      if (!(await getSyncConfig())) return
       await applyRemote(res.changes)
       await db.transaction('rw', db.outbox, db.meta, async () => {
         // 送っている間にまた変わったものは、次の回で送る
-        for (const entry of outbox) {
+        for (const entry of sent) {
           const now = await db.outbox.get([entry.kind, entry.id])
           if (now && now.at === entry.at) await db.outbox.delete([entry.kind, entry.id])
         }
         await db.meta.put({ key: CURSOR_KEY, value: res.cursor })
       })
-      if (!res.more && (await db.outbox.count()) === 0) break
+      // 送れないもの（大きすぎる）だけが残っていたら、終わり
+      if (!res.more && (await db.outbox.count()) <= outbox.length - sent.length) break
     }
-    await setStatus({ lastSyncedAt: Date.now() })
+    await setStatus({ lastSyncedAt: Date.now(), ...((await photosFull()) ? { photosFull: true } : {}) })
   } catch (e) {
     await setStatus({ ...(await getSyncStatus()), error: e instanceof Error ? e.message : String(e) })
     throw e
   }
 }
 
+async function photosFull(): Promise<boolean> {
+  const at = (await db.meta.get(PHOTOS_FULL_KEY))?.value as number | undefined
+  return at !== undefined && Date.now() - at < PHOTOS_FULL_RETRY_MS
+}
+
+/** 写真の置ける量を超えたことを覚える（写真・サムネイルを送るのを、しばらく休む） */
+async function markPhotosFull() {
+  await db.meta.put({ key: PHOTOS_FULL_KEY, value: Date.now() })
+}
+
 /** 写真（縮小済み）をサーバーに置く。置けたら cloudPhoto を立てて、ほかの端末でも見られるようにする */
 async function uploadPhotos(config: SyncConfig) {
+  if (await photosFull()) return
   // 縮小できなかった大きい写真はサーバーに置かない（この端末にだけ残る）
   const targets = await db.media
     .filter((m) => m.type.startsWith('image/') && hasContent(m) && !m.cloudPhoto && m.size <= PHOTO_MAX_BYTES)
     .toArray()
   for (const m of targets) {
+    // ログアウトしたら、残りは送らない
+    if (!(await getSyncConfig())) return
     try {
       const body = await contentBlob(m)
       if (!body) continue
@@ -279,7 +303,7 @@ async function uploadPhotos(config: SyncConfig) {
       // 電波が無いときは同期ごと止める。サーバーが受け付けない写真・端末にファイルが無い写真は飛ばして、ほかの同期を続ける
       if ((e instanceof SyncError && e.status === 400) || e instanceof ContentUnavailableError) continue
       // サーバーに置ける量を超えたら、写真は置かずに、記録などの同期を続ける
-      if (e instanceof SyncError && e.status === 413) return
+      if (e instanceof SyncError && e.status === 413) return markPhotosFull()
       throw e
     }
     await db.transaction('rw', db.media, db.outbox, async () => {
@@ -294,6 +318,7 @@ async function uploadPhotos(config: SyncConfig) {
  * 端末から動画を消したあとや、入れ直した端末・別の端末でも、カップの絵と再生前の絵を出せるようにする
  */
 async function uploadPosters(config: SyncConfig) {
+  if (await photosFull()) return
   // まだ置いていないもの、置いたのが前の作り方（最初のコマ）で、できあがりのコマを作り直したもの
   const targets = await db.media
     .filter(
@@ -305,6 +330,7 @@ async function uploadPosters(config: SyncConfig) {
     )
     .toArray()
   for (const m of targets) {
+    if (!(await getSyncConfig())) return
     try {
       await api(config, `/api/photos/${encodeURIComponent(posterPhotoId(m.id))}`, {
         method: 'PUT',
@@ -313,7 +339,7 @@ async function uploadPosters(config: SyncConfig) {
       })
     } catch (e) {
       if (e instanceof SyncError && e.status === 400) continue
-      if (e instanceof SyncError && e.status === 413) return
+      if (e instanceof SyncError && e.status === 413) return markPhotosFull()
       throw e
     }
     await db.transaction('rw', db.media, db.outbox, async () => {
@@ -397,7 +423,9 @@ export async function connectWithConfig(config: SyncConfig): Promise<{ firstDevi
 }
 
 export async function disconnectSync() {
-  await db.meta.bulkDelete([CONFIG_KEY, CURSOR_KEY, STATUS_KEY])
+  await db.meta.bulkDelete([CONFIG_KEY, CURSOR_KEY, STATUS_KEY, PHOTOS_FULL_KEY])
+  // 動いている同期が終わるのを待つ（このあと端末のデータを消しても、受け取ったものが書き戻されないように）
+  await running?.catch(() => {})
 }
 
 // ---- 自動で同期する ----
