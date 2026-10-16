@@ -137,9 +137,10 @@ export function Recorder({
     }
   }, [withAudio, quality])
 
-  // できあがりを撮る画面に切り替えたら、開いているカメラをそのまま映す
+  // できあがりを撮る画面に切り替えたとき・撮り直しで録画の画面に戻ったときも、開いているカメラをそのまま映す
+  // （画面ごとに映像の部品が作り直されるので、そのつど映し直す）
   useEffect(() => {
-    if (finished && preview.current && stream.current) preview.current.srcObject = stream.current
+    if (preview.current && stream.current) preview.current.srcObject = stream.current
   }, [finished])
 
   // 録画中の経過時間と、上限での自動停止
@@ -255,6 +256,10 @@ export function Recorder({
         <div className="finish-guide" ref={guide} aria-hidden="true" />
         <p className="finish-hint">できあがりのカップを、枠の中に入れて1枚</p>
         <div className="recorder-bottom">
+          {/* 録画がうまくいかなかったとき、動画を捨てて録画からやり直せる（シャッターから離し、うっかり押さない位置に） */}
+          <button className="btn small ghost recorder-retake" disabled={shooting} onClick={() => setFinished(undefined)}>
+            撮り直す
+          </button>
           <button
             className="shutter-button"
             aria-label="できあがりを撮る"

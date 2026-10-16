@@ -169,7 +169,13 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
   // ラテアートの型では、うまくいかなかった原因をワンタップで選べる
   const causeOptions: readonly string[] = patternFor(skill.name) ? LATTE_CAUSES : []
   const hasNewMedia = items.some((i) => i.kind === 'new' || (i.kind === 'existing' && i.replaced))
-  const unsaved = editing ? dirty : items.length > 0
+  // 結果・原因・次の一手・メモのどれかを入れてある（空白だけは入れていないのと同じ。保存の条件と同じ数え方）
+  const hasInput =
+    !!outcome || !!draft.reason?.trim() || !!draft.nextAction?.trim() || (draft.causes?.length ?? 0) > 0
+  // 新しい記録は、動画・写真か入力が1つでもあれば残す価値がある（無いまま戻ると何も失わない）
+  const unsaved = editing ? dirty : items.length > 0 || hasInput
+  // 新しい記録で、まだ何も無い（保存しても「何か入れてください」になるだけなので、押せないようにする）
+  const nothingToSave = !editing && items.length === 0 && !hasInput
 
   const change = () => setDirty(true)
 
@@ -251,7 +257,8 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
       try {
         const reason = draft.reason ?? ''
         const nextAction = draft.nextAction ?? ''
-        const causes = draft.causes ?? []
+        // 原因は、△✕のときだけ選べる。書きかけから戻ったとき、結果だけ消えて原因が見えないまま残っても、保存はしない
+        const causes = editing || outcome === 'meh' || outcome === 'bad' ? (draft.causes ?? []) : []
         const added: NewMedia[] = []
         const replace: ({ id: string } & NewMedia)[] = []
         for (const i of items) {
@@ -353,12 +360,19 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
           <p>
             {editing
               ? '編集した内容が保存されていません。保存せずに戻りますか？'
-              : `撮った動画・写真が ${items.length} 件あります。保存せずに戻ると消えます。`}
+              : items.length > 0
+                ? `撮った動画・写真が ${items.length} 件あります。保存せずに戻ると消えます。`
+                : '入力した内容が保存されていません。保存せずに戻ると消えます。'}
           </p>
           <div className="row">
             <button
               className="btn danger"
-              onClick={() => ('to' in confirmLeave ? go(confirmLeave.to) : goBack(fallback))}
+              onClick={() => {
+                // 「保存せずに戻る」と選んだ書きかけは、次に開いたときに現れないよう消す
+                if (!editing) clearDraft()
+                if ('to' in confirmLeave) go(confirmLeave.to)
+                else goBack(fallback)
+              }}
             >
               {'to' in confirmLeave ? '保存せずに移動' : '保存せずに戻る'}
             </button>
@@ -642,10 +656,10 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
         ) : (
           // 続けて淹れるときは「もう1杯」（保存してすぐカメラへ）。終わるときは「保存」
           <div className="save-pair">
-            <button className="btn" disabled={saving} onClick={() => save(true)}>
+            <button className="btn" disabled={saving || nothingToSave} onClick={() => save(true)}>
               保存してもう1杯
             </button>
-            <button className="btn primary" disabled={saving} onClick={() => save()}>
+            <button className="btn primary" disabled={saving || nothingToSave} onClick={() => save()}>
               {saving ? '保存中…' : '保存'}
             </button>
           </div>
