@@ -4,14 +4,27 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ラテ帳｜ラテアートの練習帳</title>
-    <meta name="description" content="ラテアートの練習を、カップの写真と動画で残す記録帳。うまくいった・いかなかった理由を残して、次の一杯につなげます。" />
+    <meta name="description" content="ラテアートの練習を、1杯ずつ撮って残す記録帳。◎△✕とひとことだけ。最初と最新を見くらべて、次の一杯につなげます。" />
+    <link rel="canonical" href="https://latte.makimura.me/" />
     <link rel="icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" href="/icon.png" />
+    <meta name="theme-color" content="#faf7f2" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#1d1814" media="(prefers-color-scheme: dark)" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="ラテ帳｜ラテアートの練習帳" />
+    <meta property="og:description" content="ラテアートの練習を、1杯ずつ撮って残す記録帳。◎△✕とひとことだけ。" />
+    <meta property="og:url" content="https://latte.makimura.me/" />
+    <meta property="og:image" content="https://latte.makimura.me/icon.png" />
+    <meta name="twitter:card" content="summary" />
     <style>
       :root {
         color-scheme: light dark;
         --bg: #faf7f2;
         --ink: #2a1f19;
         --muted: #7a6a5e;
+        --line: #e3d9cc;
+        --button: #2a1f19;
+        --button-ink: #faf7f2;
         font-family: system-ui, -apple-system, 'Hiragino Sans', 'Noto Sans JP', sans-serif;
         line-height: 1.8;
       }
@@ -20,78 +33,253 @@
           --bg: #1d1814;
           --ink: #f1e9df;
           --muted: #a89888;
+          --line: #3a3029;
+          --button: #f1e9df;
+          --button-ink: #1d1814;
         }
       }
+      * {
+        box-sizing: border-box;
+      }
       body {
-        max-width: 560px;
-        margin: 0 auto;
-        padding: 72px 24px 64px;
+        margin: 0;
         background: var(--bg);
         color: var(--ink);
       }
-      img {
+      main,
+      footer {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 0 24px;
+      }
+      p {
+        margin: 0 0 1em;
+      }
+      a {
+        color: inherit;
+      }
+      h1,
+      h2 {
+        font-family: 'Hiragino Mincho ProN', 'Noto Serif JP', serif;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+      }
+
+      .hero {
+        display: grid;
+        gap: 40px;
+        padding: 64px 0 72px;
+      }
+      .hero img.icon {
         width: 72px;
         height: 72px;
         border-radius: 16px;
       }
       h1 {
         margin: 20px 0 4px;
-        font-family: 'Hiragino Mincho ProN', 'Noto Serif JP', serif;
         font-size: 2rem;
-        font-weight: 600;
         letter-spacing: 0.12em;
       }
+      .tagline {
+        margin: 0 0 20px;
+        font-family: 'Hiragino Mincho ProN', 'Noto Serif JP', serif;
+        font-size: 1.35rem;
+        line-height: 1.6;
+        letter-spacing: 0.06em;
+      }
       .lead {
-        margin: 0 0 32px;
+        margin: 0 0 28px;
         color: var(--muted);
       }
-      p {
-        margin: 0 0 1em;
+      .button {
+        display: inline-block;
+        padding: 14px 36px;
+        border-radius: 14px;
+        background: var(--button);
+        color: var(--button-ink);
+        text-decoration: none;
+        letter-spacing: 0.06em;
       }
+      .note {
+        margin: 14px 0 0;
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      .phone {
+        width: min(72vw, 280px);
+        margin: 0;
+        border: 1px solid var(--line);
+        border-radius: 32px;
+        overflow: hidden;
+        background: #faf7f2;
+      }
+      .phone img {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+
+      .feature {
+        display: grid;
+        gap: 28px;
+        justify-items: start;
+        padding: 56px 0;
+        border-top: 1px solid var(--line);
+      }
+      .feature h2 {
+        margin: 0 0 12px;
+        font-size: 1.3rem;
+        line-height: 1.6;
+      }
+      .feature p {
+        margin: 0;
+        color: var(--muted);
+      }
+      .keep {
+        padding: 56px 0;
+        border-top: 1px solid var(--line);
+      }
+      .keep h2 {
+        margin: 0 0 12px;
+        font-size: 1.3rem;
+      }
+      .keep p {
+        margin: 0 0 0.6em;
+        color: var(--muted);
+      }
+      .start {
+        padding: 56px 0 64px;
+        border-top: 1px solid var(--line);
+      }
+      .start h2 {
+        margin: 0 0 20px;
+        font-size: 1.3rem;
+      }
+
+      @media (min-width: 800px) {
+        .hero {
+          grid-template-columns: 1fr auto;
+          align-items: center;
+          gap: 72px;
+          padding: 96px 0;
+        }
+        .feature {
+          grid-template-columns: 1fr auto;
+          align-items: center;
+          gap: 72px;
+        }
+        .feature.flip {
+          grid-template-columns: auto 1fr;
+        }
+        .feature.flip .phone {
+          order: -1;
+        }
+      }
+
       .en {
-        margin-top: 32px;
+        margin-top: 8px;
         padding-top: 24px;
-        border-top: 1px solid var(--muted);
+        border-top: 1px solid var(--line);
         color: var(--muted);
         font-size: 0.95rem;
+        max-width: 560px;
       }
       nav {
         display: flex;
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 4px;
-        margin-top: 40px;
-      }
-      a {
-        color: inherit;
+        flex-wrap: wrap;
+        gap: 4px 24px;
+        margin: 40px 0 0;
+        padding-bottom: 64px;
+        font-size: 0.95rem;
       }
     </style>
   </head>
   <body>
-    <img src="/icon.png" alt="" />
-    <h1>ラテ帳</h1>
-    <p class="lead">ラテアートの練習帳</p>
+    <main>
+      <section class="hero">
+        <div>
+          <img class="icon" src="/icon.png" width="72" height="72" alt="" />
+          <h1>ラテ帳</h1>
+          <p class="tagline">ラテアートの練習を、<br />1杯ずつ残す。</p>
+          <p class="lead">撮って、◎△✕とひとこと。見返すたびに、次の一杯がわかる練習帳です。</p>
+          <a class="button" href="https://makim0939.github.io/michishirube/">Web 版をひらく</a>
+          <p class="note">登録なしで、すぐ始められます。</p>
+        </div>
+        <figure class="phone">
+          <img src="/img/today.webp" width="780" height="1272" alt="ラテ帳の「今日」の画面。最新の1杯の写真と、練習中の型、次の一手、記録するボタン" />
+        </figure>
+      </section>
 
-    <p>ラテアートの練習を、カップの写真と動画で残す記録帳です。</p>
-    <p>
-      注いだらすぐ撮って、◎△✕とひとことだけ残します。あとから見返して、次の一杯につなげられます。
-    </p>
-    <p>記録は、はじめは端末の中だけに置きます。Google でログインすると、機種を変えても、ほかの端末でも同じ記録を使えます。</p>
+      <section class="feature flip">
+        <div>
+          <h2>注いで、撮って、ひとこと。</h2>
+          <p>記録を始めると、すぐカメラが開きます。動画と、できあがりの1枚。◎△✕を選んで、うまくいかなかった原因をタップするだけ。メモは、書きたいときだけで大丈夫です。記録は、カップ帳に1杯ずつ並びます。</p>
+        </div>
+        <figure class="phone">
+          <img src="/img/cups.webp" width="780" height="1272" alt="カップ帳の画面。1杯ずつの写真に、番号と◎△✕が付いて並ぶ" loading="lazy" decoding="async" />
+        </figure>
+      </section>
 
-    <section lang="en" class="en">
-      <p>
-        Latte-chō (ラテ帳) is a practice journal for latte art. You record each cup with a photo and a short video, mark how it went, and look back to improve your next cup.
-      </p>
-      <p>
-        Records stay on your device by default. If you sign in with Google, you can use the same records on other devices. If you link YouTube, your practice videos can be uploaded to your own YouTube channel (unlisted by default) using the YouTube upload permission, which the app requests only when you link YouTube.
-      </p>
-    </section>
+      <section class="feature">
+        <div>
+          <h2>前の自分と、見くらべる。</h2>
+          <p>最初の1杯と、最新の1杯を、動画でも写真でも並べて見られます。上達は、並べるとよく分かります。</p>
+        </div>
+        <figure class="phone">
+          <img src="/img/compare.webp" width="780" height="1272" alt="型の画面。最近の調子の点と、最新と最初のラテアートの写真が並ぶ" loading="lazy" decoding="async" />
+        </figure>
+      </section>
 
-    <nav>
-      <a href="https://makim0939.github.io/michishirube/">Web 版を開く</a>
-      <a href="/privacy">プライバシーポリシー</a>
-      <a href="/privacy-en">Privacy Policy (English)</a>
-      <a href="https://github.com/makim0939/michishirube/issues">お問い合わせ</a>
-    </nav>
+      <section class="feature flip">
+        <div>
+          <h2>次の一手が、手元に残る。</h2>
+          <p>毎回、次の一手をひとつ決めておくと、次に撮るときカメラの上に出ます。つまずきやすいところは、記録から自動でまとめます。</p>
+        </div>
+        <figure class="phone">
+          <img src="/img/tips.webp" width="780" height="1272" alt="自分のコツの画面。いま意識していることと、つまずきやすいところ" loading="lazy" decoding="async" />
+        </figure>
+      </section>
+
+      <section class="feature">
+        <div>
+          <h2>型の道すじで、次の練習が決まる。</h2>
+          <p>ハート、チューリップ、ロゼッタ、スワン。型は、おすすめの順につながった道すじになっています。どの型からでも始められます。</p>
+        </div>
+        <figure class="phone">
+          <img src="/img/types.webp" width="780" height="1272" alt="型の一覧。練習中のロゼッタ、ハート、チューリップと、直近の結果の点" loading="lazy" decoding="async" />
+        </figure>
+      </section>
+
+      <section class="keep">
+        <h2>記録は、あなたのもの。</h2>
+        <p>記録は、はじめは端末の中だけに置きます。Google でログインすると、機種を変えても同じ記録を使えます。</p>
+        <p>動画の保存先を YouTube にすると、スマホの容量を使わずに残せます（標準は限定公開）。</p>
+      </section>
+
+      <section class="start">
+        <h2>ホーム画面に追加して、アプリのように。</h2>
+        <a class="button" href="https://makim0939.github.io/michishirube/">Web 版をひらく</a>
+        <p class="note">iPhone は Safari の「共有 → ホーム画面に追加」、Android は Chrome のメニューから「ホーム画面に追加」。</p>
+      </section>
+
+      <section lang="en" class="en">
+        <p>
+          Latte-chō (ラテ帳) is a practice journal for latte art. You record each cup with a photo and a short video, mark how it went, and look back to improve your next cup.
+        </p>
+        <p>
+          Records stay on your device by default. If you sign in with Google, you can use the same records on other devices. If you link YouTube, your practice videos can be uploaded to your own YouTube channel (unlisted by default) using the YouTube upload permission, which the app requests only when you link YouTube.
+        </p>
+      </section>
+    </main>
+
+    <footer>
+      <nav>
+        <a href="https://makim0939.github.io/michishirube/">Web 版を開く</a>
+        <a href="/privacy">プライバシーポリシー</a>
+        <a href="/privacy-en">Privacy Policy (English)</a>
+        <a href="https://github.com/makim0939/michishirube/issues">お問い合わせ</a>
+      </nav>
+    </footer>
   </body>
 </html>
