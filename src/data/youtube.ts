@@ -88,13 +88,14 @@ async function requireConfig(): Promise<SyncConfig> {
 
 // ---- アップロード ----
 
-let token: { value: string; expiresAt: number } | undefined
+/** 替えてもらった access token と、その元の鍵（ログアウト・別の人が連携し直したら、前の人のものを使わない） */
+let token: { value: string; expiresAt: number; refresh: string } | undefined
 
 /** アップロード用の access token。この端末の鍵をサーバーに渡し、1時間だけ使えるものに替えてもらう */
 async function accessToken(config: SyncConfig): Promise<string> {
-  if (token && token.expiresAt - Date.now() > 60_000) return token.value
   const refresh = await refreshToken()
   if (!refresh) throw new SyncError('YouTube と連携していません', 409)
+  if (token && token.refresh === refresh && token.expiresAt - Date.now() > 60_000) return token.value
   let res: { accessToken: string; expiresAt: number }
   try {
     res = (await (
@@ -109,7 +110,7 @@ async function accessToken(config: SyncConfig): Promise<string> {
     if (e instanceof SyncError && e.status === 409) await db.meta.delete(REFRESH_KEY)
     throw e
   }
-  token = { value: res.accessToken, expiresAt: res.expiresAt }
+  token = { value: res.accessToken, expiresAt: res.expiresAt, refresh }
   return token.value
 }
 
@@ -210,8 +211,13 @@ async function throwIfFailed(res: Response) {
   throw new Error(body.error?.message ?? `YouTube でエラーが起きました（${res.status}）`)
 }
 
-async function setUpload(id: string, patch: Partial<Media>) {
+/**
+ * 上げた結果を書く。contentAt を渡したら、上げているあいだに中身が差し替わった（切り取ったなど）ときは書かない
+ * （差し替えた中身は、アップ待ちのまま次に上げる）
+ */
+async function setUpload(id: string, patch: Partial<Media>, contentAt?: number) {
   await db.transaction('rw', db.media, db.outbox, async () => {
+    if (contentAt !== undefined && ((await db.media.get(id))?.contentAt ?? 0) !== contentAt) return
     await db.media.update(id, { ...patch, updatedAt: Date.now() })
     await markDirty('media', [id])
   })
@@ -262,7 +268,7 @@ async function doUploads() {
         const content = await contentBlob(m)
         if (!content) throw new ContentUnavailableError()
         const youtubeId = await uploadVideo(content, await videoMeta(m), tokenValue)
-        await setUpload(m.id, { upload: 'done', youtubeId, uploadError: undefined, uploadAttempts: undefined })
+        await setUpload(m.id, { upload: 'done', youtubeId, uploadError: undefined, uploadAttempts: undefined }, m.contentAt ?? 0)
       } catch (e) {
         if (e instanceof SyncError && (e.status === 409 || e.status === 400)) {
           // 連携していない・切れた・サーバーに Google の設定が無い：上げずに待つ（設定画面で連携すると再開する）
@@ -273,7 +279,7 @@ async function doUploads() {
         if (e instanceof QuotaExceeded) {
           // 上限は太平洋時間の0時に戻るので、半日おいて再開する
           await db.meta.put({ key: PAUSE_KEY, value: Date.now() + 12 * 60 * 60 * 1000 })
-          await setUpload(m.id, { upload: 'pending', uploadError: e.message })
+          await setUpload(m.id, { upload: 'pending', uploadError: e.message }, m.contentAt ?? 0)
           return
         }
         if (e instanceof SyncError || e instanceof TypeError) {
@@ -281,11 +287,15 @@ async function doUploads() {
           await db.media.update(m.id, { upload: 'pending' })
           return
         }
-        await setUpload(m.id, {
-          upload: 'failed',
-          uploadError: e instanceof Error ? e.message : String(e),
-          uploadAttempts: (m.uploadAttempts ?? 0) + 1,
-        })
+        await setUpload(
+          m.id,
+          {
+            upload: 'failed',
+            uploadError: e instanceof Error ? e.message : String(e),
+            uploadAttempts: (m.uploadAttempts ?? 0) + 1,
+          },
+          m.contentAt ?? 0,
+        )
       }
     }
   }

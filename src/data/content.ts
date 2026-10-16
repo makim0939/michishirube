@@ -170,8 +170,8 @@ async function optimizeNow(ids?: string[]) {
     }
     const swapped = await db.transaction('rw', db.media, async () => {
       const current = await db.media.get(id)
-      // 作り直しているあいだに、中身が差し替わった・消されたなら、作ったファイルは使わない
-      if (!current || current.file !== source) return false
+      // 作り直しているあいだに、中身が差し替わった（切り取ったなど）・消されたなら、作ったファイルは使わない
+      if (!current || current.file !== source || current.contentAt !== m.contentAt) return false
       // 中身はこの端末だけのものなので、同期の対象にしない（updatedAt も変えない）
       await db.media.update(
         id,
@@ -206,17 +206,41 @@ export function tidyContentFiles(): Promise<void> {
 async function sweepNow() {
   const known = new Set<string>()
   const used = new Set<string>()
-  const relinkable = new Map<string, string>()
+  /** 中身の無い行と、つなぎ直す候補のファイル名（よいものから順に） */
+  const lost: { id: string; candidates: { path: string; optimized?: VideoQuality }[] }[] = []
   await db.media.each((m) => {
     known.add(m.id)
     if (m.file) used.add(m.file)
-    else if (!m.blob) relinkable.set(contentPath(m), m.id)
+    // 画質をそろえ済みなのに中身が無いのは、YouTube に上げ終えて端末から消した動画（つなぎ直さない）
+    else if (!m.blob && !m.optimized) {
+      // 元のファイルがあれば元を使う（画質をそろえる途中で止まると、書きかけのファイルが残っていることがある）。
+      // そろえ終えると元は消え、高画質から標準へ軽くする途中なら、高画質のほうが書き終わっている
+      lost.push({
+        id: m.id,
+        candidates: [
+          { path: contentPath(m) },
+          ...(m.type.startsWith('video/')
+            ? (['high', 'standard'] as const).map((quality) => ({ path: optimizedPath(m, quality), optimized: quality }))
+            : []),
+        ],
+      })
+    }
   })
-  for (const path of await listContentFiles()) {
-    if (used.has(path)) continue
-    const id = relinkable.get(path)
-    if (id) await db.media.update(id, { file: path })
-    else if (known.has(contentIdOf(path) ?? '')) await deleteFile(path)
+  const listed = new Set(await listContentFiles())
+  for (const { id, candidates } of lost) {
+    const found = candidates.find((c) => listed.has(c.path))
+    if (!found) continue
+    const linked = await db.transaction('rw', db.media, async () => {
+      // ファイルの一覧を読むあいだに、同期などで行が変わった（中身が来た・差し替わった・消された）なら、つなぎ直さない
+      const current = await db.media.get(id)
+      if (!current || current.file || current.blob || current.optimized || contentPath(current) !== candidates[0].path) return false
+      await db.media.update(id, found.optimized ? { file: found.path, optimized: found.optimized } : { file: found.path })
+      return true
+    })
+    if (linked) used.add(found.path)
+  }
+  for (const path of listed) {
+    if (!used.has(path) && known.has(contentIdOf(path) ?? '')) await deleteFile(path)
   }
 }
 

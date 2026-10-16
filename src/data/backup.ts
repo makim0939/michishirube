@@ -283,6 +283,10 @@ export async function importBackup(zips: Blob[]): Promise<ImportSummary> {
     if (content) {
       row.blob = new Blob([content], { type: m.type })
       if (m.type.startsWith('video/') && !m.upload) row.upload = 'pending'
+      // 書き出したときと別のアカウントかもしれないので、中身のある写真・サムネイルはサーバーに置き直す
+      delete row.cloudPhoto
+      delete row.cloudPoster
+      delete row.cloudPosterEnd
     }
     return row
   })

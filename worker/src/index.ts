@@ -1,6 +1,6 @@
 import { Hono, type Context } from 'hono'
 import { cors } from 'hono/cors'
-import { PHOTO_MAX_BYTES } from '../../shared/protocol'
+import { mediaIdOfPhoto, PHOTO_MAX_BYTES, PHOTO_QUOTA_BYTES } from '../../shared/protocol'
 import {
   claimLegacy,
   createAuthRequest,
@@ -37,9 +37,6 @@ type App = { Bindings: Env; Variables: { userId: string } }
 const APP_SCHEME = 'io.github.makim0939.lattecho'
 
 const app = new Hono<App>()
-
-/** 1人が置ける写真・サムネイルの合計（無料のデータベースの大きさに収めるため） */
-const PHOTO_QUOTA_BYTES = 50 * 1024 * 1024
 
 app.use(
   '/api/*',
@@ -88,6 +85,11 @@ app.put('/api/photos/:id', async (c) => {
   const id = c.req.param('id')
   const type = c.req.header('Content-Type') ?? ''
   if (!/^image\/[a-z0-9.+-]+$/i.test(type)) throw new BadRequest('Content-Type must be image/*')
+  // 消した動画・写真のものは置かない（ほかの端末が消したのを、まだ受け取っていない端末から届くと、誰も消さない写真が残る）
+  const removed = await c.env.DB.prepare("SELECT 1 AS x FROM user_entities WHERE user_id = ?1 AND kind = 'media' AND id = ?2 AND deleted = 1")
+    .bind(userId, mediaIdOfPhoto(id))
+    .first()
+  if (removed) throw new BadRequest('media is deleted')
   const data = await c.req.arrayBuffer()
   if (data.byteLength === 0 || data.byteLength > PHOTO_MAX_BYTES) throw new BadRequest('photo size is out of range')
   const used = await c.env.DB.prepare('SELECT COALESCE(SUM(size), 0) AS bytes FROM user_photos WHERE user_id = ?1 AND id != ?2')
@@ -109,8 +111,9 @@ app.get('/api/photos/:id', async (c) => {
     .bind(c.get('userId'), c.req.param('id'))
     .first<{ type: string; data: ArrayBuffer | number[] }>()
   if (!row) return c.json({ error: 'not_found' }, 404)
-  // D1 は BLOB を数値の配列で返すことがあるので、どちらでもバイト列に直す
-  return new Response(new Uint8Array(row.data), { headers: { 'Content-Type': row.type, 'Cache-Control': 'private, max-age=31536000' } })
+  // D1 は BLOB を数値の配列で返すことがあるので、どちらでもバイト列に直す。
+  // 同じ id のまま中身を置き直す（写真の差し替え・動画を切り取ったあとのサムネイル）ので、キャッシュさせない（端末は受け取ったら自分で持つ）
+  return new Response(new Uint8Array(row.data), { headers: { 'Content-Type': row.type, 'Cache-Control': 'private, no-store' } })
 })
 
 // ---- アカウント ----

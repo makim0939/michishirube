@@ -4,7 +4,8 @@ import { db } from './db'
 import { pickRecorderMimeType } from './mediaPrep'
 import { addRecord, createDomain, createSkill, ensureSeeded } from './repo'
 import { getVideoStorage, setVideoStorage, setYoutubePrivacy } from './videoStorage'
-import { applyRemote, connectWithConfig, runSync } from './sync'
+import { applyRemote, connectWithConfig, getSyncStatus, runSync } from './sync'
+import { logout } from './account'
 import { selectVideosToDrop } from './tidy'
 import { uploadVideo, videoMeta, youtubePlayable } from './youtube'
 
@@ -90,6 +91,152 @@ describe('同期', () => {
     const after = await db.media.get(m.id)
     expect(after?.keep).toBe(true)
     expect(await after?.blob?.text()).toBe('photo')
+  })
+})
+
+describe('同期が止まらないようにする', () => {
+  it('写真の置ける量を超えても、記録の同期は続ける', async () => {
+    const server = fakeServer()
+    const base = server.fetch.getMockImplementation()!
+    server.fetch.mockImplementation(async (url: string, init?: RequestInit) =>
+      new URL(url).pathname.startsWith('/api/photos/') && init?.method === 'PUT'
+        ? Response.json({ error: 'quota' }, { status: 413 })
+        : base(url, init),
+    )
+    vi.stubGlobal('fetch', server.fetch)
+    const domainId = await createDomain('ピアノ')
+    const recordId = await addRecord({
+      skillId: await createSkill(domainId, input('A')),
+      reason: 'x',
+      nextAction: '',
+      files: [new Blob(['photo'], { type: 'image/jpeg' })],
+    })
+    await connectWithConfig({ url: 'https://api.example', token: 't' })
+    expect(server.rows.get(`record:${recordId}`)?.deleted).toBe(false)
+    expect(await db.outbox.count()).toBe(0)
+    expect((await getSyncStatus()).photosFull).toBe(true)
+    // 断られる写真を、同期のたびに送り直さない
+    const puts = () => server.fetch.mock.calls.filter(([, init]) => init?.method === 'PUT').length
+    const before = puts()
+    await runSync()
+    expect(puts()).toBe(before)
+  })
+
+  it('サーバーが受け付けない大きさのものは送らず、ほかの変更は送る', async () => {
+    const server = fakeServer()
+    vi.stubGlobal('fetch', server.fetch)
+    const domainId = await createDomain('ピアノ')
+    const big = await createSkill(domainId, { ...input('大きい'), description: 'あ'.repeat(70 * 1024) })
+    const small = await createSkill(domainId, input('小さい'))
+    await connectWithConfig({ url: 'https://api.example', token: 't' })
+    expect(server.rows.has(`skill:${big}`)).toBe(false)
+    expect(server.rows.get(`skill:${small}`)?.deleted).toBe(false)
+    // 送れなかったものは「送っていない変更」に残り、設定に知らせる
+    expect((await db.outbox.toArray()).map((e) => e.id)).toEqual([big])
+    expect((await getSyncStatus()).tooLarge).toBe(1)
+  })
+
+  it('別のアカウントでログインし直したら、前のアカウントで置いた写真の印を送らない（置けなかったら印は付かない）', async () => {
+    const first = fakeServer()
+    vi.stubGlobal('fetch', first.fetch)
+    const domainId = await createDomain('ピアノ')
+    const recordId = await addRecord({
+      skillId: await createSkill(domainId, input('A')),
+      reason: 'x',
+      nextAction: '',
+      files: [new Blob(['photo'], { type: 'image/jpeg' })],
+    })
+    await connectWithConfig({ url: 'https://api.example', token: 't' })
+    const [m] = await db.media.where('recordId').equals(recordId).toArray()
+    expect(m.cloudPhoto).toBe(true)
+    await logout()
+    // 別のアカウント（写真はまだ無く、置ける量もいっぱい）
+    const second = fakeServer()
+    const base = second.fetch.getMockImplementation()!
+    second.fetch.mockImplementation(async (url: string, init?: RequestInit) =>
+      init?.method === 'PUT' ? Response.json({ error: 'quota' }, { status: 413 }) : base(url, init),
+    )
+    vi.stubGlobal('fetch', second.fetch)
+    await connectWithConfig({ url: 'https://api.example', token: 't2' })
+    expect((second.rows.get(`media:${m.id}`)?.data as { cloudPhoto?: boolean }).cloudPhoto).toBeUndefined()
+    expect((await db.media.get(m.id))?.cloudPhoto).toBeUndefined()
+  })
+
+  it('ログインし直しても、ほかの端末で差し替えた写真を、この端末の古い写真で上書きしない', async () => {
+    const server = fakeServer()
+    vi.stubGlobal('fetch', server.fetch)
+    const domainId = await createDomain('ピアノ')
+    const recordId = await addRecord({
+      skillId: await createSkill(domainId, input('A')),
+      reason: 'x',
+      nextAction: '',
+      files: [new Blob(['photo'], { type: 'image/jpeg' })],
+    })
+    await connectWithConfig({ url: 'https://api.example', token: 't' })
+    const [m] = await db.media.where('recordId').equals(recordId).toArray()
+    await logout()
+    // ほかの端末で写真を差し替えた
+    const row = server.rows.get(`media:${m.id}`)!
+    server.rows.set(`media:${m.id}`, {
+      ...row,
+      updatedAt: m.updatedAt + 1000,
+      data: { ...(row.data as object), contentAt: (m.contentAt ?? 0) + 1000, cloudPhoto: true },
+      seq: 1000,
+    })
+    const puts = () => server.fetch.mock.calls.filter(([url, init]) => init?.method === 'PUT' && String(url).endsWith(m.id)).length
+    const before = puts()
+    await connectWithConfig({ url: 'https://api.example', token: 't2' })
+    expect(puts()).toBe(before)
+    expect((await db.media.get(m.id))?.contentAt).toBe((m.contentAt ?? 0) + 1000)
+  })
+
+  it('ログインし直したら、中身のある写真は置き直し、サーバーにしか無い写真の印は残す', async () => {
+    const server = fakeServer()
+    vi.stubGlobal('fetch', server.fetch)
+    const domainId = await createDomain('ピアノ')
+    const recordId = await addRecord({
+      skillId: await createSkill(domainId, input('A')),
+      reason: 'x',
+      nextAction: '',
+      files: [new Blob(['photo'], { type: 'image/jpeg' })],
+    })
+    await connectWithConfig({ url: 'https://api.example', token: 't' })
+    const [m] = await db.media.where('recordId').equals(recordId).toArray()
+    expect(m.cloudPhoto).toBe(true)
+    // ほかの端末で撮った写真（この端末には中身が無い）
+    await db.media.add({ ...m, id: 'remote-only', blob: undefined, cloudPhoto: true })
+    await logout()
+    const puts = () => server.fetch.mock.calls.filter(([url, init]) => init?.method === 'PUT' && String(url).endsWith(m.id)).length
+    const before = puts()
+    await connectWithConfig({ url: 'https://api.example', token: 't2' })
+    expect(puts()).toBe(before + 1)
+    expect((await db.media.get(m.id))?.cloudPhoto).toBe(true)
+    expect((await db.media.get('remote-only'))?.cloudPhoto).toBe(true)
+  })
+
+  it('分野・型が後ろのページにあっても、2台目と分かる', async () => {
+    const server = fakeServer()
+    const base = server.fetch.getMockImplementation()!
+    // 1ページに1件だけ返すサーバー
+    server.fetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (new URL(url).pathname !== '/api/sync') return base(url, init)
+      const body = JSON.parse(String(init?.body)) as { since: number; changes: unknown[] }
+      if (body.changes.length > 0) return base(url, init)
+      const all = [...server.rows.values()].filter((r) => r.seq > body.since).sort((a, b) => a.seq - b.seq)
+      return Response.json({ cursor: all[0]?.seq ?? body.since, more: all.length > 1, changes: all.slice(0, 1) })
+    })
+    vi.stubGlobal('fetch', server.fetch)
+    server.rows.set('record:r', { kind: 'record', id: 'r', updatedAt: 5, deleted: false, data: { id: 'r' }, seq: 1 })
+    server.rows.set('domain:remote', {
+      kind: 'domain',
+      id: 'remote',
+      updatedAt: 5,
+      deleted: false,
+      data: { id: 'remote', name: 'ラテアート', order: 1, createdAt: 1 },
+      seq: 2,
+    })
+    await ensureSeeded()
+    expect(await connectWithConfig({ url: 'https://api.example', token: 't' })).toEqual({ firstDevice: false })
   })
 })
 

@@ -211,23 +211,38 @@ export async function loginWithGoogle(): Promise<{ firstDevice: boolean } | null
   return result?.kind === 'login' ? completeLogin(result) : null
 }
 
+/** つながりを切り、この端末の YouTube の鍵を消す（写真をサーバーに置いた印は、次にログインしたときに見直す） */
+async function forgetConnection() {
+  await disconnectSync()
+  await forgetYoutubeKey()
+}
+
 /** この端末のログインを終える。端末の記録はそのまま残る */
 export async function logout() {
   const config = await getSyncConfig()
   if (config) {
     // ログインした端末がつないでいるサーバー（独自ドメインにする前にログインした端末は、前の URL）に送る
-    await fetch(`${serverOf(config)}/api/session`, { method: 'DELETE', headers: { Authorization: `Bearer ${config.token}` } }).catch(
-      () => {},
-    )
+    // 電波が悪くても、ログアウト（とすべて削除）が止まらないよう、長くは待たない
+    const abort = new AbortController()
+    const timer = setTimeout(() => abort.abort(), 5000)
+    await fetch(`${serverOf(config)}/api/session`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${config.token}` },
+      signal: abort.signal,
+    })
+      .catch(() => {})
+      .finally(() => clearTimeout(timer))
   }
-  await disconnectSync()
-  await forgetYoutubeKey()
+  await forgetConnection()
 }
 
-/** アカウントと、サーバーに置いたデータをすべて消す。端末の記録はそのまま残る */
-export async function deleteAccount() {
+/**
+ * アカウントと、サーバーに置いたデータをすべて消す。端末の記録はそのまま残る。
+ * ログインが切れていた（ほかの端末で削除した・長く使わなかった）ときは、消せたか分からないので false を返す（この端末のログインは終える）
+ */
+export async function deleteAccount(): Promise<boolean> {
   const config = await getSyncConfig()
-  if (!config) return
+  if (!config) return false
   let res: Response
   try {
     res = await fetch(`${serverOf(config)}/api/account`, { method: 'DELETE', headers: { Authorization: `Bearer ${config.token}` } })
@@ -235,12 +250,13 @@ export async function deleteAccount() {
     throw new SyncError('サーバーにつながりません。電波を確認してください')
   }
   if (!res.ok && res.status !== 401) throw new SyncError(`削除できませんでした（${res.status}）`, res.status)
-  await disconnectSync()
-  await forgetYoutubeKey()
-  // 写真をサーバーに置いた印も消す（次にログインしたら置き直す）
+  await forgetConnection()
+  if (!res.ok) return false
+  // サーバーの写真は消えたので、置いた印も消す（消せたか分からないときは残す。同じアカウントに戻れば、そのまま取ってこられる）
   await db.media.toCollection().modify((m) => {
     delete m.cloudPhoto
     delete m.cloudPoster
     delete m.cloudPosterEnd
   })
+  return true
 }

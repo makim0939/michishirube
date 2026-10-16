@@ -67,11 +67,32 @@ export function go(path: string) {
 
 /** 履歴を積まずに移動する（保存・削除のあとに、戻るでフォームへ戻らないように） */
 export function replace(path: string) {
+  // 同じ画面への replace では hashchange が起きないので、印を立てない
+  replacing = window.location.hash !== href(path)
   window.location.replace(href(path))
 }
 
-// アプリ内で何回画面を移動したか。0 ならホーム画面から直接開いた直後なので、戻る先がない
+/**
+ * いまの画面が、アプリを開いてから何画面目か（0 ならホーム画面・リンクから直接開いた画面で、戻る先がない）。
+ * 履歴の項目ごとに覚えるので、戻る・進むで移動しても合う
+ */
 let inAppDepth = 0
+/** replace で移動している（同じ深さのまま） */
+let replacing = false
+
+function storedDepth(): number | undefined {
+  const depth = (window.history.state as { depth?: unknown } | null)?.depth
+  return typeof depth === 'number' ? depth : undefined
+}
+
+function rememberDepth(depth: number) {
+  inAppDepth = depth
+  try {
+    window.history.replaceState({ ...(window.history.state as object | null), depth }, '')
+  } catch {
+    // 覚えられなくても、移動はできる
+  }
+}
 
 /** 来た画面へ戻る。アプリ内に履歴がなければ fallback へ */
 export function goBack(fallback: string) {
@@ -89,9 +110,12 @@ export function backHandler(fallback: string) {
 export function useRoute(): Route {
   const [route, setRoute] = useState(() => parseHash(window.location.hash))
   useEffect(() => {
+    rememberDepth(storedDepth() ?? 0)
     const onChange = () => {
-      // 読み込み後にアプリ内で移動していれば、1つ前の履歴はたいていアプリ内の画面
-      inAppDepth += 1
+      // 戻る・進むで来た画面は、覚えておいた深さ。新しく積んだ画面は1つ深い（replace なら同じ深さ）
+      const known = storedDepth()
+      rememberDepth(known ?? (replacing ? inAppDepth : inAppDepth + 1))
+      replacing = false
       setRoute(parseHash(window.location.hash))
       window.scrollTo(0, 0)
     }

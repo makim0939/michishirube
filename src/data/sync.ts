@@ -4,6 +4,7 @@ import { PHOTO_MAX_BYTES, posterPhotoId, SYNC_LIMITS } from '../../shared/protoc
 import { DEFAULT_SETTINGS, type Media, type Settings } from '../domain/types'
 import { ContentUnavailableError, contentBlob, hasContent, moveContentsToFiles } from './content'
 import { db } from './db'
+import { listContentFiles, usesFiles } from './files'
 
 /**
  * サーバー（Cloudflare Worker + D1）との同期。Google でログインした人のデータだけをやり取りする（account.ts）。
@@ -25,11 +26,23 @@ export interface SyncConfig {
 export interface SyncStatus {
   lastSyncedAt?: number
   error?: string
+  /** サーバーに置ける写真の量を超えて、置けていない写真がある */
+  photosFull?: boolean
+  /** 大きすぎて送れない記録・型の数 */
+  tooLarge?: number
 }
 
 const CONFIG_KEY = 'sync:config'
 const CURSOR_KEY = 'sync:cursor'
 const STATUS_KEY = 'sync:status'
+/** 写真の置ける量を超えた時刻。しばらくは写真を送らない（断られる写真を、同期のたびに送り直さないように） */
+const PHOTOS_FULL_KEY = 'sync:photos-full'
+const PHOTOS_FULL_RETRY_MS = 24 * 60 * 60 * 1000
+/**
+ * ログインし直したあと、写真・サムネイルをサーバーに置いた印を見直す（前に別のアカウントでつないでいたかもしれない）。
+ * サーバーの内容を受け取りきってから見直す（先に置くと、ほかの端末で差し替えた写真を、この端末の古い写真で上書きしてしまう）
+ */
+const RECHECK_PHOTOS_KEY = 'sync:recheck-photos'
 
 export class SyncError extends Error {
   constructor(
@@ -42,6 +55,11 @@ export class SyncError extends Error {
 
 export async function getSyncConfig(): Promise<SyncConfig | undefined> {
   return (await db.meta.get(CONFIG_KEY))?.value as SyncConfig | undefined
+}
+
+/** 始めたときと同じログインのままか（ログアウトしたら、ログインし直していても、前の同期は続けない） */
+async function stillConnected(config: SyncConfig): Promise<boolean> {
+  return (await getSyncConfig())?.token === config.token
 }
 
 async function setStatus(status: SyncStatus) {
@@ -210,31 +228,46 @@ export function runSync(): Promise<void> {
   return running
 }
 
-async function doSync() {
+async function doSync(): Promise<void> {
   const config = await getSyncConfig()
   if (!config) return
+  const recheck = !!(await db.meta.get(RECHECK_PHOTOS_KEY))
+  // 見直す前の印は、前のアカウントのものかもしれない。中身のある写真・サムネイルの印は送らない（見直して置けたら送る）
+  const readable = recheck ? await readableContent() : undefined
   try {
-    await uploadPhotos(config)
-    await uploadPosters(config)
+    if (!recheck) {
+      await uploadPhotos(config)
+      await uploadPosters(config)
+    }
     // 送りきるまで、または受け取りきるまで繰り返す（上限つき）
+    let tooLarge = 0
     for (let round = 0; round < 50; round++) {
+      // 同期の途中でログアウト・すべて削除したら、受け取ったものを書き戻さずにやめる
+      if (!(await stillConnected(config))) return
       const since = ((await db.meta.get(CURSOR_KEY))?.value as number | undefined) ?? 0
       const outbox = await db.outbox.limit(SYNC_LIMITS.maxChanges).toArray()
       const changes: EntityChange[] = []
+      const sent: typeof outbox = []
       for (const entry of outbox) {
         const local = await readLocal(entry.kind, entry.id)
-        changes.push(
-          local
-            ? {
-                kind: entry.kind,
-                id: entry.id,
-                updatedAt: local.updatedAt,
-                deleted: false,
-                data: toWire(entry.kind, local as Record<string, unknown>),
-              }
-            : // 端末に無い＝消した。消した時刻を updatedAt として送る
-              { kind: entry.kind, id: entry.id, updatedAt: entry.at, deleted: true },
-        )
+        if (local) {
+          const data = toWire(entry.kind, local as Record<string, unknown>)
+          if (readable && entry.kind === 'media') {
+            if (readable(local as Media)) delete data.cloudPhoto
+            if ((local as Media).poster) {
+              delete data.cloudPoster
+              delete data.cloudPosterEnd
+            }
+          }
+          // サーバーが受け付けない大きさのもの（とても長いメモなど）は送らない。送ると全体が断られ、ほかの変更もずっと送れなくなる。
+          // outbox には残すので、「送っていない変更」に数えられる（短くすれば送る）
+          if (JSON.stringify(data).length > SYNC_LIMITS.maxEntityBytes) continue
+          changes.push({ kind: entry.kind, id: entry.id, updatedAt: local.updatedAt, deleted: false, data })
+        } else {
+          // 端末に無い＝消した。消した時刻を updatedAt として送る
+          changes.push({ kind: entry.kind, id: entry.id, updatedAt: entry.at, deleted: true })
+        }
+        sent.push(entry)
       }
       const res = (await (
         await api(config, '/api/sync', {
@@ -244,31 +277,57 @@ async function doSync() {
         })
       ).json()) as SyncResponse
 
+      if (!(await stillConnected(config))) return
+      tooLarge = outbox.length - sent.length
       await applyRemote(res.changes)
       await db.transaction('rw', db.outbox, db.meta, async () => {
         // 送っている間にまた変わったものは、次の回で送る
-        for (const entry of outbox) {
+        for (const entry of sent) {
           const now = await db.outbox.get([entry.kind, entry.id])
           if (now && now.at === entry.at) await db.outbox.delete([entry.kind, entry.id])
         }
         await db.meta.put({ key: CURSOR_KEY, value: res.cursor })
       })
-      if (!res.more && (await db.outbox.count()) === 0) break
+      // 送れないもの（大きすぎる）だけが残っていたら、終わり
+      if (!res.more && (await db.outbox.count()) <= outbox.length - sent.length) break
     }
-    await setStatus({ lastSyncedAt: Date.now() })
+    if (recheck) {
+      await recheckCloudFlags()
+      // 見直した写真・サムネイルを置いて、もう一度送る
+      return await doSync()
+    }
+    await setStatus({
+      lastSyncedAt: Date.now(),
+      ...((await photosFull()) ? { photosFull: true } : {}),
+      ...(tooLarge > 0 ? { tooLarge } : {}),
+    })
   } catch (e) {
-    await setStatus({ ...(await getSyncStatus()), error: e instanceof Error ? e.message : String(e) })
+    // ログアウトしたあとに失敗を書き戻さない（次にログインしたとき、前の失敗が出ないように）
+    if (await stillConnected(config)) await setStatus({ ...(await getSyncStatus()), error: e instanceof Error ? e.message : String(e) })
     throw e
   }
 }
 
+async function photosFull(): Promise<boolean> {
+  const at = (await db.meta.get(PHOTOS_FULL_KEY))?.value as number | undefined
+  return at !== undefined && Date.now() - at < PHOTOS_FULL_RETRY_MS
+}
+
+/** 写真の置ける量を超えたことを覚える（写真・サムネイルを送るのを、しばらく休む） */
+async function markPhotosFull() {
+  await db.meta.put({ key: PHOTOS_FULL_KEY, value: Date.now() })
+}
+
 /** 写真（縮小済み）をサーバーに置く。置けたら cloudPhoto を立てて、ほかの端末でも見られるようにする */
 async function uploadPhotos(config: SyncConfig) {
+  if (await photosFull()) return
   // 縮小できなかった大きい写真はサーバーに置かない（この端末にだけ残る）
   const targets = await db.media
     .filter((m) => m.type.startsWith('image/') && hasContent(m) && !m.cloudPhoto && m.size <= PHOTO_MAX_BYTES)
     .toArray()
   for (const m of targets) {
+    // ログアウトしたら、残りは送らない
+    if (!(await stillConnected(config))) return
     try {
       const body = await contentBlob(m)
       if (!body) continue
@@ -280,9 +339,13 @@ async function uploadPhotos(config: SyncConfig) {
     } catch (e) {
       // 電波が無いときは同期ごと止める。サーバーが受け付けない写真・端末にファイルが無い写真は飛ばして、ほかの同期を続ける
       if ((e instanceof SyncError && e.status === 400) || e instanceof ContentUnavailableError) continue
+      // サーバーに置ける量を超えたら、写真は置かずに、記録などの同期を続ける
+      if (e instanceof SyncError && e.status === 413) return markPhotosFull()
       throw e
     }
     await db.transaction('rw', db.media, db.outbox, async () => {
+      // 送っているあいだに写真を差し替えたら、印を立てない（新しい写真を次に送る）
+      if ((await db.media.get(m.id))?.contentAt !== m.contentAt) return
       await db.media.update(m.id, { cloudPhoto: true, updatedAt: Date.now() })
       await db.outbox.put({ kind: 'media', id: m.id, at: Date.now() })
     })
@@ -294,6 +357,7 @@ async function uploadPhotos(config: SyncConfig) {
  * 端末から動画を消したあとや、入れ直した端末・別の端末でも、カップの絵と再生前の絵を出せるようにする
  */
 async function uploadPosters(config: SyncConfig) {
+  if (await photosFull()) return
   // まだ置いていないもの、置いたのが前の作り方（最初のコマ）で、できあがりのコマを作り直したもの
   const targets = await db.media
     .filter(
@@ -305,6 +369,7 @@ async function uploadPosters(config: SyncConfig) {
     )
     .toArray()
   for (const m of targets) {
+    if (!(await stillConnected(config))) return
     try {
       await api(config, `/api/photos/${encodeURIComponent(posterPhotoId(m.id))}`, {
         method: 'PUT',
@@ -313,9 +378,13 @@ async function uploadPosters(config: SyncConfig) {
       })
     } catch (e) {
       if (e instanceof SyncError && e.status === 400) continue
+      if (e instanceof SyncError && e.status === 413) return markPhotosFull()
       throw e
     }
     await db.transaction('rw', db.media, db.outbox, async () => {
+      // 送っているあいだにサムネイルを作り直したら、印を立てない（新しいものを次に送る）
+      const current = await db.media.get(m.id)
+      if (!current || current.contentAt !== m.contentAt || !!current.posterEnd !== !!m.posterEnd) return
       await db.media.update(m.id, { cloudPoster: true, cloudPosterEnd: !!m.posterEnd, updatedAt: Date.now() })
       await db.outbox.put({ kind: 'media', id: m.id, at: Date.now() })
     })
@@ -326,7 +395,8 @@ async function uploadPosters(config: SyncConfig) {
 export async function fetchPoster(media: Media): Promise<Blob | undefined> {
   const config = await getSyncConfig()
   if (!config || !media.cloudPoster) return undefined
-  const poster = await (await api(config, `/api/photos/${encodeURIComponent(posterPhotoId(media.id))}`)).blob()
+  // 同じ id のまま中身が置き直されるので、HTTP のキャッシュ（前の版のサーバーは1年残させていた）を使わない
+  const poster = await (await api(config, `/api/photos/${encodeURIComponent(posterPhotoId(media.id))}`, { cache: 'no-store' })).blob()
   // サムネイルは小さいので、次からは端末から出す（同期の対象にはしない）
   await db.media.update(media.id, { poster, posterEnd: !!media.cloudPosterEnd })
   return poster
@@ -336,7 +406,7 @@ export async function fetchPoster(media: Media): Promise<Blob | undefined> {
 export async function fetchPhoto(media: Media): Promise<Blob | undefined> {
   const config = await getSyncConfig()
   if (!config || !media.cloudPhoto) return undefined
-  const blob = await (await api(config, `/api/photos/${encodeURIComponent(media.id)}`)).blob()
+  const blob = await (await api(config, `/api/photos/${encodeURIComponent(media.id)}`, { cache: 'no-store' })).blob()
   // 写真は小さいので、次からは端末から出す（同期の対象にはしない）。アプリではファイルに移す
   await db.media.update(media.id, { blob })
   void moveContentsToFiles([media.id])
@@ -345,19 +415,52 @@ export async function fetchPhoto(media: Media): Promise<Blob | undefined> {
 
 // ---- 接続 ----
 
+/** この端末で中身を読める動画・写真か。アプリでは、行にファイルの場所があっても、ファイルが無いことがある */
+async function readableContent(): Promise<(m: Media) => boolean> {
+  const files = usesFiles ? new Set(await listContentFiles().catch(() => [])) : undefined
+  return (m) => !!m.blob || (!!m.file && (!files || files.has(m.file)))
+}
+
+/**
+ * この端末に中身のある写真・サムネイルは、サーバーに置き直す
+ * （サーバーにしか中身が無いものの印は残す。同じアカウントなら、そのまま取ってこられる）
+ */
+async function recheckCloudFlags() {
+  const readable = await readableContent()
+  await db.transaction('rw', db.media, db.meta, async () => {
+    await db.media.toCollection().modify((m) => {
+      if (readable(m)) delete m.cloudPhoto
+      if (m.poster) {
+        delete m.cloudPoster
+        delete m.cloudPosterEnd
+      }
+    })
+    await db.meta.delete(RECHECK_PHOTOS_KEY)
+  })
+}
+
 /**
  * 同期を始める。サーバーにすでにデータがあれば（2台目の端末）、この端末の初期データ（updatedAt が 0）は捨ててから受け取る。
  * サーバーが空なら（1台目）、この端末のデータを全部送る
  */
 export async function connectWithConfig(config: SyncConfig): Promise<{ firstDevice: boolean }> {
-  const first = (await (
-    await api(config, '/api/sync', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ since: 0, changes: [] }),
-    })
-  ).json()) as SyncResponse
-  const firstDevice = !first.changes.some((c) => !c.deleted && (c.kind === 'domain' || c.kind === 'skill'))
+  // 分野・型は、あとで書き直されると後ろのページに移るので、見つかるか最後のページまで見る
+  let firstDevice = true
+  for (let since = 0, round = 0; round < 50; round++) {
+    const page = (await (
+      await api(config, '/api/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ since, changes: [] }),
+      })
+    ).json()) as SyncResponse
+    if (page.changes.some((c) => !c.deleted && (c.kind === 'domain' || c.kind === 'skill'))) {
+      firstDevice = false
+      break
+    }
+    if (!page.more) break
+    since = page.cursor
+  }
 
   await db.transaction('rw', [db.domains, db.skills, db.records, db.media, db.meta, db.outbox], async () => {
     if (!firstDevice) {
@@ -369,6 +472,8 @@ export async function connectWithConfig(config: SyncConfig): Promise<{ firstDevi
     }
     // 接続前にたまった印は、下で全件を積み直すので消す（捨てた初期データの削除を送らないように）
     await db.outbox.clear()
+    // 前に別のアカウントでつないでいたかもしれないので、受け取りきったあとに写真を置いた印を見直す
+    await db.meta.put({ key: RECHECK_PHOTOS_KEY, value: true })
     // 端末に残っているものは全部送る（サーバーのほうが新しいものは上書きされない）
     const all = [
       ...(await db.domains.toCollection().primaryKeys()).map((id) => ({ kind: 'domain' as const, id: id as string })),
@@ -381,12 +486,18 @@ export async function connectWithConfig(config: SyncConfig): Promise<{ firstDevi
     await db.meta.put({ key: CONFIG_KEY, value: config })
     await db.meta.put({ key: CURSOR_KEY, value: 0 })
   })
+  // 前のログインの同期が動いていたら、止まるのを待ってから、このログインで同期する
+  // （runSync は動いている同期を返すので、そのままだと前のログインの同期を待つことになる）
+  while (running) await running.catch(() => {})
   await runSync()
   return { firstDevice }
 }
 
 export async function disconnectSync() {
-  await db.meta.bulkDelete([CONFIG_KEY, CURSOR_KEY, STATUS_KEY])
+  await db.meta.bulkDelete([CONFIG_KEY, CURSOR_KEY, STATUS_KEY, PHOTOS_FULL_KEY, RECHECK_PHOTOS_KEY])
+  // 動いている同期が終わるのを待つ（このあと端末のデータを消しても、受け取ったものが書き戻されないように）。
+  // 同期は次の区切りで止まる。電波が悪くて終わらなくても、長くは待たない
+  if (running) await Promise.race([running.catch(() => {}), new Promise((r) => setTimeout(r, 5000))])
 }
 
 // ---- 自動で同期する ----

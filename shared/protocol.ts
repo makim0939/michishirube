@@ -37,8 +37,18 @@ export const SYNC_LIMITS = {
 /** 写真は縮小してから送るので、これを超えるものは受け付けない */
 export const PHOTO_MAX_BYTES = 2 * 1024 * 1024
 
+/** 1人が置ける写真・サムネイルの合計（無料のデータベースの大きさに収めるため） */
+export const PHOTO_QUOTA_BYTES = 50 * 1024 * 1024
+
+/** 動画のサムネイルを、写真と同じ置き場に置くときの id の末尾 */
+export const POSTER_SUFFIX = '.poster'
+
 /** 動画のサムネイルを、写真と同じ置き場に置くときの id */
-export const posterPhotoId = (mediaId: string) => `${mediaId}.poster`
+export const posterPhotoId = (mediaId: string) => `${mediaId}${POSTER_SUFFIX}`
+
+/** 写真の置き場の id から、どの動画・写真のものかを読む */
+export const mediaIdOfPhoto = (photoId: string) =>
+  photoId.endsWith(POSTER_SUFFIX) ? photoId.slice(0, -POSTER_SUFFIX.length) : photoId
 
 export function isEntityKind(v: unknown): v is EntityKind {
   return typeof v === 'string' && (ENTITY_KINDS as readonly string[]).includes(v)
