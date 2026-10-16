@@ -3279,3 +3279,59 @@ div.notice > a {
   font-weight: 500;
   color: var(--muted);
 }
+
+/* ---- 今日（レビュー対応）：ヒーローのリンク・題字・ほかの型の杯の型名・はじめての画面 ---- */
+
+/* 大きな写真を押すと、その1杯へ。めくる指の動きは邪魔しない */
+.hero-link {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+
+.hero-link:focus-visible {
+  outline: 3px solid #faf7f2;
+  outline-offset: -6px;
+}
+
+/* 題字は h1 にしたが、見た目は以前の span と同じにする */
+h1.wordmark {
+  margin: 0;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: normal;
+  line-height: normal;
+}
+
+.recent-skill {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: -3px;
+  font-size: 0.66rem;
+  color: var(--muted);
+}
+
+.sheet-empty.first-run {
+  align-items: stretch;
+  gap: 12px;
+}
+
+.sheet-empty.first-run h2 {
+  color: var(--text);
+  font-family: var(--font-mincho);
+  font-size: 1.25rem;
+  letter-spacing: 0.06em;
+}
+
+.sheet-empty.first-run p {
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.7;
+}
+
+.practice-more {
+  align-self: center;
+}

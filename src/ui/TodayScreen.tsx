@@ -1,15 +1,16 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { isLoggedIn } from '../data/account'
 import { db } from '../data/db'
 import { cupNumbers, practicingSkillIds, recordedSkillIds, recordsOf } from '../data/repo'
 import { getSyncConfig, getSyncStatus } from '../data/sync'
+import { uploadBacklog } from '../data/videoStorage'
 import { computeStates, indexById, practiceOrder, prereqsDone, sortByDepth } from '../domain/logic'
 import type { Media, PracticeRecord, Skill } from '../domain/types'
 import { recentForm, type RecentForm } from '../domain/form'
 import { OUTCOME_MARK } from '../domain/format'
 import { formatAgo, splitName } from './common'
-import { pickCupMedia, useCupImage, useCupImageUrl, useImageUrl } from './cupImage'
+import { pickCupMedia, useContent, useCupImageUrl, useImageUrl } from './cupImage'
 import { hasCupImage } from '../data/poster'
 import { FormDots } from './FormDots'
 import { AlertIcon, CameraIcon } from './icons'
@@ -29,6 +30,8 @@ const HERO_SLIDES = 6
 const RECENT = 12
 /** 次のおすすめは、数を絞って出す（全部は型の画面で） */
 const RECOMMEND = 3
+/** 練習中の型は、最近練習した順にこの数まで先に出す（残りは「見る」で開く。撮るボタンまで何度もスクロールしないように） */
+const PRACTICE_SHOWN = 3
 
 const WEEKDAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
 
@@ -75,8 +78,8 @@ function Notice() {
   const data = useLiveQuery(async () => ({
     config: await getSyncConfig(),
     status: await getSyncStatus(),
-    uploads: await db.media.where('upload').anyOf('pending', 'uploading').count(),
-    failed: await db.media.where('upload').equals('failed').count(),
+    // YouTube に上げる設定の端末だけ数える（端末に置く設定なら、上げないので待ちにならない）
+    backlog: await uploadBacklog(),
   }))
   if (!data) return null
 
@@ -108,13 +111,17 @@ function Notice() {
       </div>
     )
   }
-  if (data.failed > 0) {
+  if (data.backlog.failed > 0) {
     return (
-      <p className="notice quiet">YouTube へのアップに失敗した動画が {data.failed} 本あります。次に開いたときに上げ直します</p>
+      <p className="notice quiet">
+        YouTube へのアップに失敗した動画が {data.backlog.failed} 本あります。次に開いたときに上げ直します
+      </p>
     )
   }
-  if (data.uploads > 0) {
-    return <p className="notice quiet">YouTube へのアップ待ちの動画が {data.uploads} 本あります（開いている間に上げます）</p>
+  if (data.backlog.waiting > 0) {
+    return (
+      <p className="notice quiet">YouTube へのアップ待ちの動画が {data.backlog.waiting} 本あります（開いている間に上げます）</p>
+    )
   }
   return null
 }
@@ -132,16 +139,31 @@ type Slide = {
  * 大きな写真の1枚と、その説明。写真がまだ読めないあいだは、いまの時刻の光の絵を出し、説明は付けない
  * （自分の1杯ではない絵に、No. を付けないように）
  */
-function HeroSlide({ slide, light, now }: { slide: Slide; light: Light; now: Date }) {
-  const blob = useCupImage(slide.media)
+function HeroSlide({
+  slide,
+  light,
+  now,
+  onMissing,
+}: {
+  slide: Slide
+  light: Light
+  now: Date
+  /** 写真を読めなかったとき（電波が無く、サーバーにしか無い写真など）に知らせる */
+  onMissing: (recordId: string) => void
+}) {
+  // 大きな写真には写真だけを使う（動画のコマは出さない）ので、中身そのものを読む
+  const { blob, loading } = useContent(slide.media)
   const url = useImageUrl(blob, slide.media ? `${slide.media.id}-hero-${blob?.size ?? 0}` : undefined)
+  const recordId = slide.record.id
+  useEffect(() => {
+    if (!loading && !blob) onMissing(recordId)
+  }, [loading, blob, recordId, onMissing])
+  const label = `No.${slide.number}${slide.skillName ? ` ${splitName(slide.skillName).main}` : ''}`
   return (
     <div className="hero-slide">
-      <img
-        className="hero-image"
-        src={url ?? lightUrl(light)}
-        alt={url ? `No.${slide.number} ${slide.skillName ? splitName(slide.skillName).main : ''}` : ''}
-      />
+      <img className="hero-image" src={url ?? lightUrl(light)} alt={url ? label : ''} />
+      {/* 押すと、その1杯の動画・写真とメモを見返せる（下の小さな杯と同じ行き先） */}
+      {url && <a className="hero-link" href={href(`/cup/${recordId}`)} aria-label={`${label}の詳細`} />}
       {url && (
         <div className="hero-caption">
           {slide.first && <span className="hero-first">はじまりの1杯</span>}
@@ -161,8 +183,12 @@ function HeroSlide({ slide, light, now }: { slide: Slide; light: Light; now: Dat
  * 今日の画面のいちばん上。最近の杯の写真を左右にめくれて、最後の1枚は「はじまりの1杯」（いまと見比べる）。
  * 写真がまだ無いあいだは、いまの時刻の光の絵を出す
  */
-function Hero({ slides }: { slides: Slide[] }) {
+function Hero({ slides: all }: { slides: Slide[] }) {
   const now = useNow()
+  // 写真を読めなかった杯は、時刻の光の絵のスライドが混ざらないよう、めくる列から外す
+  const [missing, setMissing] = useState<ReadonlySet<string>>(new Set())
+  const onMissing = useCallback((id: string) => setMissing((m) => (m.has(id) ? m : new Set(m).add(id))), [])
+  const slides = all.filter((s) => !missing.has(s.record.id))
   const light = lightFor(now)
   const date = `${now.getMonth() + 1}.${now.getDate()} ${WEEKDAYS[now.getDay()]} · ${LIGHT_LABEL[light]}`
   const track = useRef<HTMLDivElement>(null)
@@ -188,21 +214,21 @@ function Hero({ slides }: { slides: Slide[] }) {
           }}
         >
           {slides.map((s) => (
-            <HeroSlide key={s.record.id} slide={s} light={light} now={now} />
+            <HeroSlide key={s.record.id} slide={s} light={light} now={now} onMissing={onMissing} />
           ))}
         </div>
       )}
       <div className="hero-shade" aria-hidden="true" />
       <div className="hero-top">
         {/* 題字は、写真に馴染む欧文（ラテ帳の読み）に、小さく和文を添える */}
-        <span className="wordmark" role="img" aria-label="ラテ帳">
+        <h1 className="wordmark" aria-label="ラテ帳">
           <span className="wordmark-latin" aria-hidden="true">
             Latte chō
           </span>
           <span className="wordmark-ja" aria-hidden="true">
             ラテ帳
           </span>
-        </span>
+        </h1>
         <span className="hero-date">{date}</span>
       </div>
       {slides.length > 1 && (
@@ -238,6 +264,8 @@ function RecentCup({
           {label}
           {record.outcome && ` ${OUTCOME_MARK[record.outcome]}`}
         </span>
+        {/* ほかの型の杯は、どの型かが見えるように型の名前を添える */}
+        {name && <span className="recent-skill">{name}</span>}
       </a>
     </li>
   )
@@ -359,7 +387,8 @@ async function loadToday() {
         media: cupOf(record),
         number: numbers.get(record.id) ?? 0,
         skillName: byId.get(record.skillId)?.name,
-        first: withFirst && record.id === firstRecord.id,
+        // 最後の1枚が「はじまりの1杯」。最近の杯の中にすでに入っていても、2枚以上めくれるときはラベルを付ける
+        first: !!firstRecord && record.id === firstRecord.id && heroAll.length > 1,
       }),
     ),
     available,
@@ -379,6 +408,7 @@ export function forgetToday() {
 }
 
 export function TodayScreen() {
+  const [showAllPractices, setShowAllPractices] = useState(false)
   const data = useLiveQuery(
     async () => {
       lastToday = await loadToday()
@@ -389,6 +419,10 @@ export function TodayScreen() {
   )
 
   if (!data) return null
+
+  // はじめて開いたときは、最初のおすすめを大きなボタンに出すので、下の一覧には重ねて出さない
+  const firstRun = data.practices.length === 0 && data.skillCount > 0 && data.available.length > 0
+  const recommended = firstRun ? data.available.slice(1) : data.available
 
   return (
     <div className="screen today">
@@ -402,30 +436,48 @@ export function TodayScreen() {
             <div className="sheet-head">
               <h2>練習中の型</h2>
               <span className="muted small">
-                今週 {data.thisWeek}杯 ·{' '}
+                {/* 週の初め（まだ0杯）は、数を出さない */}
+                {data.thisWeek > 0 && <>今週 {data.thisWeek}杯 · </>}
                 <a href={href('/records')}>カップ帳</a>
               </span>
             </div>
             <div className="practice-list">
-              {data.practices.map((p) => (
+              {(showAllPractices ? data.practices : data.practices.slice(0, PRACTICE_SHOWN)).map((p) => (
                 <PracticeBlock key={p.skill.id} practice={p} />
               ))}
+              {!showAllPractices && data.practices.length > PRACTICE_SHOWN && (
+                <button className="btn practice-more" onClick={() => setShowAllPractices(true)}>
+                  ほかの練習中の型を見る（{data.practices.length - PRACTICE_SHOWN}）
+                </button>
+              )}
             </div>
           </>
         ) : data.skillCount > 0 ? (
-          <div className="sheet-empty">
-            <h2>練習中の型</h2>
-            {data.available.length > 0 ? (
-              <p>下のおすすめか型の画面から、やってみたい型を記録すると、ここに出ます。</p>
-            ) : (
-              <>
-                <p>型の画面から、やってみたい型を選んで記録すると、ここに出ます。</p>
-                <a className="btn" href={href('/map')}>
-                  型の画面を開く
+          data.available.length > 0 ? (
+            // はじめて開いたとき：最初の1杯へ、迷わず進めるボタンを1つだけ出す
+            <div className="sheet-empty first-run">
+              <h2>まずは1杯、撮ってみましょう</h2>
+              <p>撮ると、練習中の型としてここに並び、次の一手とこれまでの杯を見返せます。</p>
+              <a className="btn primary shoot" href={href(`/record/${data.available[0].id}`)}>
+                <CameraIcon size={20} />
+                {splitName(data.available[0].name).main}を記録する
+              </a>
+              {/* 下に「次のおすすめ」が出るときは、そちらに同じリンクがある */}
+              {recommended.length === 0 && (
+                <a className="sub-link" href={href('/map')}>
+                  ほかの型から選ぶ
                 </a>
-              </>
-            )}
-          </div>
+              )}
+            </div>
+          ) : (
+            <div className="sheet-empty">
+              <h2>練習中の型</h2>
+              <p>型の画面から、やってみたい型を選んで記録すると、ここに出ます。</p>
+              <a className="btn" href={href('/map')}>
+                型の画面を開く
+              </a>
+            </div>
+          )
         ) : (
           <div className="sheet-empty">
             <p>型がありません。</p>
@@ -446,7 +498,7 @@ export function TodayScreen() {
           </section>
         )}
 
-        {data.available.length > 0 && (
+        {recommended.length > 0 && (
           <section className="section">
             <div className="sheet-head">
               <h2>次のおすすめ</h2>
@@ -455,7 +507,7 @@ export function TodayScreen() {
               </a>
             </div>
             <ul className="type-rows">
-              {data.available.map((s) => (
+              {recommended.map((s) => (
                 <li key={s.id} className="type-row">
                   <a href={href(`/skill/${s.id}`)} className="type-row-main">
                     <PatternImage name={s.name} className="small" />

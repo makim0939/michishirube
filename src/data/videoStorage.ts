@@ -41,6 +41,19 @@ export async function getVideoStorage(): Promise<VideoStorage> {
   return uploaded.length > 0 ? 'youtube' : 'device'
 }
 
+/**
+ * ホームのお知らせに出す、YouTube へのアップの状況。
+ * 保存先が youtube の端末だけ数える（device の端末では、動画は pending のまま残るが、上げることはないので待ちではない）
+ */
+export async function uploadBacklog(): Promise<{ waiting: number; failed: number }> {
+  if ((await getVideoStorage()) !== 'youtube') return { waiting: 0, failed: 0 }
+  const [waiting, failed] = await Promise.all([
+    db.media.where('upload').anyOf('pending', 'uploading').count(),
+    db.media.where('upload').equals('failed').count(),
+  ])
+  return { waiting, failed }
+}
+
 export async function setVideoStorage(value: VideoStorage) {
   await db.meta.put({ key: KEY, value })
 }
