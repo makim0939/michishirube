@@ -1,1 +1,4 @@
 CAPACITOR_DEBUG = true
+
+// 署名のチーム ID は、この端末だけの signing.xcconfig に書く（git に入れない。Xcode の画面で選ぶと pbxproj に入ってしまうので、ここに書く）
+#include? "signing.xcconfig"

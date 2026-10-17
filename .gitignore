@@ -8,5 +8,8 @@ dev-dist
 .dev.vars
 .wrangler
 
+# 署名のチーム ID（各自の端末のファイル。ios/debug.xcconfig から読む）
+ios/signing.xcconfig
+
 # 形の参考にしている画像（出典が様々なので公開しない）
 references/

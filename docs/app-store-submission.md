@@ -14,7 +14,7 @@ Apple の規約の確認日：2026-10-17。提出の前に、App Review Guidelin
   配信前の 2026-10-17 に、`io.github.makim0939.lattecho` → `me.makimura.lattecho` → `me.makimura.lattecho.app` と変えた（Android の applicationId、Google ログインから戻る URL スキームも同じ値）。
   最後の変更の理由：`me.makimura.lattecho` は、無料の Personal Team が Xcode の自動署名で先に登録していて、有料のチームでは登録できなかったため（Apple 全体で、Bundle ID は重複できない。無料チームのものは、自分では削除できない）。**開発中は、必ず有料のチームで署名する。**
   変えるたびに、前の ID で端末に入っているアプリとは別のアプリになる。記録は、前のアプリの「設定 → バックアップ」で書き出し、新しいアプリで復元する。
-- **署名（コード署名）**：このアプリが「この開発者が作り、途中で書き換えられていない」ことを、Apple が発行する証明書で証明する仕組み。App Store に出すアプリには、配布用の署名が要る。Xcode の「Automatically manage signing」にチームを選ぶと、証明書とプロビジョニングプロファイル（どのアプリを、どの証明書で、どう配るかの許可証）を、自動で作る。`DEVELOPMENT_TEAM`（チーム ID）は、各自の Xcode の設定に入る値で、リポジトリには入れない。
+- **署名（コード署名）**：このアプリが「この開発者が作り、途中で書き換えられていない」ことを、Apple が発行する証明書で証明する仕組み。App Store に出すアプリには、配布用の署名が要る。Xcode の「Automatically manage signing」にチームを選ぶと、証明書とプロビジョニングプロファイル（どのアプリを、どの証明書で、どう配るかの許可証）を、自動で作る。`DEVELOPMENT_TEAM`（チーム ID）は、各自の値で、リポジトリには入れない。`ios/signing.xcconfig`（git に入れないファイル）に `DEVELOPMENT_TEAM = <チーム ID>` と1行書くと、Xcode が読む（`ios/debug.xcconfig` から読み込んでいる）。Xcode の画面でチームを選ぶと、`project.pbxproj` に書き込まれて差分が出るので、画面ではなくこのファイルに書く。
   Apple Developer Program に入ったあとは、Xcode の「Signing & Capabilities」で、有料のチームを選び直す。
 
 ## 2. 先に決めること

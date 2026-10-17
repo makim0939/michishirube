@@ -5,7 +5,7 @@ description: 変更を PR にして、レビュー・マージ・片づけまで
 
 # 作業ツリー → PR → レビュー → マージ → 片づけ
 
-別のセッションが元のフォルダで作業していることがある。**元のフォルダで、ブランチを切り替えない・`checkout -- .`・`stash -u`・`clean` をしない。** ユーザーの未コミットの変更（特に `ios/App/App.xcodeproj/project.pbxproj` の `DEVELOPMENT_TEAM`）を守る。
+別のセッションが元のフォルダで作業していることがある。**元のフォルダで、ブランチを切り替えない・`checkout -- .`・`stash -u`・`clean` をしない。** ユーザーの未コミットの変更（特に `ios/signing.xcconfig`。署名のチーム ID）を守る。
 
 ## 1. 作業ツリーを作る
 
