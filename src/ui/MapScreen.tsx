@@ -179,7 +179,7 @@ export function MapScreen({ domainId }: { domainId?: string }) {
                   <PatternImage name={s.name} />
                   <span className="type-row-text">
                     <span className="type-name">{splitName(s.name).main}</span>
-                    <span className="muted small">{recommendLabel(s, byId, practicing, recorded)}</span>
+                    <span className="muted small">{recommendLabel(s, recorded)}</span>
                   </span>
                 </a>
               </li>
