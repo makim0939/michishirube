@@ -90,6 +90,22 @@ describe('同期', () => {
     expect((await db.domains.toArray()).map((d) => d.id)).toEqual(['remote'])
   })
 
+  it('古い端末が送った型の、参考の目安・出典は、取り込まない', async () => {
+    await applyRemote([
+      {
+        kind: 'skill',
+        id: 's1',
+        updatedAt: 5,
+        deleted: false,
+        data: { domainId: 'd1', name: 'ハート', description: '説明', criteria: '10回中8回', sources: [{ title: 't' }], prereqIds: [] },
+      },
+    ])
+    const skill = await db.skills.get('s1')
+    expect(skill?.name).toBe('ハート')
+    expect(skill).not.toHaveProperty('criteria')
+    expect(skill).not.toHaveProperty('sources')
+  })
+
   it('新しいほうを残し、写真の中身は端末のものを保つ', async () => {
     const domainId = await createDomain('ピアノ')
     const recordId = await addRecord({

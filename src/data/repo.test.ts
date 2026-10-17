@@ -190,6 +190,18 @@ describe('バックアップ', () => {
     expect(await m.blob!.text()).toBe('movie-bytes')
   })
 
+  it('古い版で書き出したバックアップの、参考の目安・出典は、取り込まない', async () => {
+    const { a } = await chain()
+    // 古い版では、型にこの2つの項目があった（書き出しは、保存してある行をそのまま入れる）
+    await db.skills.update(a, { criteria: '10回中8回', sources: [{ title: 't' }] } as never)
+    const parts = await exportBackup({ includeMedia: false })
+    await importBackup(parts.map((p) => p.blob))
+    const skill = await db.skills.get(a)
+    expect(skill?.name).toBe('A')
+    expect(skill).not.toHaveProperty('criteria')
+    expect(skill).not.toHaveProperty('sources')
+  })
+
   it('メディアを含めない書き出しでは、中身のないメディアとして戻す（YouTube やサーバーの写真は見られる）', async () => {
     const { a } = await chain()
     await addRecord({ skillId: a, reason: 'x', nextAction: '', files: [new Blob(['v'], { type: 'image/jpeg' })] })

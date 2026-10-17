@@ -5,6 +5,7 @@ import {
   type EntityChange,
   type SyncRequest,
   type SyncResponse,
+  withoutLegacySkillFields,
 } from '../../shared/protocol'
 
 export class BadRequest extends Error {}
@@ -33,7 +34,9 @@ export function parseSyncRequest(body: unknown): SyncRequest {
         }
         if (JSON.stringify(data).length > SYNC_LIMITS.maxEntityBytes) throw new BadRequest(`changes[${i}] is too large`)
       }
-      return { kind, id, updatedAt, deleted, data: deleted ? null : (data as Record<string, unknown>) }
+      // 更新前の端末が型を送ってきても、消した項目（参考の目安・出典）は保存しない（migration で消したものが戻らないように）
+      const body = data as Record<string, unknown>
+      return { kind, id, updatedAt, deleted, data: deleted ? null : kind === 'skill' ? withoutLegacySkillFields(body) : body }
     }),
   }
 }

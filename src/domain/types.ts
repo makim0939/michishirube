@@ -8,11 +8,6 @@ export interface Domain {
   updatedAt: number
 }
 
-export interface Source {
-  title: string
-  url?: string
-}
-
 /** 練習中に何度も見返す動画や記事 */
 export interface Reference {
   id: string
@@ -36,10 +31,6 @@ export interface Skill {
   domainId: string
   name: string
   description: string
-  /** 前に画面にあった「参考の目安」（もとの呼び名は達成条件）。今は使わない（古いデータのために残す） */
-  criteria?: string
-  /** 前に画面にあった出典。今は使わない（古いデータのために残す） */
-  sources?: Source[]
   references: Reference[]
   /** 前提。どれか1つが達成か練習中なら、おすすめに上がる。空なら最初から */
   prereqIds: string[]

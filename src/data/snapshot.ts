@@ -1,3 +1,4 @@
+import { withoutLegacySkillFields } from '../../shared/protocol'
 import type { Domain, Media, PracticeRecord, Skill } from '../domain/types'
 import { db, type Meta } from './db'
 import { readTextFile, usesFiles, writeTextFile } from './files'
@@ -112,7 +113,7 @@ export async function restoreSnapshotIfEmpty(): Promise<boolean> {
   if (!snapshot || (snapshot.domains.length === 0 && snapshot.records.length === 0)) return false
   await db.transaction('rw', [db.domains, db.skills, db.records, db.media, db.meta, db.outbox], async () => {
     await db.domains.bulkPut(snapshot.domains)
-    await db.skills.bulkPut(snapshot.skills)
+    await db.skills.bulkPut(snapshot.skills.map((s) => withoutLegacySkillFields(s)))
     await db.records.bulkPut(snapshot.records)
     await db.media.bulkPut(snapshot.media)
     await db.meta.bulkPut(snapshot.meta)

@@ -50,6 +50,29 @@ describe('記録の写しから戻す', () => {
     expect(await db.outbox.get(['record', 'r1'])).toBeDefined()
   })
 
+  it('写しの型に、参考の目安・出典が残っていても、戻さない', async () => {
+    const legacySkill = {
+      id: 's1',
+      domainId: 'd1',
+      name: 'ハート',
+      description: '',
+      criteria: '10回中8回',
+      sources: [{ title: 't' }],
+      references: [],
+      prereqIds: [],
+      status: 'idle',
+      createdAt: 1,
+      updatedAt: 1,
+    }
+    const snapshot = JSON.parse(snapshotText())
+    files.texts = new Map([['snapshot.json', JSON.stringify({ ...snapshot, skills: [legacySkill] })]])
+    expect(await restoreSnapshotIfEmpty()).toBe(true)
+    const skill = await db.skills.get('s1')
+    expect(skill?.name).toBe('ハート')
+    expect(skill).not.toHaveProperty('criteria')
+    expect(skill).not.toHaveProperty('sources')
+  })
+
   it('入れ替えの途中で止まっていたら、一時ファイルから戻す', async () => {
     files.texts = new Map([['snapshot.json.tmp', snapshotText()]])
     expect(await restoreSnapshotIfEmpty()).toBe(true)
