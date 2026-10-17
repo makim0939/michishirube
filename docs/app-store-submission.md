@@ -55,10 +55,9 @@ Guideline 4.8（Login Services）：第三者のログイン（Google など）�
 ラテ帳：YouTube の鍵（refresh token）は端末にだけ保存する。ただし、連携の直後に、端末へ渡すために、サーバーが**最長10分**だけ預かり、受け取られたらすぐ消す。また、アップロードの前に、端末が鍵をサーバーに送り、1時間の access token に替えてもらう（サーバーは鍵を保存しない）。連携は、アプリ内からいつでも解除できる（Google 側の許可も取り消される）。
 → 「保存」ではなく「通過」であることを、審査メモに書く（5 章。書いてある）。指摘されたら、同じ説明を返信する。
 
-### 2-4. YouTube の審査（Google）との順番
+### 2-4. YouTube の審査（Google）
 
-YouTube 権限の Google 審査が通る前は、連携のとき「Google で確認されていません」の警告が出る（100ユーザーまで連携できる）。審査員がこれを見ても、通る。ただ、審査メモに書いておく。
-Google の審査が先に通りそうなら、それを待ってから出すと、審査員が混乱しない。
+2026-10-17 に通過した。実機で、連携のときに、「Google で確認されていません」の警告が出ず、アプリ名の「ラテ帳」が表示されることを確認済み。審査メモに、警告についての記述は不要（外した）。
 
 ## 3. 提出のチェックリスト
 
@@ -169,7 +168,6 @@ Every feature works without signing in; records stay on the device. Signing in w
 
 OPTIONAL YOUTUBE LINK (Guideline 5.2.2)
 In Settings > Account, users can optionally link their own YouTube channel (scope: youtube.upload). Practice videos are then uploaded, from the device directly to YouTube, to the user's own channel, unlisted by default. Before linking, the app shows that uploaded videos must comply with the YouTube Terms of Service and are uploaded as "not made for kids". The YouTube refresh token is kept only on the device: it passes through our server only to be handed to the device (deleted on receipt, at most 10 minutes) and to be exchanged for a one-hour access token before each upload; it is never persisted on the server. Users can unlink at any time (this also revokes the permission). We use the YouTube API Services in accordance with the YouTube API Services Terms of Service.
-Note: our Google OAuth verification for the YouTube scope is in progress, so Google may show an "unverified app" screen during linking (up to 100 users). You can continue through it ("Advanced" > "Go to ... (unsafe)"), or skip YouTube entirely, as it is optional.
 
 PRIVACY
 Privacy policy: https://latte.makimura.me/privacy-en (also linked in the app). Support: https://latte.makimura.me/
