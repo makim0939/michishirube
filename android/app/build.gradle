@@ -4,7 +4,7 @@ android {
     namespace = "me.makimura.lattecho"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "me.makimura.lattecho"
+        applicationId "me.makimura.lattecho.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

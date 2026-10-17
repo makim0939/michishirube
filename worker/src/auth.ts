@@ -71,14 +71,17 @@ export async function verifyState(token: string, secret: string, now = Date.now(
 }
 
 /** アプリの URL スキーム（Bundle ID と同じ）。認可が終わったら、これでアプリへ戻る */
-export const APP_SCHEME = 'me.makimura.lattecho'
+export const APP_SCHEME = 'me.makimura.lattecho.app'
+
+/** 一つ前の Bundle ID のスキーム。その版のアプリ（開発中の端末）が、スキームを伝えてくる */
+export const PREVIOUS_APP_SCHEME = 'me.makimura.lattecho'
 
 /** Bundle ID を変える前の版のアプリの URL スキーム。その版は、スキームを伝えてこないので、これで戻す */
 export const LEGACY_APP_SCHEME = 'io.github.makim0939.lattecho'
 
 /** アプリが戻り先に求めた URL スキームが許可したものか（よそのアプリへ、認可の結果を送らないように） */
 export function isAllowedAppScheme(scheme: unknown): scheme is string {
-  return scheme === APP_SCHEME || scheme === LEGACY_APP_SCHEME
+  return scheme === APP_SCHEME || scheme === PREVIOUS_APP_SCHEME || scheme === LEGACY_APP_SCHEME
 }
 
 export function parseOrigins(list: string): string[] {
