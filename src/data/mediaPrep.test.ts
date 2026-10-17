@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { canTranscode } from './content'
-import { judgeRecording, pickRecorderMimeType, recorderSupports, tapToSourcePoint } from './mediaPrep'
+import { judgeRecording, pickRecorderMimeType, recorderSupports, focusAt, keepAutoFocus, tapToSourcePoint } from './mediaPrep'
 
 const IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148'
 const ANDROID = 'Mozilla/5.0 (Linux; Android 14; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36'
@@ -95,5 +95,44 @@ describe('tapToSourcePoint', () => {
 
   it('映像の大きさがまだ分からないときは、場所を返さない', () => {
     expect(tapToSourcePoint({ width: 400, height: 800 }, { width: 0, height: 0 }, { x: 10, y: 10 })).toBeUndefined()
+  })
+})
+
+describe('ピント合わせ', () => {
+  const fakeTrack = (focusMode: string[] | undefined) => {
+    const applied: unknown[] = []
+    const track = {
+      readyState: 'live',
+      getCapabilities: () => (focusMode ? { focusMode } : {}),
+      applyConstraints: vi.fn(async (c: unknown) => void applied.push(c)),
+    } as unknown as MediaStreamTrack
+    return { track, applied }
+  }
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  it('focusMode に対応していない端末では、何も指定せず false を返す', async () => {
+    const { track, applied } = fakeTrack(undefined)
+    expect(await keepAutoFocus(track)).toBe(false)
+    vi.stubGlobal('navigator', { mediaDevices: { getSupportedConstraints: () => ({ pointsOfInterest: true }) } })
+    expect(await focusAt(track, { x: 0.5, y: 0.5 })).toBe(false)
+    expect(applied).toEqual([])
+  })
+
+  it('押した場所に合わせたあと、1.5秒で自動に戻す。続けて押したら、前のタイマーは取り消す', async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('navigator', { mediaDevices: { getSupportedConstraints: () => ({ pointsOfInterest: true }) } })
+    const { track, applied } = fakeTrack(['continuous', 'single-shot'])
+    expect(await focusAt(track, { x: 0.2, y: 0.2 })).toBe(true)
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(await focusAt(track, { x: 0.8, y: 0.8 })).toBe(true)
+    await vi.advanceTimersByTimeAsync(1000) // 最初の押下から2秒。前のタイマーが生きていれば、ここで自動に戻ってしまう
+    expect(applied).toHaveLength(2)
+    await vi.advanceTimersByTimeAsync(600)
+    expect(applied).toHaveLength(3)
+    expect(applied[2]).toEqual({ advanced: [{ focusMode: 'continuous' }] })
   })
 })

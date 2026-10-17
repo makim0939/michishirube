@@ -3,8 +3,8 @@ import {
   cameraConstraints,
   extensionFor,
   focusAt,
-  keepAutoFocus,
   judgeRecording,
+  keepAutoFocus,
   MAX_RECORDING_MS,
   markRecorderTypeBroken,
   pickRecorderMimeType,
@@ -107,6 +107,7 @@ export function Recorder({
   const [shooting, setShooting] = useState(false)
   const guide = useRef<HTMLDivElement>(null)
   /** 押してピントを合わせた場所（画面の座標）。合わせられたときだけ、輪を一瞬出す */
+  const ringTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const [focusRing, setFocusRing] = useState<{ x: number; y: number; id: number }>()
 
   // 写真だけのときは、マイクを使わない
@@ -146,6 +147,8 @@ export function Recorder({
       stream.current = null
     }
   }, [withAudio, quality])
+
+  useEffect(() => () => clearTimeout(ringTimer.current), [])
 
   useEffect(() => {
     const onVisibility = () => {
@@ -258,7 +261,8 @@ export function Recorder({
     if (!point || !(await focusAt(track, point))) return
     const ring = { x: e.clientX, y: e.clientY, id: Date.now() }
     setFocusRing(ring)
-    setTimeout(() => setFocusRing((cur) => (cur?.id === ring.id ? undefined : cur)), 900)
+    clearTimeout(ringTimer.current)
+    ringTimer.current = setTimeout(() => setFocusRing(undefined), 900)
   }
 
   /** いま映っているコマから、枠の中を写真にする（開いているカメラのまま、1回押すだけ） */

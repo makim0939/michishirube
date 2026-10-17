@@ -60,8 +60,11 @@ export function tapToSourcePoint(
   }
 }
 
-/** カメラのピントの合わせ方（ブラウザの型定義にまだ無いもの）。端末が対応していなければ、何も起きない */
+/** ピントの合わせ方。ブラウザの型定義に focusMode・pointsOfInterest が無いので、MediaTrackConstraintSet に型を合わせて渡す */
 type FocusMode = 'continuous' | 'single-shot' | 'manual' | 'none'
+
+/** 1回合わせたあと自動に戻すタイマー（続けて押したとき、前のタイマーが後の指定を壊さないよう、トラックごとに1つだけ持つ） */
+const revertTimers = new WeakMap<MediaStreamTrack, ReturnType<typeof setTimeout>>()
 
 /** 自動でピントを合わせ続ける（動くカップに追いつく）。対応していない端末では何もしない */
 export async function keepAutoFocus(track: MediaStreamTrack): Promise<boolean> {
@@ -90,7 +93,15 @@ export async function focusAt(track: MediaStreamTrack, point: { x: number; y: nu
     return false
   }
   // 1回合わせたあとは、また自動で合わせ続ける（ピントが固定されたままにしない）
-  if (mode === 'single-shot') setTimeout(() => void keepAutoFocus(track), 1500)
+  clearTimeout(revertTimers.get(track))
+  if (mode === 'single-shot') {
+    revertTimers.set(
+      track,
+      setTimeout(() => {
+        if (track.readyState === 'live') void keepAutoFocus(track)
+      }, 1500),
+    )
+  }
   return true
 }
 
