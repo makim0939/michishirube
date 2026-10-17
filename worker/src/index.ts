@@ -17,7 +17,7 @@ import {
   userForSession,
   type AuthKind,
 } from './accounts'
-import { bearerToken, isAllowedReturn, parseOrigins, safeEqual, signState, verifyState } from './auth'
+import { bearerToken, isAllowedAppScheme, isAllowedReturn, LEGACY_APP_SCHEME, parseOrigins, safeEqual, signState, verifyState } from './auth'
 import { resultPage } from './resultPage'
 import { BadRequest, parseSyncRequest, sync } from './sync'
 import { accessToken, authUrl, exchangeCode, ReauthRequired, revoke, type GoogleConfig } from './youtube'
@@ -32,9 +32,6 @@ interface Env {
 }
 
 type App = { Bindings: Env; Variables: { userId: string } }
-
-/** iPhone・Android のアプリの URL スキーム（認可が終わったら、これでアプリへ戻る） */
-const APP_SCHEME = 'io.github.makim0939.lattecho'
 
 const app = new Hono<App>()
 
@@ -161,10 +158,11 @@ function callbackUrl(requestUrl: string): string {
 app.post('/api/auth/start', async (c) => {
   const config = googleConfig(c.env)
   if (!config || !c.env.APP_TOKEN) return c.json({ error: 'google_not_configured' }, 400)
-  const { kind, id, challenge, returnTo, app: fromApp } = await jsonBody(c)
+  const { kind, id, challenge, returnTo, app: fromApp, scheme } = await jsonBody(c)
   if (kind !== 'login' && kind !== 'youtube') throw new BadRequest('kind is invalid')
   if (typeof id !== 'string' || !/^[A-Za-z0-9_-]{16,64}$/.test(id)) throw new BadRequest('id is invalid')
   if (typeof challenge !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(challenge)) throw new BadRequest('challenge is invalid')
+  if (scheme !== undefined && !isAllowedAppScheme(scheme)) throw new BadRequest('scheme is not allowed')
   if (fromApp !== true && (typeof returnTo !== 'string' || !isAllowedReturn(returnTo, parseOrigins(c.env.ALLOWED_ORIGINS)))) {
     throw new BadRequest('returnTo is not allowed')
   }
@@ -177,7 +175,7 @@ app.post('/api/auth/start', async (c) => {
   }
   await createAuthRequest(c.env.DB, { id, kind, challenge, userId })
   const state = await signState(
-    fromApp === true ? { id, app: true, issuedAt: Date.now() } : { id, returnTo: returnTo as string, issuedAt: Date.now() },
+    fromApp === true ? { id, app: true, ...(scheme ? { scheme } : {}), issuedAt: Date.now() } : { id, returnTo: returnTo as string, issuedAt: Date.now() },
     c.env.APP_TOKEN,
   )
   return c.json({ url: authUrl(config, callbackUrl(c.req.url), state, kind) })
@@ -193,7 +191,7 @@ app.get('/api/youtube/callback', async (c) => {
   /** 認可した画面を、始めたアプリ・Web 版へ戻す URL。成功したら一度きりのコードを付ける */
   const back = (status: string, oneTimeCode?: string) => {
     const params = new URLSearchParams({ auth_id: request.id, auth_status: status, ...(oneTimeCode ? { auth_code: oneTimeCode } : {}) })
-    if (state.app) return `${APP_SCHEME}://auth?${params}`
+    if (state.app) return `${isAllowedAppScheme(state.scheme) ? state.scheme : LEGACY_APP_SCHEME}://auth?${params}`
     return returnTo ? `${returnTo.split('#')[0].split('?')[0]}?${params}#/settings/sync` : undefined
   }
   const code = c.req.query('code')

@@ -68,7 +68,7 @@ async function post(path: string, body: unknown, session?: string): Promise<Reco
 }
 
 /** アプリの URL スキーム。Google の画面で認可が終わると、サーバーがこれでアプリへ戻す */
-const APP_SCHEME = 'io.github.makim0939.lattecho'
+const APP_SCHEME = 'me.makimura.lattecho'
 
 type Finish = 'pending' | 'expired' | 'cancelled' | 'failed' | AuthResult
 
@@ -127,7 +127,7 @@ export async function authorizeWithGoogle(kind: AuthKind, session?: string): Pro
     return new Promise(() => {})
   }
 
-  const { url } = (await post('/api/auth/start', { kind, id, challenge, app: true }, session)) as { url: string }
+  const { url } = (await post('/api/auth/start', { kind, id, challenge, app: true, scheme: APP_SCHEME }, session)) as { url: string }
   sheetOpen = true
   let settle: (back: { status: string; code?: string } | null) => void = () => {}
   const returned = new Promise<{ status: string; code?: string } | null>((resolve) => (settle = resolve))

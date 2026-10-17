@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bearerToken, isAllowedReturn, safeEqual, signState, verifyState } from './auth'
+import { APP_SCHEME, bearerToken, isAllowedAppScheme, isAllowedReturn, LEGACY_APP_SCHEME, safeEqual, signState, verifyState } from './auth'
 import { BadRequest, parseSyncRequest } from './sync'
 
 describe('トークン', () => {
@@ -25,6 +25,19 @@ describe('OAuth の state', () => {
     expect(await verifyState(token, 'other', now)).toBeNull()
     expect(await verifyState(`x${token}`, secret, now)).toBeNull()
     expect(await verifyState(token, secret, now + 11 * 60 * 1000)).toBeNull()
+  })
+
+  it('アプリの URL スキームは、今のものと、Bundle ID を変える前のものだけ（よそのアプリへ送らない）', async () => {
+    expect(isAllowedAppScheme(APP_SCHEME)).toBe(true)
+    expect(isAllowedAppScheme(LEGACY_APP_SCHEME)).toBe(true)
+    expect(isAllowedAppScheme('evil.example.app')).toBe(false)
+    expect(isAllowedAppScheme(undefined)).toBe(false)
+    // state に載せて戻せる。型が違う state は通さない
+    const now = 1_000_000
+    const token = await signState({ id: 'abc', app: true, scheme: APP_SCHEME, issuedAt: now }, secret)
+    expect((await verifyState(token, secret, now))?.scheme).toBe(APP_SCHEME)
+    const bad = await signState({ id: 'abc', app: true, scheme: 1 as unknown as string, issuedAt: now }, secret)
+    expect(await verifyState(bad, secret, now)).toBeNull()
   })
 
   it('戻り先は許可したオリジンだけ', () => {
