@@ -1,4 +1,5 @@
 import { Unzip, UnzipInflate, Zip, ZipPassThrough, strFromU8, strToU8 } from 'fflate'
+import { withoutLegacySkillFields } from '../../shared/protocol'
 import type { Domain, Media, PracticeRecord, Skill } from '../domain/types'
 import { contentBlob, hasContent, resetContentFiles } from './content'
 import { formatFileStamp } from '../domain/format'
@@ -274,7 +275,8 @@ export async function importBackup(zips: Blob[]): Promise<ImportSummary> {
     updatedAt: row.updatedAt ?? row.createdAt,
   })
   const domains = data.domains.map(stamp)
-  const skills = data.skills.map((s) => ({ ...stamp(s), references: s.references ?? [] }))
+  // 古いバックアップの型に残っている、消した項目（参考の目安・出典）は取り込まない
+  const skills = data.skills.map((s) => ({ ...withoutLegacySkillFields(stamp(s)), references: s.references ?? [] }))
   const records = data.records.map(stamp)
   let missingMedia = 0
   const media: Media[] = data.media.map(({ path, ...m }) => {

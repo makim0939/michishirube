@@ -3,6 +3,19 @@
 export const ENTITY_KINDS = ['domain', 'skill', 'record', 'media', 'settings'] as const
 export type EntityKind = (typeof ENTITY_KINDS)[number]
 
+/**
+ * 前に画面にあった型の項目（参考の目安・出典）。いまは使わず、端末とサーバーのデータからも消した。
+ * 古い端末・バックアップ・写しから届いた型に残っていることがあるので、受け取るときに取り除く
+ */
+export const LEGACY_SKILL_FIELDS = ['criteria', 'sources'] as const
+
+/** 型のデータから、消した項目を除いたコピー（元は変えない） */
+export function withoutLegacySkillFields<T extends object>(row: T): Omit<T, (typeof LEGACY_SKILL_FIELDS)[number]> {
+  const copy = { ...row } as Record<string, unknown>
+  for (const field of LEGACY_SKILL_FIELDS) delete copy[field]
+  return copy as Omit<T, (typeof LEGACY_SKILL_FIELDS)[number]>
+}
+
 export interface EntityChange {
   kind: EntityKind
   id: string

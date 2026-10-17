@@ -1,6 +1,6 @@
 import { liveQuery } from 'dexie'
 import type { EntityChange, EntityKind, SyncResponse } from '../../shared/protocol'
-import { PHOTO_MAX_BYTES, posterPhotoId, SYNC_LIMITS } from '../../shared/protocol'
+import { PHOTO_MAX_BYTES, posterPhotoId, SYNC_LIMITS, withoutLegacySkillFields } from '../../shared/protocol'
 import { DEFAULT_SETTINGS, type Media, type Settings } from '../domain/types'
 import { ContentUnavailableError, contentBlob, hasContent, moveContentsToFiles } from './content'
 import { db } from './db'
@@ -213,7 +213,9 @@ export async function applyRemote(changes: EntityChange[]) {
         await table.delete(c.id)
         continue
       }
-      const row = { ...c.data, id: c.id, updatedAt: c.updatedAt } as Record<string, unknown>
+      // 古い端末が送った型に、消した項目（参考の目安・出典）が残っていても、取り込まない
+      const data = c.kind === 'skill' && c.data ? withoutLegacySkillFields(c.data) : c.data
+      const row = { ...data, id: c.id, updatedAt: c.updatedAt } as Record<string, unknown>
       if (c.kind === 'media') {
         const merged = mergeMedia(row as unknown as Media, local as Media | undefined)
         await db.media.put(merged.row)

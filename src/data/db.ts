@@ -1,5 +1,5 @@
 import Dexie, { type Collection, type EntityTable, type Transaction } from 'dexie'
-import type { EntityKind } from '../../shared/protocol'
+import { LEGACY_SKILL_FIELDS, type EntityKind } from '../../shared/protocol'
 import type { Domain, Media, PracticeRecord, Skill } from '../domain/types'
 
 export interface Meta {
@@ -37,7 +37,22 @@ export class AppDB extends Dexie {
         outbox: '[kind+id]',
       })
       .upgrade(upgradeToV2)
+    // 保存する項目は変えず、中身だけ直す
+    this.version(3).stores({}).upgrade(upgradeToV3)
   }
+}
+
+/**
+ * 参考の目安・出典は画面からなくしたので、端末の型からも消す。
+ * updatedAt は進めず、outbox にも積まない（同期で全端末が型を受け取り直さないように。サーバーは migration で消す）
+ */
+async function upgradeToV3(tx: Transaction) {
+  await tx
+    .table('skills')
+    .toCollection()
+    .modify((s: Record<string, unknown>) => {
+      for (const field of LEGACY_SKILL_FIELDS) delete s[field]
+    })
 }
 
 /** 同期と参考資料のための項目を、既存のデータに足す */
