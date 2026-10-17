@@ -72,7 +72,11 @@ export async function renameDomain(id: string, name: string) {
   })
 }
 
-/** 型の記録と動画・写真を消す（型・分野の削除で共通。型そのものは呼び出し側が消す） */
+/**
+ * 型の記録と動画・写真を消す（型・分野の削除で共通。型そのものは呼び出し側が消す）。
+ * 自分ではトランザクションを張らない。呼び出し側が records・media・outbox を含めて張ること
+ * （削除と「削除の印」が、別々に確定しないように）
+ */
 async function deleteRecordsOfSkills(skillIds: string[]) {
   const recordIds = (await db.records.where('skillId').anyOf(skillIds).primaryKeys()) as string[]
   const mediaIds = (await db.media.where('skillId').anyOf(skillIds).primaryKeys()) as string[]

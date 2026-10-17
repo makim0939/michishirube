@@ -50,7 +50,9 @@ describe('JSON の POST', () => {
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
     expect(url).toBe('https://api.example/api/youtube/token')
     expect(init.method).toBe('POST')
-    expect(init.headers).toEqual({ Authorization: 'Bearer tok', 'Content-Type': 'application/json' })
+    const headers = new Headers(init.headers)
+    expect(headers.get('Authorization')).toBe('Bearer tok')
+    expect(headers.get('Content-Type')).toBe('application/json')
     expect(JSON.parse(String(init.body))).toEqual({ refreshToken: 'r' })
   })
 })

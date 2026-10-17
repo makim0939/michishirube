@@ -302,7 +302,7 @@ function StoragePage() {
     toast.show(value === 'public' ? 'これから上げる動画は、だれでも見られます' : 'これから上げる動画は、限定公開になります')
   }
 
-  // いま選んでいる項目をもう一度押しても、何も変えない
+  // いま選んでいる項目をもう一度押したときに、トーストや動画の作り直し（optimizeVideos）が走らないようにする
   const select =
     <T,>(current: T, value: T, change: (value: T) => Promise<void>) =>
     () =>
