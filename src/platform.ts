@@ -39,3 +39,9 @@ export function watchBackButton() {
 
 /** アプリのトップページ・プライバシーポリシー（サーバーと同じドメイン）。アプリはここのページを開く */
 export const SITE_URL = 'https://latte.makimura.me/'
+
+/**
+ * App Store の評価の画面。数字は App Store Connect の Apple ID（ストアの URL に出る公開の値。チーム ID とは別）。
+ * 開くとき（Safari 経由で App Store アプリへ）は、アプリのリンクと同じく別の窓で開く
+ */
+export const APP_STORE_REVIEW_URL = 'https://apps.apple.com/app/id6823908010?action=write-review'
