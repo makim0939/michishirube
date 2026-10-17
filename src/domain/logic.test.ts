@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  canAchieve,
   computeStates,
   descendants,
-  indexById,
   newlyUnlocked,
   practicingFrom,
   practiceOrder,
@@ -42,17 +40,21 @@ describe('computeStates', () => {
     expect(computeStates([skill('a')], new Set()).get('a')).toBe('available')
   })
 
-  it('前提を練習中なら並行して練習できるが、達成は前提を達成してから', () => {
+  it('前提を練習中なら並行して練習できる', () => {
     const skills = [skill('steam'), skill('dot', ['steam']), skill('heart', ['dot'])]
     const states = computeStates(skills, new Set(['steam']))
     expect(states.get('dot')).toBe('available')
     expect(states.get('heart')).toBe('locked')
-    const byId = indexById(skills)
-    expect(canAchieve(skills[1], byId)).toBe(false)
-    expect(canAchieve(skills[0], byId)).toBe(true)
 
     // ドットも記録すると（練習中）、ハートも並行して練習できる
     expect(computeStates(skills, new Set(['steam', 'dot'])).get('heart')).toBe('available')
+  })
+
+  it('前提が複数のとき、どれか1つが練習中なら並行して練習できる（もう一方が未着手でも）', () => {
+    const skills = [skill('wing-tulip'), skill('wing-heart'), skill('swan', ['wing-tulip', 'wing-heart'])]
+    expect(computeStates(skills, new Set()).get('swan')).toBe('locked')
+    expect(computeStates(skills, new Set(['wing-heart'])).get('swan')).toBe('available')
+    expect(computeStates(skills, new Set(['wing-tulip'])).get('swan')).toBe('available')
   })
 
   it('「できた」の型は、最近記録していても「できた」', () => {

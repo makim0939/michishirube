@@ -2341,8 +2341,6 @@ a.notice {
 }
 
 .graph-node {
-  width: 208px;
-  height: 60px;
   display: flex;
   align-items: center;
   gap: 8px;

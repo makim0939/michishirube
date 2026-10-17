@@ -31,10 +31,6 @@ function skillState(skill: Skill, byId: Map<string, Skill>, practicing: Readonly
   return prereqsStarted(skill, byId, practicing) ? 'available' : 'locked'
 }
 
-export function canAchieve(skill: Skill, byId: Map<string, Skill>): boolean {
-  return skill.status !== 'done' && prereqsDone(skill, byId)
-}
-
 export function indexById(skills: Skill[]): Map<string, Skill> {
   return new Map(skills.map((s) => [s.id, s]))
 }
