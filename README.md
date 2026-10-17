@@ -26,6 +26,7 @@ pnpm app:build   # アプリ用に作って ios/ へ入れる
 pnpm app:ios     # 作って Xcode で開く（Xcode から実機・シミュレーターで動かす）
 ```
 
+- 最新にするには、`git pull` して Xcode で実行するだけです。実行のたびに画面を作り直して入れます（`ios/App/scripts/build-web.sh`）。プラグインを足したときだけ `pnpm app:build` が要ります。画面を変えていないときに飛ばしたいなら、Xcode のスキームの環境変数に `SKIP_WEB_BUILD=1` を入れます。
 - アプリ用の作りでは、画面のファイルを相対パスで読み、Web 版のオフライン用の仕組み（サービスワーカー）は入れません。
 - カメラ・マイク・写真の許可の説明は `ios/App/App/Info.plist` にあります。
 
