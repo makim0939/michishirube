@@ -11,7 +11,7 @@ description: アプリの実際の画面を、きれいに撮る手順。紹介�
 |---|---|---|
 | 紹介サイト（`worker/site/img/`） | A：ユーザーの Chrome の Web 版（運用データ） | 780×1272 ほどの WebP（`quality=86`） |
 | 紹介の記事・SNS・資料 | A（または B） | 用途に合わせた PNG・JPEG |
-| App Store の画面写真 | B：iOS シミュレーター（ピクセル数が決まっている） | PNG・JPEG、**透明なし** |
+| App Store の画面写真 | C：実機の画面を変換（または B：iOS シミュレーター） | PNG・JPEG、**透明なし** |
 
 ## A. ユーザーの Chrome の Web 版（運用データの画面）
 
@@ -37,6 +37,31 @@ claude-in-chrome（`mcp__claude-in-chrome__*`）を使う。**新しいタブを
 3. 撮る：`xcrun simctl io booted screenshot <ファイル>.png`（機種のピクセル数のまま保存される。`control` の `screenshot` は縮小されることがあるので、ピクセル数を確認する）。
 4. **透明をなくす**（`Image.open(...).convert('RGB')` で保存。App Store は、透明のある画像を受け付けない）。
 5. 1枚ごとに、見せたい状態にしてから撮る（画面の並びは、`docs/app-store-submission.md` の案）。運用データは、見せてよいものだけ。
+
+## C. 実機のスクリーンショットを App Store の大きさに変換する
+
+ユーザーの iPhone・iPad の実機で撮った画面を、App Store の大きさに合わせる（ユーザーの機種：iPhone 12＝1170×2532、iPad Air 第4世代＝1640×2360）。
+
+- 縦横比がほぼ同じ（iPhone）なら、画面全体が収まる倍率で拡大し、足りない数ピクセルを、**端の色で伸ばす**。
+- 縦横比が違う（iPad）なら、高さに合わせて拡大し、左右を**端の色で伸ばす**。アプリは、中央の列と背景色の余白の作りなので、つなぎ目が目立たない（下のタブバーの白い帯も、行ごとに端の色が伸びるので、つながる）。
+
+```python
+import numpy as np
+from PIL import Image
+
+def to_appstore(src, target):  # target = (幅, 高さ)。例：(1179, 2556)、(2048, 2732)
+    im = Image.open(src).convert('RGB')  # 透明なし
+    tw, th = target
+    s = min(tw / im.width, th / im.height)
+    im = im.resize((round(im.width * s), round(im.height * s)), Image.LANCZOS)
+    px, py = tw - im.width, th - im.height
+    a = np.pad(np.asarray(im), ((py // 2, py - py // 2), (px // 2, px - px // 2), (0, 0)), mode='edge')
+    return Image.fromarray(a)
+```
+
+- 大きさは、`docs/app-store-submission.md` の6章（提出前に、App Store Connect の表記で確認する）。
+- ステータスバー（時刻・電池）が写る。気になる場合は、ユーザーに、時刻などを整えて撮ってもらうか、上の帯を、背景色で塗る。
+- 個人情報（メールアドレス、アカウント名など）が写っていないか、確認する（設定 → アカウントは、使わない）。
 
 ## 共通の注意
 
