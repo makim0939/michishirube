@@ -94,10 +94,12 @@ URL：
 |---|---|---|
 | 名前 | 30文字 | ラテ帳：ラテアートの練習記録 |
 | サブタイトル | 30文字 | 動画と写真で、上達が見える練習帳 |
-| プロモーション用テキスト | 170文字 | 1杯ずつ撮って、◎△✕と次の一手をメモ。最初の1杯と並べれば、上達が目で見えます。 |
+| プロモーション用テキスト | 170文字 | 1杯ずつ撮って、成功・惜しい・失敗と次の一手をメモ。最初の1杯と並べれば、上達が目で見えます。 |
 | キーワード | 100文字（カンマ区切り） | ラテアート,練習,記録,バリスタ,カフェ,コーヒー,エスプレッソ,動画,上達,ロゼッタ,ハート,チューリップ |
 
 ### 4-2. 説明文（4000文字まで）
+
+（プロモーション用テキストには、「◎△✕」が使えなかった。「■」が使えないときは、「【 】」に置き換える。）
 
 ```
 ラテアートの練習を、1杯ずつ動画と写真で記録するアプリです。
@@ -158,7 +160,7 @@ Latte-chō (ラテ帳) is a practice journal for latte art. Users record each cu
 
 HOW TO TRY IT (no account or demo login is needed)
 1. Open the app and tap a pattern (e.g. "Heart"), then tap "Record" to take a short video and a photo. Camera and microphone are used only for this. The microphone is optional (silent recording works).
-2. Choose a result (◎ / △ / ✕), optionally tap causes, write a "next step", and save. The record appears in the "Cup journal" tab.
+2. Choose a result (success / close / fail), optionally tap causes, write a "next step", and save. The record appears in the "Cup journal" tab.
 3. Open the pattern again to compare the first and the latest cup.
 You can also pick existing photos/videos from the photo library.
 
