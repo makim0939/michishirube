@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { indexById } from "../domain/logic";
 import type { Skill } from "../domain/types";
 import { recommendLabel } from "./skillLabels";
 
@@ -25,25 +24,22 @@ function skill(
 
 describe("recommendLabel", () => {
   const skills = [skill("heart"), skill("tulip", ["heart"])];
-  const byId = indexById(skills);
-  const none = new Set<string>();
 
-  it("前提の無い型は「最初の型」", () => {
-    expect(recommendLabel(skills[0], byId, none, none)).toBe("最初の型");
+  it("前提の有無に関わらず、記録がなければ「まだ記録がありません」", () => {
+    const none = new Set<string>();
+    expect(recommendLabel(skills[0], none)).toBe("まだ記録がありません");
+    expect(recommendLabel(skills[1], none)).toBe("まだ記録がありません");
   });
 
-  it("前提を練習中なら、この型の記録の有無を伝える（「並行して」とは言わない）", () => {
-    const practicing = new Set(["heart"]);
-    expect(recommendLabel(skills[1], byId, practicing, none)).toBe(
-      "まだ記録がありません",
-    );
-    expect(
-      recommendLabel(skills[1], byId, practicing, new Set(["tulip"])),
-    ).toBe("最近の記録はありません");
+  it("前提の有無に関わらず、記録があれば「最近の記録はありません」", () => {
+    const recorded = new Set(["heart", "tulip"]);
+    expect(recommendLabel(skills[0], recorded)).toBe("最近の記録はありません");
+    expect(recommendLabel(skills[1], recorded)).toBe("最近の記録はありません");
   });
 
-  it("前提を達成していれば「〇〇のつぎ」", () => {
-    const done = indexById([skill("heart", [], "done"), skills[1]]);
-    expect(recommendLabel(skills[1], done, none, none)).toBe("「heart」のつぎ");
+  it("ほかの型の記録は数えず、その型自身の記録だけで決まる", () => {
+    const onlyHeart = new Set(["heart"]);
+    expect(recommendLabel(skills[1], onlyHeart)).toBe("まだ記録がありません");
+    expect(recommendLabel(skills[0], onlyHeart)).toBe("最近の記録はありません");
   });
 });

@@ -387,7 +387,7 @@ async function loadToday() {
   const thisWeek = await db.records.where('createdAt').aboveOrEqual(startOfWeek(Date.now())).count()
   // 次のおすすめ：前提ができている「次の一歩」を先に、前提を練習中のものを後に並べる
   const available = sortByDepth(skills.filter((s) => states.get(s.id) === 'available'))
-    .map((s) => ({ ...s, parallel: !prereqsDone(s, byId), label: recommendLabel(s, byId, practicing, recorded) }))
+    .map((s) => ({ ...s, parallel: !prereqsDone(s, byId), label: recommendLabel(s, recorded) }))
     .sort((a, b) => Number(a.parallel) - Number(b.parallel))
     .slice(0, RECOMMEND)
   return {
