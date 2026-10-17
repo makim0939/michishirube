@@ -24,6 +24,9 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- 暗号化は、HTTPS・ハッシュなど OS 標準のものだけ（輸出規制の申告は、免除の扱い）。アップロードのたびの質問を省く -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
