@@ -108,7 +108,8 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
     return first ? sortByDepth(await db.skills.where('domainId').equals(first.domainId).toArray()) : []
   }, [routeSkillId])
   const [draft, setDraft, clearDraft] = useDraft(`michishirube:draft:${routeSkillId}`, !editing)
-  const skillId = draft.skillId ?? routeSkillId
+  // 下書きの型が、もう無いとき（削除・同期で消えた）は、URL の型に戻す（画面から抜けられなくならないように）
+  const skillId = draft.skillId && skills?.some((s) => s.id === draft.skillId) ? draft.skillId : routeSkillId
   const skill = skills?.find((s) => s.id === skillId)
   const stats = useLiveQuery(
     async () => ({
@@ -120,7 +121,23 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
   // 型を選び直した瞬間に、画面が空にならないよう、読み直しの間は前の値を使う
   const lastStats = useRef(stats)
   if (stats) lastStats.current = stats
-  const data = skills && (stats ?? lastStats.current) ? { skills, ...(stats ?? lastStats.current!) } : undefined
+  const shownStats = stats ?? lastStats.current
+  const data = skills && shownStats ? { skills, ...shownStats } : undefined
+  // 直す記録の、もとの型（保存したときに、型を変えたか調べるため。URL の型は、履歴の古い URL だと違うことがある）
+  const originalSkillId = useRef<string | undefined>(undefined)
+  // 型だけを選んで何も書かずに離れたら、その選びは残さない（次に同じ型の記録を開いたとき、別の型で開いてしまうため）。
+  // ページの再読み込み（カメラから戻るとき）では、この後始末は走らないので、書きかけは残る
+  const latestDraft = useRef(draft)
+  latestDraft.current = draft
+  useEffect(
+    () => () => {
+      const d = latestDraft.current
+      if (!editing && !d.reason?.trim() && !d.nextAction?.trim() && !(d.causes?.length ?? 0)) {
+        removeStorage('session', `michishirube:draft:${routeSkillId}`)
+      }
+    },
+    [editing, routeSkillId],
+  )
 
   const [items, setItems] = useState<Item[]>([])
   const [removed, setRemoved] = useState<string[]>([])
@@ -165,6 +182,7 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
         rows.map(async (m) => (m.file && !m.blob ? { ...m, blob: await contentBlob(m).catch(() => undefined) } : m)),
       )
       if (cancelled) return
+      originalSkillId.current = record.skillId
       setOutcome(record.outcome)
       setDraft({ skillId: record.skillId, reason: record.reason, nextAction: record.nextAction, causes: record.causes })
       setItems(media.map((m) => ({ kind: 'existing' as const, key: nextKey(), media: m })))
@@ -314,7 +332,7 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
             removeMediaIds: removed,
             replace,
           })
-          toast.show(skillId === routeSkillId ? '記録を保存しました' : `「${splitName(skill.name).main}」に移して保存しました`)
+          toast.show(skillId === (originalSkillId.current ?? routeSkillId) ? '記録を保存しました' : `「${splitName(skill.name).main}」に移して保存しました`)
         } else {
           await addRecord({ skillId, outcome, reason, causes, nextAction, files: added })
           clearDraft()

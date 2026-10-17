@@ -272,6 +272,33 @@ describe('記録を直す', () => {
     expect((await db.media.get(added))!.skillId).toBe(b)
   })
 
+  it('型を付け替えるとき、外した動画は戻らず、切り取った動画も新しい型になる', async () => {
+    const { a, b } = await chain()
+    const id = await addRecord({
+      skillId: a,
+      reason: '',
+      nextAction: '',
+      files: [new Blob(['v'], { type: 'video/mp4' }), new Blob(['p'], { type: 'image/jpeg' })],
+    })
+    const [video, photo] = (await db.records.get(id))!.mediaIds
+    await db.outbox.clear()
+
+    await updateRecord({
+      recordId: id,
+      skillId: b,
+      reason: '',
+      nextAction: '',
+      addFiles: [],
+      removeMediaIds: [photo],
+      replace: [{ id: video, blob: new Blob(['trimmed'], { type: 'video/mp4' }) }],
+    })
+
+    expect(await db.media.get(photo)).toBeUndefined()
+    expect((await db.media.get(video))!.skillId).toBe(b)
+    expect((await db.records.get(id))!.mediaIds).toEqual([video])
+    expect((await db.outbox.toArray()).map((e) => e.id).sort()).toEqual([photo, video, id].sort())
+  })
+
   it('無い型には付け替えられない', async () => {
     const { a } = await chain()
     const id = await addRecord({ skillId: a, reason: 'x', nextAction: '', files: [] })
