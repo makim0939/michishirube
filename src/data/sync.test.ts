@@ -7,7 +7,7 @@ import { getVideoStorage, setVideoStorage, setYoutubePrivacy } from './videoStor
 import { applyRemote, connectWithConfig, getSyncStatus, runSync } from './sync'
 import { logout } from './account'
 import { selectVideosToDrop } from './tidy'
-import { uploadVideo, videoMeta, youtubePlayable } from './youtube'
+import { uploadNow, uploadVideo, videoMeta, youtubePlayable } from './youtube'
 
 const input = (name: string) => ({ name, description: '', criteria: '', sources: [], prereqIds: [] })
 
@@ -358,6 +358,27 @@ describe('YouTube へのアップロード', () => {
     await expect(uploadVideo(new Blob(['v']), { title: 't', description: '' }, 'token', fetchImpl)).rejects.toThrow(
       /上限/,
     )
+  })
+})
+
+describe('今すぐアップ', () => {
+  it('自動で上げ直すのをやめた動画・上限で休んでいる動画も、押したら上げ直しの対象にして、残りを知らせる', async () => {
+    const domainId = await createDomain('ピアノ')
+    await addRecord({
+      skillId: await createSkill(domainId, input('A')),
+      reason: '',
+      nextAction: '',
+      files: [new Blob(['v'], { type: 'video/mp4' })],
+    })
+    const [m] = await db.media.toArray()
+    await setVideoStorage('youtube')
+    await db.media.update(m.id, { upload: 'failed', uploadError: '壊れた', uploadAttempts: 3 })
+    await db.meta.put({ key: 'youtube:pausedUntil', value: Date.now() + 60_000 })
+    // ログインしていないので上げ始めない：状況として、残っていることと理由を返す
+    const left = await uploadNow()
+    expect(await db.meta.get('youtube:pausedUntil')).toBeUndefined()
+    expect(await db.media.get(m.id)).toMatchObject({ upload: 'pending', uploadAttempts: 0 })
+    expect(left).toMatchObject({ waiting: 1, failed: 0, preparing: 0 })
   })
 })
 

@@ -37,7 +37,8 @@ vi.mock('./files', () => ({
 
 const { moveContentsToFiles, optimizeVideos, resetContentFiles, targetQuality, tidyContentFiles, watchContentFiles } =
   await import('./content')
-const { setKeepHigh, setVideoQuality } = await import('./videoStorage')
+const { setKeepHigh, setVideoQuality, setVideoStorage } = await import('./videoStorage')
+const { uploadNow } = await import('./youtube')
 
 function media(over: Partial<Media> = {}): Media {
   return {
@@ -277,3 +278,12 @@ describe('動画の画質をそろえる', () => {
   })
 })
 
+describe('今すぐアップ（アプリ）', () => {
+  it('画質をそろえている途中の動画は、そろえ終えるのを待っていることとして数える', async () => {
+    await setVideoStorage('youtube')
+    await db.media.add(media({ upload: 'pending', blob: undefined, file: 'media/m1-1.mp4', size: 100 }))
+    await db.media.add(media({ id: 'm2', upload: 'pending', blob: undefined, file: 'media/m2-1.mp4', size: 100, optimized: 'standard' }))
+    const left = await uploadNow()
+    expect(left).toMatchObject({ waiting: 2, preparing: 1 })
+  })
+})

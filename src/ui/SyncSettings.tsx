@@ -12,7 +12,7 @@ import {
 import { db } from '../data/db'
 import { getSyncConfig, getSyncStatus, runSync } from '../data/sync'
 import { getVideoStorage } from '../data/videoStorage'
-import { connectYoutube, disconnectYoutube, resumeUploads, saveYoutubeKey, youtubeStatus, type YoutubeStatus } from '../data/youtube'
+import { connectYoutube, disconnectYoutube, saveYoutubeKey, uploadNow, youtubeStatus, type YoutubeStatus } from '../data/youtube'
 import { ConfirmButton, formatAgo, formatBytes, formatDate } from './common'
 import { PHOTO_QUOTA_BYTES } from '../../shared/protocol'
 import { useAction, useToast } from './feedback'
@@ -99,6 +99,18 @@ function YoutubeSection() {
   }, [])
   useEffect(refresh, [refresh, key])
 
+  /** 押したら、上げた結果（まだ残っている本数と、止まっている理由）をトーストで知らせる */
+  const uploadNowAndReport = async () => {
+    setBusy(true)
+    const left = await run(() => uploadNow())
+    setBusy(false)
+    if (!left) return
+    const rest = left.waiting + left.failed
+    if (rest === 0) toast.show('YouTube に上げました')
+    else if (left.preparing > 0) toast.show(`画質をそろえています（${left.preparing} 本）。終わると自動で上げます`)
+    else toast.show(left.error ? `まだ ${rest} 本残っています：${left.error}` : `まだ ${rest} 本残っています。電波を確かめて、もう一度試してください`, 'error')
+  }
+
   if (status === undefined) return <p className="muted small">確認しています…</p>
   if (status === null) return <p className="muted small">サーバーにつながりません。</p>
   if (!status.configured) return <p className="muted small">サーバーに Google の設定がまだありません。</p>
@@ -112,8 +124,8 @@ function YoutubeSection() {
       {status.connected ? (
         <div className="row wrap">
           {!!pending && (
-            <button className="btn small" onClick={() => run(() => resumeUploads())}>
-              今すぐアップ
+            <button className="btn small" disabled={busy} onClick={uploadNowAndReport}>
+              {busy ? 'アップしています…' : '今すぐアップ'}
             </button>
           )}
           <ConfirmButton
