@@ -18,12 +18,12 @@ import {
   type AuthKind,
 } from './accounts'
 import { bearerToken, isAllowedAppScheme, isAllowedReturn, LEGACY_APP_SCHEME, parseOrigins, safeEqual, signState, verifyState } from './auth'
-import { parseFeedback, saveFeedback, tooManyFeedbacks } from './feedback'
+import { notifyFeedback, parseFeedback, saveFeedback, tooManyFeedbacks, type FeedbackMailEnv } from './feedback'
 import { resultPage } from './resultPage'
 import { BadRequest, parseSyncRequest, sync } from './sync'
 import { accessToken, authUrl, exchangeCode, ReauthRequired, revoke, type GoogleConfig } from './youtube'
 
-interface Env {
+interface Env extends FeedbackMailEnv {
   DB: D1Database
   ALLOWED_ORIGINS: string
   /** state の署名の鍵。前の版で1人で使っていたデータを引き継ぐときの合言葉にも使う */
@@ -82,7 +82,9 @@ app.post('/api/sync', async (c) => c.json(await sync(c.env.DB, c.get('userId'), 
 app.post('/api/feedback', async (c) => {
   const input = parseFeedback(await jsonBody(c))
   if (await tooManyFeedbacks(c.env.DB)) return c.json({ error: 'busy', message: '混み合っています。少しおいてから送ってください' }, 429)
-  await saveFeedback(c.env.DB, input)
+  const id = await saveFeedback(c.env.DB, input)
+  // メールは待たずに送る（遅くても失敗しても、利用者の送信には影響させない）
+  c.executionCtx.waitUntil(notifyFeedback(c.env, input, id))
   return c.json({ ok: true })
 })
 

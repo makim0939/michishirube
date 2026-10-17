@@ -119,7 +119,20 @@ pnpm exec wrangler d1 execute michishirube --remote --config worker/wrangler.jso
   --command "SELECT datetime(created_at/1000,'unixepoch','localtime') AS at, kind, platform, app_version, env, message, contact FROM feedback ORDER BY created_at DESC LIMIT 20"
 ```
 
-対応が済んだものは `DELETE FROM feedback WHERE id = '…'` で消します（個人情報になりうる返信先を、長く置かない）。荒らし対策に、送れるのは全体で1分に30件までです。
+届いたときは、メールでも知らせます（下の「要望の通知メール」）。対応が済んだものは `DELETE FROM feedback WHERE id = '…'` で消します（個人情報になりうる返信先を、長く置かない）。荒らし対策に、送れるのは全体で1分に30件までです。
+
+### 要望の通知メール
+
+要望が届くと、運営者のメールに本文と端末の情報を送ります（Cloudflare の Email Routing の `send_email`。送れなくても、要望は保存され、利用者の送信は成功になります）。宛先と送り元は、公開リポジトリに書かないので、Cloudflare のダッシュボードの「変数」に置きます（`wrangler.jsonc` の `keep_vars: true` で、デプロイしても消えません）。
+
+1. Cloudflare のダッシュボードで、ドメイン（`makimura.me`）の「Email」→「Email Routing」を有効にする（案内に従って DNS を追加）。
+2. 「宛先アドレス」に通知を受け取るアドレスを追加し、届いた確認メールのリンクを開く（確認済みのアドレスにしか送れない）。
+3. Worker `michishirube-api` の「設定 → 変数とシークレット」で、変数を2つ登録する。
+   - `FEEDBACK_NOTIFY_TO`：通知を受け取るアドレス（2. で確認したもの）
+   - `FEEDBACK_NOTIFY_FROM`：送り元。`makimura.me` のアドレス
+4. アプリから要望を1件送って、届くことを確かめる。届かないときは、`wrangler tail` か、ダッシュボードの Worker のログで `feedback mail failed` を探す。
+
+どちらかの変数が無いときは、メールを送らない（ローカルの開発など）。
 
 ## 開発
 
