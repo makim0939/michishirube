@@ -12,7 +12,6 @@ const files = vi.hoisted(() => ({
   transcoded: [] as { input: string; output: string; shortSide: number }[],
   transcodeResult: { skipped: false, size: 1 } as { skipped: boolean; size?: number },
   transcodeError: undefined as unknown,
-  transcodeHang: false,
 }))
 vi.mock('./files', () => ({
   usesFiles: true,
@@ -28,7 +27,6 @@ vi.mock('./files', () => ({
   listContentFiles: async () => files.listed,
   transcodeVideoFile: async (input: string, output: string, preset: { shortSide: number }) => {
     files.transcoded.push({ input, output, shortSide: preset.shortSide })
-    if (files.transcodeHang) return new Promise(() => {})
     if (files.transcodeError) throw files.transcodeError
     return files.transcodeResult
   },
@@ -37,9 +35,10 @@ vi.mock('./files', () => ({
   },
 }))
 
-const { moveContentsToFiles, optimizeLimit, optimizeVideos, prepareUploads, resetContentFiles, targetQuality, tidyContentFiles, watchContentFiles } =
+const { moveContentsToFiles, optimizeVideos, resetContentFiles, targetQuality, tidyContentFiles, watchContentFiles } =
   await import('./content')
-const { setKeepHigh, setVideoQuality } = await import('./videoStorage')
+const { setKeepHigh, setVideoQuality, setVideoStorage } = await import('./videoStorage')
+const { uploadNow } = await import('./youtube')
 
 function media(over: Partial<Media> = {}): Media {
   return {
@@ -236,37 +235,6 @@ describe('動画の画質をそろえる', () => {
     expect(await db.media.get('m1')).toMatchObject({ optimized: 'standard', file: 'media/m1-1.mp4' })
   })
 
-  it('上げるよう頼まれたときは、1回失敗しただけでも元のまま使う', async () => {
-    await db.media.add(media({ blob: undefined, file: 'media/m1-1.mp4', size: 100 }))
-    files.transcodeError = new Error('中断')
-    await optimizeVideos(['m1'], { force: true })
-    expect(await db.media.get('m1')).toMatchObject({ optimized: 'standard', file: 'media/m1-1.mp4' })
-  })
-
-  it('作り直しが終わらない動画は、時間をおいて止まったものとして先へ進む', async () => {
-    const limit = optimizeLimit.ms
-    optimizeLimit.ms = 20
-    try {
-      await db.media.add(media({ blob: undefined, file: 'media/m1-1.mp4', size: 100 }))
-      files.transcodeHang = true
-      await optimizeVideos(['m1'])
-      expect(await db.media.get('m1')).toMatchObject({ optimizeTries: 1 })
-    } finally {
-      files.transcodeHang = false
-      optimizeLimit.ms = limit
-    }
-  })
-
-  it('「今すぐアップ」の前に、ファイルへ移して画質をそろえていない上げ待ちの動画を整える', async () => {
-    await db.media.add(media({ upload: 'pending', blob: new Blob(['v1']), size: 100 }))
-    await db.media.add(media({ id: 'm2', upload: 'pending', blob: undefined, file: 'media/m2-1.mp4', size: 100, optimized: 'standard' }))
-    files.transcodeError = new Error('中断')
-    await prepareUploads()
-    expect(await db.media.get('m1')).toMatchObject({ file: 'media/m1-1.mp4', optimized: 'standard' })
-    // 整え済みの動画には触れない
-    expect(files.transcoded.map((t) => t.input)).toEqual(['media/m1-1.mp4'])
-  })
-
   it('作り直す仕組みが無いアプリでは、印を付けない', async () => {
     await db.media.add(media({ blob: undefined, file: 'media/m1-1.mp4', size: 100 }))
     files.transcodeError = { code: 'UNIMPLEMENTED' }
@@ -310,3 +278,12 @@ describe('動画の画質をそろえる', () => {
   })
 })
 
+describe('今すぐアップ（アプリ）', () => {
+  it('画質をそろえている途中の動画は、そろえ終えるのを待っていることとして数える', async () => {
+    await setVideoStorage('youtube')
+    await db.media.add(media({ upload: 'pending', blob: undefined, file: 'media/m1-1.mp4', size: 100 }))
+    await db.media.add(media({ id: 'm2', upload: 'pending', blob: undefined, file: 'media/m2-1.mp4', size: 100, optimized: 'standard' }))
+    const left = await uploadNow()
+    expect(left).toMatchObject({ waiting: 2, preparing: 1 })
+  })
+})

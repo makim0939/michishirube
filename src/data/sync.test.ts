@@ -378,7 +378,7 @@ describe('今すぐアップ', () => {
     const left = await uploadNow()
     expect(await db.meta.get('youtube:pausedUntil')).toBeUndefined()
     expect(await db.media.get(m.id)).toMatchObject({ upload: 'pending', uploadAttempts: 0 })
-    expect(left).toMatchObject({ waiting: 1, failed: 0 })
+    expect(left).toMatchObject({ waiting: 1, failed: 0, preparing: 0 })
   })
 })
 

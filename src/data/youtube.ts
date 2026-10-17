@@ -1,7 +1,7 @@
 import { liveQuery } from 'dexie'
 import { formatDateTime, OUTCOME_LABEL } from '../domain/format'
 import type { Media } from '../domain/types'
-import { ContentUnavailableError, contentBlob, hasContent, prepareUploads } from './content'
+import { ContentUnavailableError, contentBlob, hasContent, moveContentsToFiles, optimizeVideos } from './content'
 import { usesFiles } from './files'
 import { db, markDirty, mediaByIndex } from './db'
 import { authorizeWithGoogle } from './account'
@@ -308,14 +308,24 @@ export async function retryUpload(id: string) {
 }
 
 /**
- * 設定の「今すぐアップ」。止まっている理由（画質をそろえ終えていない・自動で上げ直すのをやめた・上限で休んでいる）を
- * 取り除いてから上げ、そのあとの状況を返す（押して何も起きないように見えないよう、画面で知らせる）
+ * 設定の「今すぐアップ」。自動で上げ直すのをやめた動画と、上限で休んでいる状態を解いてから上げ、
+ * そのあとの状況を返す（押して何も起きないように見えないよう、画面で知らせる）。
+ * preparing：アプリで、ファイルへの移し・画質をそろえるのがまだ終わっていない本数（終わると自動で上げる）
  */
-export async function uploadNow(): Promise<{ waiting: number; failed: number; error?: string }> {
-  await prepareUploads()
+export async function uploadNow(): Promise<{ waiting: number; failed: number; preparing: number; error?: string }> {
   await db.meta.delete(PAUSE_KEY)
   const failed = (await db.media.where('upload').equals('failed').primaryKeys()) as string[]
   for (const id of failed) await setUpload(id, { upload: 'pending', uploadError: undefined, uploadAttempts: 0 })
+  const unprepared = usesFiles
+    ? ((await db.media
+        .where('upload')
+        .anyOf('pending', 'uploading')
+        .filter((m) => m.type.startsWith('video/') && hasContent(m) && !readyToUpload(m))
+        .primaryKeys()) as string[])
+    : []
+  // 前の処理が終わっていなければ、その後ろに並ぶだけ（待たずに、進んでいることを知らせる）
+  void moveContentsToFiles(unprepared)
+  void optimizeVideos(unprepared)
   await resumeUploads()
   const backlog = await uploadBacklog()
   // 理由は、blob を持たせずに読む（索引から読んだ Blob は使わないので、エラーの文だけ見る）
@@ -324,7 +334,7 @@ export async function uploadNow(): Promise<{ waiting: number; failed: number; er
     .anyOf('pending', 'uploading', 'failed')
     .filter((m) => !!m.uploadError)
     .first()
-  return { ...backlog, error: stuck?.uploadError }
+  return { ...backlog, preparing: unprepared.length, error: stuck?.uploadError }
 }
 
 /**
