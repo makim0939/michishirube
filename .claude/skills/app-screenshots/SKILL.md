@@ -48,5 +48,4 @@ claude-in-chrome（`mcp__claude-in-chrome__*`）を使う。**新しいタブを
 ## 紹介サイトに使うとき
 
 - 置き場所：`worker/site/img/`（`today`・`cups`・`compare`・`tips`・`types`・`review`）。`index.html` が読み込む。`src/site.test.ts` が、画像のファイルとリンクがそろっているかを確かめる。
-- 紹介サイトの文言・画像を変える PR は、Google の審査中は、大きな変更を避ける（`CLAUDE.md` の「いまの状況」）。画像の差し替えは、問題ない。
 - できたら、紹介サイトをブラウザペインで、スマホ幅とパソコン幅で確認する（スキル `verify-on-device`）。
