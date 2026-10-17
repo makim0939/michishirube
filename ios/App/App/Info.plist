@@ -20,13 +20,6 @@
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>$(MARKETING_VERSION)</string>
-	<key>CFBundleVersion</key>
-	<string>$(CURRENT_PROJECT_VERSION)</string>
-	<key>LSRequiresIPhoneOS</key>
-	<true/>
-	<!-- 暗号化は、HTTPS・ハッシュなど OS 標準のものだけ（輸出規制の申告は、免除の扱い）。アップロードのたびの質問を省く -->
-	<key>ITSAppUsesNonExemptEncryption</key>
-	<false/>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -38,6 +31,13 @@
 			</array>
 		</dict>
 	</array>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<!-- 暗号化は、HTTPS・ハッシュなど OS 標準のものだけ（輸出規制の申告は、免除の扱い）。アップロードのたびの質問を省く -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>ラテアートを注ぐところと、できあがりのカップを撮るために使います。</string>
 	<key>NSMicrophoneUsageDescription</key>
