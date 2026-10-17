@@ -9,6 +9,9 @@
   // 前の URL（workers.dev）も動いたままにして、前の版のアプリがつながるようにする
   "routes": [{ "pattern": "latte.makimura.me", "custom_domain": true }],
   "assets": { "directory": "./site", "run_worker_first": ["/api/*"] },
+  // ダッシュボードで登録した変数（FEEDBACK_NOTIFY_TO / FEEDBACK_NOTIFY_FROM）を、デプロイで消さない。
+  // 宛先のメールアドレスをリポジトリに書かないため、設定ファイルではなくダッシュボードに置く
+  "keep_vars": true,
   "vars": {
     // アプリを開くオリジン。カンマ区切り
     "ALLOWED_ORIGINS": "https://makim0939.github.io,http://localhost:5179,http://localhost:5180,capacitor://localhost,https://localhost"
@@ -17,5 +20,5 @@
   "d1_databases": [{ "binding": "DB", "database_name": "michishirube", "migrations_dir": "./migrations" }],
   // 要望が届いたときの通知メール。宛先は、Email Routing で確認済みのアドレスだけ
   "send_email": [{ "name": "MAIL" }]
-  // シークレット（wrangler secret put で登録）: APP_TOKEN, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, FEEDBACK_NOTIFY_TO, FEEDBACK_NOTIFY_FROM
+  // シークレット（wrangler secret put で登録）: APP_TOKEN, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
 }

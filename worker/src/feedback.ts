@@ -83,7 +83,7 @@ export function buildFeedbackMail(input: FeedbackInput, id: string, to: string, 
 
 export interface FeedbackMailEnv {
   MAIL?: SendEmail
-  /** 通知を受け取るメールアドレス。公開リポジトリに書かないので、シークレットに置く */
+  /** 通知を受け取るメールアドレス。公開リポジトリに書かないので、Cloudflare のダッシュボードの変数に置く（wrangler.jsonc の keep_vars で、デプロイしても消えない） */
   FEEDBACK_NOTIFY_TO?: string
   /** 通知の送り元。Email Routing を有効にしたドメインのアドレス */
   FEEDBACK_NOTIFY_FROM?: string
