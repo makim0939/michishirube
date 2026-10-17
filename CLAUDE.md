@@ -8,7 +8,7 @@
 - `src/ui/`（画面）、`src/domain/`（型・記録のロジック）、`src/data/`（Dexie・同期・ログイン・YouTube）、`src/platform.ts`（端末の判定）
 - `src/roadmaps/latte-art.json`：同梱の型（最初の1回だけ入る。入れたあとの人のデータは変わらない）
 - `worker/`：API（`/api/*`）と、紹介サイト・プライバシーポリシー（`worker/site/`）。`latte.makimura.me` で配る
-- `ios/` `android/`：Capacitor のネイティブ側。Bundle ID は `me.makimura.lattecho`
+- `ios/` `android/`：Capacitor のネイティブ側。Bundle ID は `me.makimura.lattecho.app`
 - `public/world/`：型の見本（`patterns/`）と、記録がないときのホーム背景（`light/`）
 - `docs/`：`setup.md`（サーバーの運営）、`oauth-verification.md`（Google の審査）、`app-store-submission.md`（App Store の提出）
 - `references/`：参考画像・ChatGPT への依頼の資料。**git に入れない**

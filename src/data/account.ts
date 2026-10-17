@@ -68,7 +68,7 @@ async function post(path: string, body: unknown, session?: string): Promise<Reco
 }
 
 /** アプリの URL スキーム。Google の画面で認可が終わると、サーバーがこれでアプリへ戻す */
-const APP_SCHEME = 'me.makimura.lattecho'
+const APP_SCHEME = 'me.makimura.lattecho.app'
 
 type Finish = 'pending' | 'expired' | 'cancelled' | 'failed' | AuthResult
 
