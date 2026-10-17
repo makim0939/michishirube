@@ -4,7 +4,7 @@ import { db } from './db'
 import { pickRecorderMimeType } from './mediaPrep'
 import { addRecord, createDomain, createSkill, ensureSeeded } from './repo'
 import { getVideoStorage, setVideoStorage, setYoutubePrivacy } from './videoStorage'
-import { applyRemote, connectWithConfig, getSyncStatus, runSync } from './sync'
+import { applyRemote, connectWithConfig, getSyncStatus, postJson, runSync } from './sync'
 import { logout } from './account'
 import { selectVideosToDrop } from './tidy'
 import { uploadNow, uploadVideo, videoMeta, youtubePlayable } from './youtube'
@@ -40,6 +40,22 @@ function fakeServer() {
   }
   return { rows, fetch: vi.fn(handler) }
 }
+
+describe('JSON の POST', () => {
+  it('ログインのトークンと JSON の種類を付けて、本文を JSON にして送る（URL の末尾の / は重ねない）', async () => {
+    const fetchMock = vi.fn(async () => Response.json({ ok: true }))
+    vi.stubGlobal('fetch', fetchMock)
+    await postJson({ url: 'https://api.example/', token: 'tok' }, '/api/youtube/token', { refreshToken: 'r' })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).toBe('https://api.example/api/youtube/token')
+    expect(init.method).toBe('POST')
+    const headers = new Headers(init.headers)
+    expect(headers.get('Authorization')).toBe('Bearer tok')
+    expect(headers.get('Content-Type')).toBe('application/json')
+    expect(JSON.parse(String(init.body))).toEqual({ refreshToken: 'r' })
+  })
+})
 
 describe('同期', () => {
   it('1台目は全部送り、変更と削除も送る', async () => {

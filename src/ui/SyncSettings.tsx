@@ -13,15 +13,17 @@ import { db } from '../data/db'
 import { getSyncConfig, getSyncStatus, runSync } from '../data/sync'
 import { getVideoStorage } from '../data/videoStorage'
 import { connectYoutube, disconnectYoutube, saveYoutubeKey, uploadNow, youtubeStatus, type YoutubeStatus } from '../data/youtube'
-import { ConfirmButton, formatAgo, formatBytes, formatDate } from './common'
+import { formatDateTime } from '../domain/format'
+import { ConfirmButton, formatAgo, formatBytes } from './common'
 import { PHOTO_QUOTA_BYTES } from '../../shared/protocol'
 import { useAction, useToast } from './feedback'
 import { replace } from './router'
-import { isNativeApp, SITE_URL, YOUTUBE_TERMS_URL } from '../platform'
+import { PRIVACY_URL, YOUTUBE_TERMS_URL } from '../platform'
 import { AlertIcon, CheckIcon } from './icons'
 
-// アプリの中では、公開しているページを Safari で開く（アプリに入れたファイルを開くと、アプリの画面が置き換わるため）
-const PRIVACY_URL = isNativeApp ? `${SITE_URL}privacy` : `${import.meta.env.BASE_URL}privacy.html`
+/** ログインしたあとのトースト。アプリの中で終えたときと、Web 版で Google の画面から戻ったときで、同じ文言にする */
+const loginMessage = (firstDevice: boolean) =>
+  firstDevice ? 'ログインしました。この端末の記録をサーバーに置きました' : 'ログインしました。記録を受け取りました'
 
 /** Web 版で、Google の画面から戻ってきたら結果を受け取る（戻り先の URL に一度きりのコードが付いてくる） */
 function useWebAuthResult() {
@@ -36,7 +38,7 @@ function useWebAuthResult() {
       if (!result) return
       if (result.kind === 'login') {
         const { firstDevice } = await completeLogin(result)
-        toast.show(firstDevice ? 'ログインしました。この端末の記録をサーバーに置きました' : 'ログインしました。記録を受け取りました')
+        toast.show(loginMessage(firstDevice))
       } else {
         await saveYoutubeKey(result.refreshToken)
         toast.show('YouTube と連携しました')
@@ -69,7 +71,7 @@ function LoginSection({ legacy }: { legacy: boolean }) {
             const result = await run(() => loginWithGoogle())
             setBusy(false)
             if (result) {
-              toast.show(result.firstDevice ? 'ログインしました。この端末の記録をサーバーに置きました' : 'ログインしました。記録を受け取りました')
+              toast.show(loginMessage(result.firstDevice))
             }
           }}
         >
@@ -206,7 +208,7 @@ export function SyncSettings({ notice }: { notice?: string }) {
             {status.error
               ? status.error
               : status.lastSyncedAt
-                ? `最後の同期：${formatAgo(status.lastSyncedAt)} ${formatDate(status.lastSyncedAt).split(' ')[1]}`
+                ? `最後の同期：${formatAgo(status.lastSyncedAt)} ${formatDateTime(status.lastSyncedAt).split(' ')[1]}`
                 : '同期しています…'}
             {pending > 0 && `（送っていない変更が ${pending} 件）`}
           </p>

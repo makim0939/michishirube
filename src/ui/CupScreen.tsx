@@ -1,9 +1,9 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect } from 'react'
 import { db } from '../data/db'
-import { OUTCOME_LABEL } from '../domain/format'
+import { formatDateTime, OUTCOME_LABEL } from '../domain/format'
 import type { Media } from '../domain/types'
-import { formatDate, splitName } from './common'
+import { splitName } from './common'
 import { BackIcon, ForwardIcon } from './icons'
 import { MediaItem } from './MediaItem'
 import { PatternImage } from './PatternImage'
@@ -49,7 +49,7 @@ export function CupScreen({ recordId }: { recordId: string }) {
         <a className="back" href={href('/')} onClick={backHandler('/')} aria-label="戻る">
           <BackIcon size={26} />
         </a>
-        <span className="title-block muted small">{formatDate(record.createdAt)}</span>
+        <span className="title-block muted small">{formatDateTime(record.createdAt)}</span>
         <a className="btn small ghost" href={href(`/record/${record.skillId}/edit/${record.id}`)}>
           編集
         </a>

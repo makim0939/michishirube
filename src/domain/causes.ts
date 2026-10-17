@@ -8,7 +8,7 @@ export const LATTE_CAUSES = ['泡が粗い', '熱すぎた', '注ぐ高さ', '�
  * 原因ごとの「次の一手」の候補。記録のときに押すだけで次の一手に入る（書かなくて済むように）。
  * 一般的な直し方なので、自分の言葉に書き換えてもよい
  */
-export const CAUSE_TIPS: Record<(typeof LATTE_CAUSES)[number], string> = {
+const CAUSE_TIPS: Record<(typeof LATTE_CAUSES)[number], string> = {
   泡が粗い: '空気を入れるのは最初の数秒だけにする',
   熱すぎた: '60℃前後で止める',
   注ぐ高さ: '注ぎ始めは高く、広げるときはカップに近づける',

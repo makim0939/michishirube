@@ -54,7 +54,7 @@ export function contentPath(m: Pick<Media, 'id' | 'type' | 'contentAt' | 'create
 }
 
 /** contentPath の名前から、どの動画・写真のファイルかを読む */
-export function contentIdOf(path: string): string | undefined {
+function contentIdOf(path: string): string | undefined {
   return /^media\/(.+?)-\d+(?:-(?:standard|high))?\.[^.]+$/.exec(path)?.[1]
 }
 

@@ -27,7 +27,7 @@ import { RoadmapSettings } from './RoadmapSettings'
 import { backHandler, go, href, type SettingsSection } from './router'
 import { SyncSettings } from './SyncSettings'
 import { forgetToday } from './TodayScreen'
-import { APP_STORE_REVIEW_URL, isIosApp, isNativeApp, SITE_URL, YOUTUBE_TERMS_URL } from '../platform'
+import { APP_STORE_REVIEW_URL, isIosApp, isNativeApp, PRIVACY_URL, YOUTUBE_TERMS_URL } from '../platform'
 import { AlertIcon, BackIcon, CheckIcon, ForwardIcon } from './icons'
 
 function StorageStatus() {
@@ -80,13 +80,6 @@ function StorageStatus() {
     </div>
   )
 }
-
-/**
- * プライバシーポリシー。アプリの中では、公開しているページを Safari で開く
- * （アプリに入れたファイルを別の窓で開くと、アプリの画面が置き換わってしまうため）
- */
-const PRIVACY_URL = isNativeApp ? `${SITE_URL}privacy` : `${import.meta.env.BASE_URL}privacy.html`
-
 
 const TITLES: Record<SettingsSection, string> = {
   storage: '動画',
@@ -309,7 +302,11 @@ function StoragePage() {
     toast.show(value === 'public' ? 'これから上げる動画は、だれでも見られます' : 'これから上げる動画は、限定公開になります')
   }
 
-  const select = (fn: () => Promise<void>) => () => run(fn)
+  // いま選んでいる項目をもう一度押したときに、トーストや動画の作り直し（optimizeVideos）が走らないようにする
+  const select =
+    <T,>(current: T, value: T, change: (value: T) => Promise<void>) =>
+    () =>
+      run(() => (current === value ? Promise.resolve() : change(value)))
 
   return (
     <>
@@ -320,13 +317,13 @@ function StoragePage() {
             label="この端末"
             sub="端末にだけ置きます"
             selected={storage === 'device'}
-            onSelect={select(() => (storage === 'device' ? Promise.resolve() : changeStorage('device')))}
+            onSelect={select(storage, 'device', changeStorage)}
           />
           <Choice
             label="YouTube"
             sub={`上げて${TIDY_AFTER_DAYS}日たったら端末から消します。端末の容量をほとんど使いません`}
             selected={storage === 'youtube'}
-            onSelect={select(() => (storage === 'youtube' ? Promise.resolve() : changeStorage('youtube')))}
+            onSelect={select(storage, 'youtube', changeStorage)}
           />
         </ul>
         <p className="muted small">
@@ -346,13 +343,13 @@ function StoragePage() {
             label="標準"
             sub={`720p・30秒で約${megabytesPer30s('standard')}MB（100杯で約${megabytesPer30s('standard') / 10}GB）`}
             selected={quality === 'standard'}
-            onSelect={select(() => (quality === 'standard' ? Promise.resolve() : changeQuality('standard')))}
+            onSelect={select(quality, 'standard', changeQuality)}
           />
           <Choice
             label="高画質"
             sub={`1080p・30秒で約${megabytesPer30s('high')}MB。SNS に出す人向け`}
             selected={quality === 'high'}
-            onSelect={select(() => (quality === 'high' ? Promise.resolve() : changeQuality('high')))}
+            onSelect={select(quality, 'high', changeQuality)}
           />
         </ul>
         <p className="muted small">撮るときの画面で、その動画だけ変えることもできます</p>
@@ -387,13 +384,13 @@ function StoragePage() {
               label="限定公開"
               sub="URL を知っている人だけ見られます"
               selected={youtubePrivacy === 'unlisted'}
-              onSelect={select(() => (youtubePrivacy === 'unlisted' ? Promise.resolve() : changePrivacy('unlisted')))}
+              onSelect={select(youtubePrivacy, 'unlisted', changePrivacy)}
             />
             <Choice
               label="公開"
               sub="だれでも見られ、検索にも出ます。練習を発信したい人向け"
               selected={youtubePrivacy === 'public'}
-              onSelect={select(() => (youtubePrivacy === 'public' ? Promise.resolve() : changePrivacy('public')))}
+              onSelect={select(youtubePrivacy, 'public', changePrivacy)}
             />
           </ul>
         </section>
@@ -436,100 +433,99 @@ function BackupPage() {
     })
 
   return (
-      <section className="section">
-        <p className="muted">
-          記録 {data.counts.records} 件・動画と写真 {data.counts.media} 件（{formatBytes(data.mediaSize)}）
-        </p>
-        <div className="stack">
-          <button className="btn primary" disabled={busy !== null} onClick={() => doExport(true)}>
-            {busy === 'full' ? '書き出し中…' : '動画・写真も含めて書き出す'}
-          </button>
-          <button className="btn" disabled={busy !== null} onClick={() => doExport(false)}>
-            {busy === 'notes' ? '書き出し中…' : '記録とロードマップだけ書き出す（軽い）'}
-          </button>
-          <button className="btn" disabled={busy !== null} onClick={() => restoreInput.current?.click()}>
-            バックアップから復元
-          </button>
-          <input
-            ref={restoreInput}
-            hidden
-            type="file"
-            accept="application/zip,.zip"
-            multiple
-            onChange={(e) => {
-              setPendingRestore(Array.from(e.target.files ?? []))
-              e.target.value = ''
-            }}
-          />
-        </div>
-        {exported.length > 0 && (
-          <div className="confirm">
-            <p>
-              バックアップを作りました
-              {exported.length > 1 && `。大きいので ${exported.length} つの ZIP に分けています。復元するときは全部を選んでください`}
-              。「ファイルに保存」や AirDrop で、この端末の外にも置いてください。
-            </p>
-            <div className="stack">
-              {exported.map((part) => (
-                <button
-                  key={part.name}
-                  className={saved.has(part.name) ? 'btn' : 'btn primary'}
-                  onClick={() =>
-                    run(async () => {
-                      await saveFile(part.blob, part.name)
-                      setSaved((prev) => new Set(prev).add(part.name))
-                    })
-                  }
-                >
-                  {saved.has(part.name) ? '✓ ' : ''}
-                  {exported.length > 1 ? `${part.name.match(/(\d+)of\d+\.zip$/)?.[1]} つ目を保存` : '保存する'}（
-                  {formatBytes(part.blob.size)}）
-                </button>
-              ))}
-              <button className="btn ghost" onClick={() => setExported([])}>
-                閉じる
-              </button>
-            </div>
-          </div>
-        )}
-        {pendingRestore.length > 0 && (
-          <div className="confirm">
-            <p>
-              {pendingRestore.length === 1 ? `「${pendingRestore[0].name}」` : `${pendingRestore.length} つの ZIP`}（
-              {formatBytes(pendingRestore.reduce((sum, f) => sum + f.size, 0))}）で、
-              <strong>いまのデータをすべて置き換えます。</strong>元に戻せません。
-            </p>
-            <div className="row">
+    <section className="section">
+      <p className="muted">
+        記録 {data.counts.records} 件・動画と写真 {data.counts.media} 件（{formatBytes(data.mediaSize)}）
+      </p>
+      <div className="stack">
+        <button className="btn primary" disabled={busy !== null} onClick={() => doExport(true)}>
+          {busy === 'full' ? '書き出し中…' : '動画・写真も含めて書き出す'}
+        </button>
+        <button className="btn" disabled={busy !== null} onClick={() => doExport(false)}>
+          {busy === 'notes' ? '書き出し中…' : '記録とロードマップだけ書き出す（軽い）'}
+        </button>
+        <button className="btn" disabled={busy !== null} onClick={() => restoreInput.current?.click()}>
+          バックアップから復元
+        </button>
+        <input
+          ref={restoreInput}
+          hidden
+          type="file"
+          accept="application/zip,.zip"
+          multiple
+          onChange={(e) => {
+            setPendingRestore(Array.from(e.target.files ?? []))
+            e.target.value = ''
+          }}
+        />
+      </div>
+      {exported.length > 0 && (
+        <div className="confirm">
+          <p>
+            バックアップを作りました
+            {exported.length > 1 && `。大きいので ${exported.length} つの ZIP に分けています。復元するときは全部を選んでください`}
+            。「ファイルに保存」や AirDrop で、この端末の外にも置いてください。
+          </p>
+          <div className="stack">
+            {exported.map((part) => (
               <button
-                className="btn danger"
-                disabled={busy !== null}
+                key={part.name}
+                className={saved.has(part.name) ? 'btn' : 'btn primary'}
                 onClick={() =>
                   run(async () => {
-                    setBusy('restore')
-                    try {
-                      const s = await importBackup(pendingRestore)
-                      setPendingRestore([])
-                      toast.show(
-                        `復元しました（型 ${s.skills}・記録 ${s.records}・動画と写真 ${s.media}）` +
-                          (s.missingMedia > 0 ? `。含まれていなかった動画・写真 ${s.missingMedia} 件は外しました` : ''),
-                      )
-                      go('/')
-                    } finally {
-                      setBusy(null)
-                    }
+                    await saveFile(part.blob, part.name)
+                    setSaved((prev) => new Set(prev).add(part.name))
                   })
                 }
               >
-                {busy === 'restore' ? '復元中…' : '置き換える'}
+                {saved.has(part.name) ? '✓ ' : ''}
+                {exported.length > 1 ? `${part.name.match(/(\d+)of\d+\.zip$/)?.[1]} つ目を保存` : '保存する'}（
+                {formatBytes(part.blob.size)}）
               </button>
-              <button className="btn" onClick={() => setPendingRestore([])}>
-                やめる
-              </button>
-            </div>
+            ))}
+            <button className="btn ghost" onClick={() => setExported([])}>
+              閉じる
+            </button>
           </div>
-        )}
-      </section>
-
+        </div>
+      )}
+      {pendingRestore.length > 0 && (
+        <div className="confirm">
+          <p>
+            {pendingRestore.length === 1 ? `「${pendingRestore[0].name}」` : `${pendingRestore.length} つの ZIP`}（
+            {formatBytes(pendingRestore.reduce((sum, f) => sum + f.size, 0))}）で、
+            <strong>いまのデータをすべて置き換えます。</strong>元に戻せません。
+          </p>
+          <div className="row">
+            <button
+              className="btn danger"
+              disabled={busy !== null}
+              onClick={() =>
+                run(async () => {
+                  setBusy('restore')
+                  try {
+                    const s = await importBackup(pendingRestore)
+                    setPendingRestore([])
+                    toast.show(
+                      `復元しました（型 ${s.skills}・記録 ${s.records}・動画と写真 ${s.media}）` +
+                        (s.missingMedia > 0 ? `。含まれていなかった動画・写真 ${s.missingMedia} 件は外しました` : ''),
+                    )
+                    go('/')
+                  } finally {
+                    setBusy(null)
+                  }
+                })
+              }
+            >
+              {busy === 'restore' ? '復元中…' : '置き換える'}
+            </button>
+            <button className="btn" onClick={() => setPendingRestore([])}>
+              やめる
+            </button>
+          </div>
+        </div>
+      )}
+    </section>
   )
 }
 
@@ -537,37 +533,36 @@ function DataPage() {
   const run = useAction()
   const toast = useToast()
   return (
-      <section className="section">
-        <p className="muted">この端末のロードマップ・記録・動画・写真・設定をすべて削除します。</p>
-        <ConfirmButton
-          className="btn ghost"
-          confirmLabel="すべて削除する"
-          message="この端末のロードマップ・記録・動画・写真・設定をすべて削除し、ログインも解除します。サーバーの記録・写真と YouTube の動画は消えないので、ログインし直せば戻ります。この端末にだけある動画（YouTube に上げていないもの）と、まだ送れていない変更は戻りません。"
-          onConfirm={() =>
-            run(async () => {
-              // 送っていない変更があれば、先に送っておく（電波が悪ければ、長くは待たない）
-              await Promise.race([runSync().catch(() => {}), new Promise((r) => setTimeout(r, 5000))])
-              // サーバーのログインも終える（端末の印を消すだけだと、トークンがサーバーで使えるまま残る）
-              await logout()
-              await db.transaction('rw', [db.domains, db.skills, db.records, db.media, db.meta, db.outbox], async () => {
-                await Promise.all([db.domains.clear(), db.skills.clear(), db.records.clear(), db.media.clear()])
-                await Promise.all([db.meta.clear(), db.outbox.clear()])
-                await db.meta.put({ key: 'seeded', value: true })
-              })
-              // アプリでは、動画・写真のファイルも消し、記録の写しも空にする（次に開いたときに戻らないように）
-              await resetContentFiles()
-              await saveSnapshotNow()
-              // 覚えているホームの内容と写真も捨てる（削除したはずのものを、メモリにも画面にも残さない）
-              forgetToday()
-              clearImageCaches()
-              toast.show('すべて削除しました')
-              go('/')
+    <section className="section">
+      <p className="muted">この端末のロードマップ・記録・動画・写真・設定をすべて削除します。</p>
+      <ConfirmButton
+        className="btn ghost"
+        confirmLabel="すべて削除する"
+        message="この端末のロードマップ・記録・動画・写真・設定をすべて削除し、ログインも解除します。サーバーの記録・写真と YouTube の動画は消えないので、ログインし直せば戻ります。この端末にだけある動画（YouTube に上げていないもの）と、まだ送れていない変更は戻りません。"
+        onConfirm={() =>
+          run(async () => {
+            // 送っていない変更があれば、先に送っておく（電波が悪ければ、長くは待たない）
+            await Promise.race([runSync().catch(() => {}), new Promise((r) => setTimeout(r, 5000))])
+            // サーバーのログインも終える（端末の印を消すだけだと、トークンがサーバーで使えるまま残る）
+            await logout()
+            await db.transaction('rw', [db.domains, db.skills, db.records, db.media, db.meta, db.outbox], async () => {
+              await Promise.all([db.domains.clear(), db.skills.clear(), db.records.clear(), db.media.clear()])
+              await Promise.all([db.meta.clear(), db.outbox.clear()])
+              await db.meta.put({ key: 'seeded', value: true })
             })
-          }
-        >
-          削除する
-        </ConfirmButton>
-      </section>
-
+            // アプリでは、動画・写真のファイルも消し、記録の写しも空にする（次に開いたときに戻らないように）
+            await resetContentFiles()
+            await saveSnapshotNow()
+            // 覚えているホームの内容と写真も捨てる（削除したはずのものを、メモリにも画面にも残さない）
+            forgetToday()
+            clearImageCaches()
+            toast.show('すべて削除しました')
+            go('/')
+          })
+        }
+      >
+        削除する
+      </ConfirmButton>
+    </section>
   )
 }

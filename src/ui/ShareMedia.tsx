@@ -1,15 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { inMemory } from '../data/mediaPrep'
 import { youtubeUrl } from '../data/youtube'
+import { formatFileStamp } from '../domain/format'
 import type { Media } from '../domain/types'
 import { saveFile } from './common'
 import { useToast } from './feedback'
 import { ShareIcon } from './icons'
 
 function fileNameFor(media: Media, type: string): string {
-  const d = new Date(media.createdAt)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`
   const ext = type.includes('mp4')
     ? 'mp4'
     : type.includes('webm')
@@ -19,14 +17,14 @@ function fileNameFor(media: Media, type: string): string {
         : type.includes('png')
         ? 'png'
         : 'jpg'
-  return `latte-${stamp}.${ext}`
+  return `latte-${formatFileStamp(new Date(media.createdAt))}.${ext}`
 }
 
 /**
  * ファイルを共有シートで送る（写真アプリへの保存も共有シートから）。PC など共有シートが無ければ、ファイルとして保存する。
  * 押した直後に呼ぶこと（共有シートを開くには、直前のタップが要る）。送れなかったら false
  */
-export async function shareFile(file: File): Promise<boolean> {
+async function shareFile(file: File): Promise<boolean> {
   const touch = window.matchMedia('(pointer: coarse)').matches
   if (!touch || !navigator.canShare?.({ files: [file] })) {
     try {

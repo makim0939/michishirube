@@ -5,7 +5,7 @@ import { ContentUnavailableError, contentBlob, hasContent, moveContentsToFiles, 
 import { usesFiles } from './files'
 import { db, markDirty, mediaByIndex } from './db'
 import { authorizeWithGoogle } from './account'
-import { api, getSyncConfig, SyncError, type SyncConfig } from './sync'
+import { api, getSyncConfig, postJson, SyncError, type SyncConfig } from './sync'
 import { SITE_URL } from '../platform'
 import { getVideoSettings, getVideoStorage, uploadBacklog, type YoutubePrivacy } from './videoStorage'
 
@@ -70,11 +70,7 @@ export async function disconnectYoutube() {
   const refresh = await refreshToken()
   const config = await getSyncConfig()
   if (refresh && config) {
-    await api(config, '/api/youtube/revoke', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken: refresh }),
-    }).catch(() => {})
+    await postJson(config, '/api/youtube/revoke', { refreshToken: refresh }).catch(() => {})
   }
   await db.meta.delete(REFRESH_KEY)
   token = undefined
@@ -98,13 +94,10 @@ async function accessToken(config: SyncConfig): Promise<string> {
   if (token && token.refresh === refresh && token.expiresAt - Date.now() > 60_000) return token.value
   let res: { accessToken: string; expiresAt: number }
   try {
-    res = (await (
-      await api(config, '/api/youtube/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken: refresh }),
-      })
-    ).json()) as { accessToken: string; expiresAt: number }
+    res = (await (await postJson(config, '/api/youtube/token', { refreshToken: refresh })).json()) as {
+      accessToken: string
+      expiresAt: number
+    }
   } catch (e) {
     // 連携が取り消された・期限切れなら、鍵を消して連携し直してもらう
     if (e instanceof SyncError && e.status === 409) await db.meta.delete(REFRESH_KEY)
@@ -235,7 +228,7 @@ export function resumeUploads() {
 }
 
 /** 上げていない動画を順に上げる。同時に1つだけ動かす */
-export function runUploads(): Promise<void> {
+function runUploads(): Promise<void> {
   running ??= doUploads().finally(() => {
     running = null
   })

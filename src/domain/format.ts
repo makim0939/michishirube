@@ -15,6 +15,12 @@ export function formatDateTime(ts: number): string {
   return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
+/** 20261010-0905 の形（端末の時刻）。バックアップと、共有する動画・写真のファイル名で、同じ書き方にする */
+export function formatFileStamp(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`
+}
+
 /** 2つの日時が、暦の上で何日離れているか（同じ日なら0。時刻は見ない） */
 export function daysBetween(a: number, b: number): number {
   const day = (ts: number) => {

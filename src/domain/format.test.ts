@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { daysBetween, spanLabel } from './format'
+import { daysBetween, formatFileStamp, spanLabel } from './format'
 
 describe('見比べる2杯の日数', () => {
   it('時刻は見ず、暦の日付の差を数える', () => {
@@ -15,5 +15,12 @@ describe('見比べる2杯の日数', () => {
   it('同じ日なら「同じ日」', () => {
     expect(spanLabel(0)).toBe('同じ日')
     expect(spanLabel(12)).toBe('12日')
+  })
+})
+
+describe('ファイル名の日時', () => {
+  it('年月日-時分を、0 でそろえて並べる', () => {
+    expect(formatFileStamp(new Date(2026, 9, 10, 9, 5))).toBe('20261010-0905')
+    expect(formatFileStamp(new Date(2026, 0, 2, 23, 59))).toBe('20260102-2359')
   })
 })

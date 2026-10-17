@@ -19,7 +19,7 @@ export interface Cup {
 }
 
 /** 1杯。押すと、その1杯の詳細（動画・写真と理由）を開く */
-export function CupTile({ cup }: { cup: Cup }) {
+function CupTile({ cup }: { cup: Cup }) {
   // 一覧では、前の作り方のサムネイルは作り直さない（見ただけで、たくさんの動画を読み込まないように）
   const url = useCupImageUrl(cup.media, 'tile', { upgrade: false })
   const mark = cup.record.outcome ? ` ${OUTCOME_MARK[cup.record.outcome]}` : ''

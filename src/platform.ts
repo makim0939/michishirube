@@ -24,7 +24,6 @@ export function isIosDevice(): boolean {
   )
 }
 
-/** 公開している Web 版の場所（アプリからプライバシーポリシーなどを開くとき・https の場所が要るときに使う） */
 /**
  * Android の「戻る」（ボタン・端からのスワイプ）。何もしないとアプリが閉じるので、画面の履歴があれば1つ前の画面に戻る。
  * 最初の画面では、アプリを裏に回す（Android のほかのアプリと同じ）
@@ -39,6 +38,12 @@ export function watchBackButton() {
 
 /** アプリのトップページ・プライバシーポリシー（サーバーと同じドメイン）。アプリはここのページを開く */
 export const SITE_URL = 'https://latte.makimura.me/'
+
+/**
+ * プライバシーポリシー。アプリの中では、公開しているページを Safari で開く
+ * （アプリに入れたファイルを別の窓で開くと、アプリの画面が置き換わってしまうため）
+ */
+export const PRIVACY_URL = isNativeApp ? `${SITE_URL}privacy` : `${import.meta.env.BASE_URL}privacy.html`
 
 /**
  * App Store の評価の画面。数字は App Store Connect の Apple ID（ストアの URL に出る公開の値。チーム ID とは別）。

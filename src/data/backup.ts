@@ -1,6 +1,7 @@
 import { Unzip, UnzipInflate, Zip, ZipPassThrough, strFromU8, strToU8 } from 'fflate'
 import type { Domain, Media, PracticeRecord, Skill } from '../domain/types'
 import { contentBlob, hasContent, resetContentFiles } from './content'
+import { formatFileStamp } from '../domain/format'
 import { db, markDirty, type Meta } from './db'
 
 /**
@@ -101,7 +102,7 @@ export async function estimateBackupSize(includeMedia: boolean): Promise<number>
  * ZIP 1つあたりの上限。fflate は ZIP64 を書けないので 4GB を超えると壊れる。
  * 余裕を持たせ、スマホのメモリにも優しい大きさで分割する
  */
-export const PART_LIMIT = 1.5 * 1024 ** 3
+const PART_LIMIT = 1.5 * 1024 ** 3
 
 class ZipWriter {
   private sink = new BlobSink()
@@ -322,12 +323,10 @@ export async function importBackup(zips: Blob[]): Promise<ImportSummary> {
 }
 
 /** この端末だけの meta（同期の接続先など） */
-export function isLocalMeta(key: string): boolean {
+function isLocalMeta(key: string): boolean {
   return key.startsWith('sync:') || key.startsWith('youtube:')
 }
 
 function backupFileName(includeMedia: boolean, now = new Date()): string {
-  const pad = (n: number) => String(n).padStart(2, '0')
-  const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`
-  return `michishirube-${includeMedia ? 'full' : 'notes'}-${stamp}`
+  return `michishirube-${includeMedia ? 'full' : 'notes'}-${formatFileStamp(now)}`
 }
