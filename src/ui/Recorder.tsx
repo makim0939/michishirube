@@ -2,12 +2,15 @@ import { useEffect, useRef, useState } from 'react'
 import {
   cameraConstraints,
   extensionFor,
+  focusAt,
+  keepAutoFocus,
   judgeRecording,
   MAX_RECORDING_MS,
   markRecorderTypeBroken,
   pickRecorderMimeType,
   QUALITY,
   recorderSupports,
+  tapToSourcePoint,
 } from '../data/mediaPrep'
 import type { VideoQuality } from '../data/videoStorage'
 import { isWebUrl } from '../domain/template'
@@ -103,6 +106,8 @@ export function Recorder({
   const [finished, setFinished] = useState<File>()
   const [shooting, setShooting] = useState(false)
   const guide = useRef<HTMLDivElement>(null)
+  /** 押してピントを合わせた場所（画面の座標）。合わせられたときだけ、輪を一瞬出す */
+  const [focusRing, setFocusRing] = useState<{ x: number; y: number; id: number }>()
 
   // 写真だけのときは、マイクを使わない
   const withAudio = audio && mode === 'video'
@@ -119,6 +124,9 @@ export function Recorder({
           return
         }
         stream.current = s
+        // 端末の初めの設定が「固定」でも、ラテアートに合わせ続ける
+        const track = s.getVideoTracks()[0]
+        if (track) void keepAutoFocus(track)
         if (preview.current) preview.current.srcObject = s
         setReady(true)
       })
@@ -236,6 +244,23 @@ export function Recorder({
 
   const recording = startedAt !== undefined
 
+  /** 映像を押した場所にピントを合わせる（対応していない端末では、押しても何も起きない） */
+  const tapToFocus = async (e: React.MouseEvent<HTMLVideoElement>) => {
+    const track = stream.current?.getVideoTracks()[0]
+    const video = preview.current
+    if (!track || !video) return
+    const rect = video.getBoundingClientRect()
+    const point = tapToSourcePoint(
+      rect,
+      { width: video.videoWidth, height: video.videoHeight },
+      { x: e.clientX - rect.left, y: e.clientY - rect.top },
+    )
+    if (!point || !(await focusAt(track, point))) return
+    const ring = { x: e.clientX, y: e.clientY, id: Date.now() }
+    setFocusRing(ring)
+    setTimeout(() => setFocusRing((cur) => (cur?.id === ring.id ? undefined : cur)), 900)
+  }
+
   /** いま映っているコマから、枠の中を写真にする（開いているカメラのまま、1回押すだけ） */
   const shoot = async () => {
     const video = preview.current
@@ -269,7 +294,8 @@ export function Recorder({
   if (finished) {
     return (
       <div className="recorder" role="dialog" aria-modal="true" aria-label="できあがりを撮る">
-        <video ref={preview} className="recorder-preview" autoPlay playsInline muted />
+        <video ref={preview} className="recorder-preview" autoPlay playsInline muted onClick={(e) => void tapToFocus(e)} />
+        {focusRing && <span key={focusRing.id} className="focus-ring" style={{ left: focusRing.x, top: focusRing.y }} aria-hidden="true" />}
         <div className="finish-guide" ref={guide} aria-hidden="true" />
         <p className="finish-hint">できあがりのカップを、枠の中に入れて1枚</p>
         <div className="recorder-bottom">
@@ -295,7 +321,8 @@ export function Recorder({
 
   return (
     <div className="recorder" role="dialog" aria-modal="true" aria-label={photoMode ? '写真を撮る' : '録画'}>
-      <video ref={preview} className="recorder-preview" autoPlay playsInline muted />
+      <video ref={preview} className="recorder-preview" autoPlay playsInline muted onClick={(e) => void tapToFocus(e)} />
+      {focusRing && <span key={focusRing.id} className="focus-ring" style={{ left: focusRing.x, top: focusRing.y }} aria-hidden="true" />}
       {/* 写真だけのときは、できあがりと同じ枠の中を撮る */}
       {photoMode && <div className="finish-guide" ref={guide} aria-hidden="true" />}
       {!ready && !error && <p className="recorder-status">カメラを準備しています…</p>}
