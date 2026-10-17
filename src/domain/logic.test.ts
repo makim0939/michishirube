@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  canAchieve,
   computeStates,
   descendants,
-  indexById,
   newlyUnlocked,
   practicingFrom,
   practiceOrder,
@@ -18,8 +16,6 @@ function skill(id: string, prereqIds: string[] = [], status: SkillStatus = 'idle
     domainId: 'd',
     name: id,
     description: '',
-    criteria: '',
-    sources: [],
     references: [],
     prereqIds,
     status,
@@ -29,26 +25,36 @@ function skill(id: string, prereqIds: string[] = [], status: SkillStatus = 'idle
 }
 
 describe('computeStates', () => {
-  it('前提がすべて達成済みならおすすめ、そうでなければその先。最近記録した型は練習中', () => {
-    const skills = [skill('a', [], 'done'), skill('b', ['a']), skill('c', ['a', 'b']), skill('d')]
+  it('前提のどれか1つが達成済みならおすすめ、どれもまだならその先。最近記録した型は練習中', () => {
+    const skills = [skill('a', [], 'done'), skill('b', ['a']), skill('c', ['b']), skill('d'), skill('e', ['a', 'c'])]
     const states = computeStates(skills, new Set(['d']))
     expect(states.get('a')).toBe('done')
     expect(states.get('b')).toBe('available')
     expect(states.get('c')).toBe('locked')
     expect(states.get('d')).toBe('active')
+    // 前提が複数でも、どれか1つ（a）が達成済みなら、もう先ではない
+    expect(states.get('e')).toBe('available')
   })
 
-  it('前提を練習中なら並行して練習できるが、達成は前提を達成してから', () => {
+  it('前提が無い型は、最初からおすすめ', () => {
+    expect(computeStates([skill('a')], new Set()).get('a')).toBe('available')
+  })
+
+  it('前提を練習中なら並行して練習できる', () => {
     const skills = [skill('steam'), skill('dot', ['steam']), skill('heart', ['dot'])]
     const states = computeStates(skills, new Set(['steam']))
     expect(states.get('dot')).toBe('available')
     expect(states.get('heart')).toBe('locked')
-    const byId = indexById(skills)
-    expect(canAchieve(skills[1], byId)).toBe(false)
-    expect(canAchieve(skills[0], byId)).toBe(true)
 
     // ドットも記録すると（練習中）、ハートも並行して練習できる
     expect(computeStates(skills, new Set(['steam', 'dot'])).get('heart')).toBe('available')
+  })
+
+  it('前提が複数のとき、どれか1つが練習中なら並行して練習できる（もう一方が未着手でも）', () => {
+    const skills = [skill('wing-tulip'), skill('wing-heart'), skill('swan', ['wing-tulip', 'wing-heart'])]
+    expect(computeStates(skills, new Set()).get('swan')).toBe('locked')
+    expect(computeStates(skills, new Set(['wing-heart'])).get('swan')).toBe('available')
+    expect(computeStates(skills, new Set(['wing-tulip'])).get('swan')).toBe('available')
   })
 
   it('「できた」の型は、最近記録していても「できた」', () => {
@@ -65,9 +71,9 @@ describe('practicingFrom', () => {
 })
 
 describe('newlyUnlocked', () => {
-  it('ほかの前提も満たしているものだけを返す', () => {
+  it('はじめて前提を満たしたものだけを返す（別の前提を先に達成していた型は、もう満たしていた）', () => {
     const skills = [skill('a'), skill('b', [], 'done'), skill('c', ['a', 'b']), skill('d', ['a', 'x']), skill('e', ['b'])]
-    expect(newlyUnlocked('a', skills).map((s) => s.id)).toEqual(['c'])
+    expect(newlyUnlocked('a', skills).map((s) => s.id)).toEqual(['d'])
   })
 })
 
@@ -88,6 +94,18 @@ describe('sortByDepth', () => {
   it('前提の深さ順に並べる', () => {
     const skills = [skill('c', ['b']), skill('b', ['a']), skill('a')]
     expect(sortByDepth(skills).map((s) => s.id)).toEqual(['a', 'b', 'c'])
+  })
+
+  it('前提が複数あるときは、いちばん短い経路の深さで並べる', () => {
+    // swan は、長い道（wing-heart 経由）より、短い道（wing-tulip 経由）の深さ
+    const skills = [
+      skill('swan', ['wing-tulip', 'wing-heart']),
+      skill('wing-heart', ['layer-heart']),
+      skill('layer-heart', ['rosetta']),
+      skill('wing-tulip', ['rosetta']),
+      skill('rosetta'),
+    ]
+    expect(sortByDepth(skills).map((s) => s.id)).toEqual(['rosetta', 'layer-heart', 'wing-tulip', 'swan', 'wing-heart'])
   })
 })
 

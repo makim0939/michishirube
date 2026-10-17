@@ -36,10 +36,12 @@ export interface Skill {
   domainId: string
   name: string
   description: string
-  /** 達成条件。「10回中8回」のように判定できる書き方にする */
-  criteria: string
-  sources: Source[]
+  /** 前に画面にあった「参考の目安」（もとの呼び名は達成条件）。今は使わない（古いデータのために残す） */
+  criteria?: string
+  /** 前に画面にあった出典。今は使わない（古いデータのために残す） */
+  sources?: Source[]
   references: Reference[]
+  /** 前提。どれか1つが達成か練習中なら、おすすめに上がる。空なら最初から */
   prereqIds: string[]
   status: SkillStatus
   /** 前に「はじめる」で練習中にした日時。今は使わない（古いデータのために残す） */

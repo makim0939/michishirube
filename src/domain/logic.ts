@@ -1,8 +1,11 @@
 import type { Skill, SkillState } from './types'
 
-/** 前提をすべて達成している。達成にできるのはこのときだけ */
+/**
+ * 前提は、複数あっても「どれか1つ」でよい（ラテアートは、スワンのように、道がいくつもあるため）。
+ * 前提が無い型は、最初から満たしている（some は空だと偽になるので分ける）
+ */
 export function prereqsDone(skill: Skill, byId: Map<string, Skill>): boolean {
-  return skill.prereqIds.every((id) => byId.get(id)?.status === 'done')
+  return skill.prereqIds.length === 0 || skill.prereqIds.some((id) => byId.get(id)?.status === 'done')
 }
 
 /**
@@ -11,11 +14,14 @@ export function prereqsDone(skill: Skill, byId: Map<string, Skill>): boolean {
 export const PRACTICING_DAYS = 21
 
 /**
- * 前提がすべて「達成」か「練習中」。このときは並行して練習できる。
+ * 前提のどれか1つが「達成」か「練習中」。このときは並行して練習できる。
  * 例：スチームを練習しながら、同じミルクでドットやハートも練習する
  */
 function prereqsStarted(skill: Skill, byId: Map<string, Skill>, practicing: ReadonlySet<string>): boolean {
-  return skill.prereqIds.every((id) => byId.get(id)?.status === 'done' || practicing.has(id))
+  return (
+    skill.prereqIds.length === 0 ||
+    skill.prereqIds.some((id) => byId.get(id)?.status === 'done' || practicing.has(id))
+  )
 }
 
 /** practicing は、最近記録した型（練習中）の id */
@@ -23,10 +29,6 @@ function skillState(skill: Skill, byId: Map<string, Skill>, practicing: Readonly
   if (skill.status === 'done') return 'done'
   if (practicing.has(skill.id)) return 'active'
   return prereqsStarted(skill, byId, practicing) ? 'available' : 'locked'
-}
-
-export function canAchieve(skill: Skill, byId: Map<string, Skill>): boolean {
-  return skill.status !== 'done' && prereqsDone(skill, byId)
 }
 
 export function indexById(skills: Skill[]): Map<string, Skill> {
@@ -48,12 +50,20 @@ export function practicingFrom(recent: { skillId: string }[], last: { skillId: s
   return ids
 }
 
-/** skillId を達成したことで、達成を目指せるようになったスキル（前提がすべて達成済みになったもの） */
+/**
+ * skillId を達成したことで、はじめて前提を満たしたスキル。
+ * 前提はどれか1つでよいので、別の前提を先に達成していた型は、もう満たしていた（もう一度は出さない）
+ */
 export function newlyUnlocked(skillId: string, skills: Skill[]): Skill[] {
+  const before = indexById(skills)
   const after = skills.map((s) => (s.id === skillId ? { ...s, status: 'done' as const } : s))
   const byId = indexById(after)
   return after.filter(
-    (s) => s.status !== 'done' && s.prereqIds.includes(skillId) && prereqsDone(s, byId),
+    (s) =>
+      s.status !== 'done' &&
+      s.prereqIds.includes(skillId) &&
+      prereqsDone(s, byId) &&
+      !prereqsDone(s, before),
   )
 }
 
@@ -91,7 +101,7 @@ export function descendants(skillId: string, skills: Skill[]): Set<string> {
   return result
 }
 
-/** 前提の深さ（最長経路）。並び順に使う */
+/** 前提の深さ（どれか1つでよいので、いちばん短い経路）。並び順に使う */
 function depths(skills: Skill[]): Map<string, number> {
   const byId = indexById(skills)
   const memo = new Map<string, number>()
@@ -100,11 +110,8 @@ function depths(skills: Skill[]): Map<string, number> {
     if (cached !== undefined) return cached
     if (path.has(s.id)) return 0
     path.add(s.id)
-    let d = 0
-    for (const p of s.prereqIds) {
-      const ps = byId.get(p)
-      if (ps) d = Math.max(d, visit(ps, path) + 1)
-    }
+    const found = s.prereqIds.map((p) => byId.get(p)).filter((p): p is Skill => !!p)
+    const d = found.length === 0 ? 0 : Math.min(...found.map((p) => visit(p, path) + 1))
     path.delete(s.id)
     memo.set(s.id, d)
     return d

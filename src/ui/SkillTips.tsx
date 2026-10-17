@@ -1,4 +1,3 @@
-import { isWebUrl } from '../domain/template'
 import { summarizeTips } from '../domain/tips'
 import type { PracticeRecord, Skill, SkillState } from '../domain/types'
 import { formatAgo, splitName, STATE_LABEL } from './common'
@@ -73,7 +72,7 @@ export function SkillTips({
   )
 }
 
-/** この型について（一般的な説明・参考の目安・前後の型・出典）。読むことは少ないので、閉じておく */
+/** この型について（自分で書いた説明・前後の型）。読むことは少ないので、閉じておく */
 export function AboutSkill({
   skill,
   prereqs,
@@ -93,19 +92,11 @@ export function AboutSkill({
       </a>
     </li>
   )
-  if (!skill.description && !skill.criteria && prereqs.length === 0 && leadsTo.length === 0 && skill.sources.length === 0) {
-    return null
-  }
+  if (!skill.description && prereqs.length === 0 && leadsTo.length === 0) return null
   return (
     <details className="section about-skill">
       <summary>この型について</summary>
       {skill.description && <p className="prewrap">{skill.description}</p>}
-      {skill.criteria && (
-        <p className="prewrap">
-          <strong>参考の目安</strong>
-          {skill.criteria}
-        </p>
-      )}
       {prereqs.length > 0 && (
         <>
           <h3>先にやると進めやすい型</h3>
@@ -116,24 +107,6 @@ export function AboutSkill({
         <>
           <h3>次のステップ</h3>
           <ul className="chips">{leadsTo.map(link)}</ul>
-        </>
-      )}
-      {skill.sources.length > 0 && (
-        <>
-          <h3>出典</h3>
-          <ul className="sources">
-            {skill.sources.map((s, i) => (
-              <li key={i}>
-                {s.url && isWebUrl(s.url) ? (
-                  <a href={s.url} target="_blank" rel="noopener noreferrer">
-                    {s.title}
-                  </a>
-                ) : (
-                  s.title
-                )}
-              </li>
-            ))}
-          </ul>
         </>
       )}
     </details>

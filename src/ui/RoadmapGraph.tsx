@@ -8,7 +8,7 @@ import { splitName, STATE_LABEL } from './common'
 import { PatternImage } from './PatternImage'
 import { go } from './router'
 
-const NODE_WIDTH = 196
+const NODE_WIDTH = 208
 const NODE_HEIGHT = 60
 
 type SkillNode = Node<{ name: string; state: SkillState }, 'skill'>
@@ -16,7 +16,7 @@ type SkillNode = Node<{ name: string; state: SkillState }, 'skill'>
 /** 型1つ。見本の絵・名前・いまの状態を出す */
 function SkillNodeView({ data }: NodeProps<SkillNode>) {
   return (
-    <div className={`graph-node state-${data.state}`}>
+    <div className={`graph-node state-${data.state}`} style={{ width: NODE_WIDTH, height: NODE_HEIGHT }}>
       <Handle type="target" position={Position.Top} />
       <PatternImage name={data.name} className="graph-node-image" dim={data.state === 'locked'} />
       <span className="graph-node-text">
