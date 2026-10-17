@@ -15,7 +15,7 @@ export function formatDateTime(ts: number): string {
   return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-/** 20261010-0905 の形。ファイル名に付ける日時（バックアップと、共有する動画・写真で同じ書き方にする） */
+/** 20261010-0905 の形（端末の時刻）。バックアップと、共有する動画・写真のファイル名で、同じ書き方にする */
 export function formatFileStamp(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`

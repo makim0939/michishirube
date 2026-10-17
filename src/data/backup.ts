@@ -31,7 +31,7 @@ interface BackupData {
   meta: Meta[]
 }
 
-class BackupError extends Error {}
+export class BackupError extends Error {}
 
 const EXT_BY_TYPE: Record<string, string> = {
   'video/quicktime': '.mov',

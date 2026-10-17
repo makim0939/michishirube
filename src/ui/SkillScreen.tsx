@@ -59,7 +59,7 @@ export function SkillScreen({ id }: { id: string }) {
   const prereqs = skill.prereqIds.map((p) => byId.get(p)).filter((s) => !!s)
   const leadsTo = skills.filter((s) => s.prereqIds.includes(skill.id))
   const form = recentForm(records)
-  const name = splitName(skill.name)
+  const { main, sub } = splitName(skill.name)
   const mediaById = new Map(media.map((m) => [m.id, m]))
 
   return (
@@ -82,8 +82,8 @@ export function SkillScreen({ id }: { id: string }) {
       <div className="skill-hero">
         <PatternImage name={skill.name} className="large" />
         <div className="skill-hero-text">
-          <h1>{name.main}</h1>
-          {name.sub && <span className="muted small">{name.sub}</span>}
+          <h1>{main}</h1>
+          {sub && <span className="muted small">{sub}</span>}
           <div className="row wrap">
             <StateBadge state={state} />
             {skill.achievedAt && <span className="muted small">{formatDateTime(skill.achievedAt)} にできた</span>}

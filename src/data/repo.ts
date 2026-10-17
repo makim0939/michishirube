@@ -8,7 +8,7 @@ import type { VideoQuality, YoutubePrivacy } from './videoStorage'
 
 export const BUNDLED_TEMPLATES: RoadmapTemplate[] = [parseTemplate(latteArt)]
 
-class RepoError extends Error {}
+export class RepoError extends Error {}
 
 /**
  * 書き込みはすべて、updatedAt を進めて outbox に印を付ける（サーバーへ送る対象になる）。

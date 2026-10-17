@@ -88,6 +88,7 @@ export async function api(config: SyncConfig, path: string, init: RequestInit = 
   return res
 }
 
+/** JSON を POST する。認証のヘッダーは api が付ける（同期と YouTube の鍵の受け渡しで、同じ書き方を使う） */
 export function postJson(config: SyncConfig, path: string, body: unknown): Promise<Response> {
   return api(config, path, {
     method: 'POST',

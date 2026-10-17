@@ -23,7 +23,7 @@ const MODE_KEY = 'michishirube:recorder-mode'
 
 type Mode = 'video' | 'photo'
 
-/** ファイル名に付ける撮った時刻（20261010T090500 の形） */
+/** 撮った時刻（UTC。20261010T000500 の形）。すでに保存したファイル名と同じ形のまま残している（formatFileStamp とは別） */
 const shotStamp = () => new Date().toISOString().replace(/[-:]/g, '').slice(0, 15)
 
 function formatElapsed(ms: number) {

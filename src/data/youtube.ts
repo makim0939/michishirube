@@ -138,7 +138,7 @@ export async function videoMeta(media: Media): Promise<VideoMeta> {
   }
 }
 
-class QuotaExceeded extends Error {}
+export class QuotaExceeded extends Error {}
 
 /**
  * 1本を上げて、YouTube の動画 ID を返す。

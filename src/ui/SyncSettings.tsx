@@ -21,6 +21,7 @@ import { replace } from './router'
 import { PRIVACY_URL, YOUTUBE_TERMS_URL } from '../platform'
 import { AlertIcon, CheckIcon } from './icons'
 
+/** ログインしたあとのトースト。アプリの中で終えたときと、Web 版で Google の画面から戻ったときで、同じ文言にする */
 const loginMessage = (firstDevice: boolean) =>
   firstDevice ? 'ログインしました。この端末の記録をサーバーに置きました' : 'ログインしました。記録を受け取りました'
 
