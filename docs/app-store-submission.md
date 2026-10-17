@@ -10,8 +10,9 @@ Apple の規約の確認日：2026-10-17。提出の前に、App Review Guidelin
 
 ## 1. 用語
 
-- **Bundle ID**：アプリの「固有の名前」（`io.github.makim0939.lattecho`）。App Store・端末が、アプリを見分けるのに使う。ストアに登録したあとは変えられない。
-  このアプリでは、Google ログインから戻るときの URL スキーム（`src/data/account.ts` と `worker/src/index.ts` の `APP_SCHEME`）、Android の applicationId にも同じ文字列を使っている。変えると、いま端末に入っているアプリとは別のアプリになり、中の記録が引き継がれない。**変えない。**
+- **Bundle ID**：アプリの「固有の名前」（`me.makimura.lattecho`。所有ドメイン makimura.me を逆にした形）。App Store・端末が、アプリを見分けるのに使う。ストアに登録したあとは変えられない。
+  配信前の 2026-10-17 に、`io.github.makim0939.lattecho` から変えた（Android の applicationId、Google ログインから戻る URL スキームも同じ値）。
+  変えたため、前の ID で端末に入っているアプリとは別のアプリになる。記録は、前のアプリの「設定 → バックアップ」で書き出し、新しいアプリで復元する。
 - **署名（コード署名）**：このアプリが「この開発者が作り、途中で書き換えられていない」ことを、Apple が発行する証明書で証明する仕組み。App Store に出すアプリには、配布用の署名が要る。Xcode の「Automatically manage signing」にチームを選ぶと、証明書とプロビジョニングプロファイル（どのアプリを、どの証明書で、どう配るかの許可証）を、自動で作る。`DEVELOPMENT_TEAM`（チーム ID）は、各自の Xcode の設定に入る値で、リポジトリには入れない。
   Apple Developer Program に入ったあとは、Xcode の「Signing & Capabilities」で、有料のチームを選び直す。
 
@@ -63,7 +64,7 @@ Google の審査が先に通りそうなら、それを待ってから出すと�
 | # | 項目 | 状況 |
 |---|---|---|
 | 1 | Apple Developer Program に加入 | 済み |
-| 2 | Bundle ID を決める（`io.github.makim0939.lattecho` のまま） | 決定 |
+| 2 | Bundle ID を決める（`me.makimura.lattecho`） | 決定・反映済み（別 PR） |
 | 3 | Xcode の署名を、有料のチームにする | これから |
 | 4 | App Store Connect で、「新規 App」を作る（名前・言語・Bundle ID・SKU） | これから |
 | 5 | アプリのアイコン（1024px・透明なし）を入れる | 別セッションで作成中 |
