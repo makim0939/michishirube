@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { FEEDBACK_CONTACT_MAX, FEEDBACK_MESSAGE_MAX, type FeedbackKind } from '../../shared/feedback'
 import { clearDraft, loadDraft, saveDraft, sendFeedback } from '../data/feedback'
 import { useAction, useToast } from './feedback'
-import { go } from './router'
+import { goBack } from './router'
 
 const KINDS: { value: FeedbackKind; label: string; placeholder: string }[] = [
   { value: 'idea', label: '要望', placeholder: 'こんな機能がほしい、ここが使いにくい' },
@@ -38,7 +38,8 @@ export function FeedbackPage() {
         sent.current = true
         clearDraft()
         toast.show('届きました。ありがとうございます')
-        go('/settings')
+        // 設定へ戻る（新しく積むと、戻るで空のフォームに戻ってしまう）
+        goBack('/settings')
       } finally {
         setSending(false)
       }
