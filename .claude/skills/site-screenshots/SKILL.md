@@ -19,8 +19,8 @@ claude-in-chrome（`mcp__claude-in-chrome__*`。ロードは `anthropic-skills:c
    document.body.style.cssText = 'margin:0;background:#ddd';
    document.documentElement.style.cssText = 'height:auto;overflow:hidden';
    ```
-   （`resize_window` は、スクリーンショットの幅を変えない。この iframe の方法を使う。）
-3. 画面を、クリックで動かす。**座標は、iframe の位置（ウィンドウ幅から決まる）に注意。** ウィンドウの幅が 1440 なら、iframe は x=525〜915。
+   （`resize_window` は、ウィンドウの大きさが思いどおりにならないことがある。iframe の方法なら、いつも幅 390 になる。）
+3. 画面を、クリックで動かす。**座標は、iframe の位置（ウィンドウ幅から決まる）に注意。** iframe は、ウィンドウの中央に置かれる（幅 1440 なら x=525〜915、幅 500 なら x=55〜445）。まず `screenshot` で位置を確かめる。
 4. `computer` の `zoom`（`region` に iframe の範囲、`save_to_disk: true`）で撮る。**`zoom` は、高解像度（2倍）の PNG を保存する**（`screenshot` は低い）。
 5. **マウスカーソルが写り込む。** 撮る前に、`hover` で、iframe の外（例：`[1300, 300]`）へ動かす。下のタブバーにカーソルが残る画像は、タブバーごと切り取る。
 6. スクロールバーが写るときは、背景色で塗りつぶす。
