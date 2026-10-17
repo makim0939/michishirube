@@ -1,4 +1,4 @@
-package io.github.makim0939.lattecho;
+package me.makimura.lattecho;
 
 import android.media.MediaMetadataRetriever;
 import android.net.Uri;

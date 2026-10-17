@@ -6,7 +6,7 @@ import type { CapacitorConfig } from '@capacitor/cli'
  */
 const config: CapacitorConfig = {
   // ストアに出すときの識別子（最初に公開する前なら変えられる）
-  appId: 'io.github.makim0939.lattecho',
+  appId: 'me.makimura.lattecho',
   appName: 'ラテ帳',
   webDir: 'dist',
   backgroundColor: '#faf7f2',
