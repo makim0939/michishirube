@@ -9,6 +9,7 @@ import {
   createDomain,
   createSkill,
   cupNumbers,
+  deleteDomain,
   deleteRecord,
   deleteSkill,
   ensureSeeded,
@@ -73,6 +74,54 @@ describe('挑戦と達成', () => {
     const { a, b } = await chain()
     await deleteSkill(a)
     expect((await db.skills.get(b))!.prereqIds).toEqual([])
+  })
+})
+
+describe('削除', () => {
+  const video = () => new Blob(['v'], { type: 'video/mp4' })
+  const outboxKeys = async () => (await db.outbox.toArray()).map((e) => `${e.kind}:${e.id}`).sort()
+
+  it('分野を消すと、その型・記録・動画・写真も消え、ほかの分野は残る。消した印はサーバーへ送る対象になる', async () => {
+    const { domainId, a, b } = await chain()
+    const otherDomain = await createDomain('ドラム')
+    const other = await createSkill(otherDomain, input('X'))
+    const r1 = await addRecord({ skillId: a, reason: 'x', nextAction: '', files: [video()] })
+    const r2 = await addRecord({ skillId: b, reason: 'y', nextAction: '', files: [video()] })
+    const keep = await addRecord({ skillId: other, reason: 'z', nextAction: '', files: [video()] })
+    const mediaIds = (await db.media.where('recordId').anyOf(r1, r2).primaryKeys()) as string[]
+    const skillIds = (await db.skills.where('domainId').equals(domainId).primaryKeys()) as string[]
+    await db.outbox.clear()
+
+    await deleteDomain(domainId)
+
+    expect((await db.domains.toArray()).map((d) => d.id)).toEqual([otherDomain])
+    expect((await db.skills.toArray()).map((s) => s.id)).toEqual([other])
+    expect((await db.records.toArray()).map((r) => r.id)).toEqual([keep])
+    expect(await db.media.count()).toBe(1)
+    expect(await outboxKeys()).toEqual(
+      [
+        `domain:${domainId}`,
+        ...skillIds.map((id) => `skill:${id}`),
+        `record:${r1}`,
+        `record:${r2}`,
+        ...mediaIds.map((id) => `media:${id}`),
+      ].sort(),
+    )
+  })
+
+  it('型を消すと、その記録・動画・写真も消え、消した印が残る', async () => {
+    const { a, b } = await chain()
+    const r1 = await addRecord({ skillId: a, reason: 'x', nextAction: '', files: [video()] })
+    const keep = await addRecord({ skillId: b, reason: 'y', nextAction: '', files: [video()] })
+    const mediaId = ((await db.media.where('recordId').equals(r1).primaryKeys()) as string[])[0]
+    await db.outbox.clear()
+
+    await deleteSkill(a)
+
+    expect((await db.records.toArray()).map((r) => r.id)).toEqual([keep])
+    expect(await db.media.count()).toBe(1)
+    // 前提にしていた b も、前提が外れて送る対象になる
+    expect(await outboxKeys()).toEqual([`media:${mediaId}`, `record:${r1}`, `skill:${a}`, `skill:${b}`].sort())
   })
 })
 

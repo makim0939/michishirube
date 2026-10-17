@@ -1,15 +1,6 @@
 import { newlyUnlocked, practicingFrom, PRACTICING_DAYS, wouldCreateCycle } from '../domain/logic'
 import { isWebUrl, parseTemplate, templateToEntities, type RoadmapTemplate } from '../domain/template'
-import {
-  DEFAULT_SETTINGS,
-  type Media,
-  type Outcome,
-  type PracticeRecord,
-  type Reference,
-  type Settings,
-  type Skill,
-  type Source,
-} from '../domain/types'
+import type { Media, Outcome, PracticeRecord, Reference, Skill, Source } from '../domain/types'
 import latteArt from '../roadmaps/latte-art.json'
 import { moveContentsToFiles, optimizeVideos } from './content'
 import { db, markDirty, newId } from './db'
@@ -17,19 +8,12 @@ import type { VideoQuality, YoutubePrivacy } from './videoStorage'
 
 export const BUNDLED_TEMPLATES: RoadmapTemplate[] = [parseTemplate(latteArt)]
 
-export class RepoError extends Error {}
+class RepoError extends Error {}
 
 /**
  * 書き込みはすべて、updatedAt を進めて outbox に印を付ける（サーバーへ送る対象になる）。
  * そのため、トランザクションには必ず db.outbox も含める
  */
-
-// ---- 設定 ----
-
-export async function getSettings(): Promise<Settings> {
-  const row = await db.meta.get('settings')
-  return { ...DEFAULT_SETTINGS, ...(row?.value as Partial<Settings> | undefined) }
-}
 
 // ---- 初回 ----
 
@@ -88,17 +72,22 @@ export async function renameDomain(id: string, name: string) {
   })
 }
 
+/** 型の記録と動画・写真を消す（型・分野の削除で共通。型そのものは呼び出し側が消す） */
+async function deleteRecordsOfSkills(skillIds: string[]) {
+  const recordIds = (await db.records.where('skillId').anyOf(skillIds).primaryKeys()) as string[]
+  const mediaIds = (await db.media.where('skillId').anyOf(skillIds).primaryKeys()) as string[]
+  await db.media.bulkDelete(mediaIds)
+  await db.records.bulkDelete(recordIds)
+  await markDirty('media', mediaIds)
+  await markDirty('record', recordIds)
+}
+
 export async function deleteDomain(id: string) {
   await db.transaction('rw', [db.domains, db.skills, db.records, db.media, db.outbox], async () => {
     const skillIds = (await db.skills.where('domainId').equals(id).toArray()).map((s) => s.id)
-    const recordIds = (await db.records.where('skillId').anyOf(skillIds).primaryKeys()) as string[]
-    const mediaIds = (await db.media.where('skillId').anyOf(skillIds).primaryKeys()) as string[]
-    await db.media.bulkDelete(mediaIds)
-    await db.records.bulkDelete(recordIds)
+    await deleteRecordsOfSkills(skillIds)
     await db.skills.bulkDelete(skillIds)
     await db.domains.delete(id)
-    await markDirty('media', mediaIds)
-    await markDirty('record', recordIds)
     await markDirty('skill', skillIds)
     await markDirty('domain', [id])
   })
@@ -156,13 +145,8 @@ export async function updateSkill(id: string, input: SkillInput) {
 
 export async function deleteSkill(id: string) {
   await db.transaction('rw', [db.skills, db.records, db.media, db.outbox], async () => {
-    const recordIds = (await db.records.where('skillId').equals(id).primaryKeys()) as string[]
-    const mediaIds = (await db.media.where('skillId').equals(id).primaryKeys()) as string[]
-    await db.media.bulkDelete(mediaIds)
-    await db.records.bulkDelete(recordIds)
+    await deleteRecordsOfSkills([id])
     await db.skills.delete(id)
-    await markDirty('media', mediaIds)
-    await markDirty('record', recordIds)
     await markDirty('skill', [id])
     const now = Date.now()
     const dependents = (await db.skills.toArray()).filter((s) => s.prereqIds.includes(id))
@@ -208,7 +192,7 @@ export async function removeReference(skillId: string, referenceId: string) {
 }
 
 /** タイトルを書かなかったときの名前。YouTube などはサービス名、それ以外はドメイン名 */
-export function defaultReferenceTitle(url: string): string {
+function defaultReferenceTitle(url: string): string {
   const host = new URL(url).hostname.replace(/^www\.|^m\./, '')
   if (host === 'youtu.be' || host.endsWith('youtube.com')) return 'YouTube の動画'
   if (host.endsWith('instagram.com')) return 'Instagram の投稿'

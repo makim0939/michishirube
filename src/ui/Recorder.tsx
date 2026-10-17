@@ -23,6 +23,9 @@ const MODE_KEY = 'michishirube:recorder-mode'
 
 type Mode = 'video' | 'photo'
 
+/** ファイル名に付ける撮った時刻（20261010T090500 の形） */
+const shotStamp = () => new Date().toISOString().replace(/[-:]/g, '').slice(0, 15)
+
 function formatElapsed(ms: number) {
   const s = Math.floor(ms / 1000)
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
@@ -230,9 +233,8 @@ export function Recorder({
         }
         return
       }
-      const stamp = new Date().toISOString().replace(/[-:]/g, '').slice(0, 15)
       // 動画の最後に、きれいにカップが写っているとは限らないので、続けてできあがりを1枚撮ってもらう
-      setFinished(new File([blob], `rec-${stamp}.${extensionFor(type)}`, { type: blob.type }))
+      setFinished(new File([blob], `rec-${shotStamp()}.${extensionFor(type)}`, { type: blob.type }))
     }
     recorder.current = r
     try {
@@ -280,7 +282,7 @@ export function Recorder({
       canvas.height = size
       canvas.getContext('2d')!.drawImage(video, sx, sy, side, side, 0, 0, size, size)
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.85))
-      const base = finished ? finished.name.replace(/\.[^.]+$/, '') : `photo-${new Date().toISOString().replace(/[-:]/g, '').slice(0, 15)}`
+      const base = finished ? finished.name.replace(/\.[^.]+$/, '') : `photo-${shotStamp()}`
       if (blob) photo = new File([blob], `${base}-cup.jpg`, { type: 'image/jpeg' })
     }
     if (!finished && !photo) {

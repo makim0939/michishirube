@@ -78,7 +78,7 @@ export function useContent(media: Media | undefined): { blob?: Blob; loading: bo
  * カップの絵の中身。写真はこの端末に無ければサーバーから取り、動画はサムネイル（できあがりのコマ）を使う
  * （無ければ作るか、サーバーから取る）
  */
-export function useCupImage(media: Media | undefined, { upgrade = true }: { upgrade?: boolean } = {}): Blob | undefined {
+function useCupImage(media: Media | undefined, { upgrade = true }: { upgrade?: boolean } = {}): Blob | undefined {
   const video = !!media && isVideo(media)
   // 動画の中身は読まない（サムネイルを使う）
   const photo = useContent(video ? undefined : media).blob

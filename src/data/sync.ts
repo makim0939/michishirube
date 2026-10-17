@@ -88,6 +88,14 @@ export async function api(config: SyncConfig, path: string, init: RequestInit = 
   return res
 }
 
+export function postJson(config: SyncConfig, path: string, body: unknown): Promise<Response> {
+  return api(config, path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+}
+
 // ---- 端末の行 ⇄ 送る形 ----
 
 const TABLES = {
@@ -269,13 +277,7 @@ async function doSync(): Promise<void> {
         }
         sent.push(entry)
       }
-      const res = (await (
-        await api(config, '/api/sync', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ since, changes }),
-        })
-      ).json()) as SyncResponse
+      const res = (await (await postJson(config, '/api/sync', { since, changes })).json()) as SyncResponse
 
       if (!(await stillConnected(config))) return
       tooLarge = outbox.length - sent.length
@@ -447,13 +449,7 @@ export async function connectWithConfig(config: SyncConfig): Promise<{ firstDevi
   // 分野・型は、あとで書き直されると後ろのページに移るので、見つかるか最後のページまで見る
   let firstDevice = true
   for (let since = 0, round = 0; round < 50; round++) {
-    const page = (await (
-      await api(config, '/api/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ since, changes: [] }),
-      })
-    ).json()) as SyncResponse
+    const page = (await (await postJson(config, '/api/sync', { since, changes: [] })).json()) as SyncResponse
     if (page.changes.some((c) => !c.deleted && (c.kind === 'domain' || c.kind === 'skill'))) {
       firstDevice = false
       break

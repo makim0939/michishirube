@@ -31,7 +31,7 @@ function fullPath(path: string) {
 }
 
 /** 画面（WebView）から読むための URL */
-export function fileUrl(path: string): string {
+function fileUrl(path: string): string {
   if (!baseUri) throw new Error('ファイルの準備ができていません')
   return Capacitor.convertFileSrc(`${baseUri}/${path}`)
 }

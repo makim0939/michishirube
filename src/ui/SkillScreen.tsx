@@ -11,7 +11,8 @@ import {
 } from '../data/repo'
 import { computeStates, indexById } from '../domain/logic'
 import { recentForm } from '../domain/form'
-import { ConfirmButton, Empty, formatDate, splitName, StateBadge } from './common'
+import { formatDateTime } from '../domain/format'
+import { ConfirmButton, Empty, splitName, StateBadge } from './common'
 import { Compare } from './Compare'
 import { PatternImage } from './PatternImage'
 import { FormDots, formSummary } from './FormDots'
@@ -25,7 +26,6 @@ import { AboutSkill, SkillTips } from './SkillTips'
 /** 記録は写真の格子で、まず新しいものを数段だけ出し、少しずつ足す（3列なので3の倍数） */
 const RECORDS_FIRST = 9
 const RECORDS_PAGE = 12
-
 
 export function SkillScreen({ id }: { id: string }) {
   const run = useAction()
@@ -59,6 +59,7 @@ export function SkillScreen({ id }: { id: string }) {
   const prereqs = skill.prereqIds.map((p) => byId.get(p)).filter((s) => !!s)
   const leadsTo = skills.filter((s) => s.prereqIds.includes(skill.id))
   const form = recentForm(records)
+  const name = splitName(skill.name)
   const mediaById = new Map(media.map((m) => [m.id, m]))
 
   return (
@@ -81,11 +82,11 @@ export function SkillScreen({ id }: { id: string }) {
       <div className="skill-hero">
         <PatternImage name={skill.name} className="large" />
         <div className="skill-hero-text">
-          <h1>{splitName(skill.name).main}</h1>
-          {splitName(skill.name).sub && <span className="muted small">{splitName(skill.name).sub}</span>}
+          <h1>{name.main}</h1>
+          {name.sub && <span className="muted small">{name.sub}</span>}
           <div className="row wrap">
             <StateBadge state={state} />
-            {skill.achievedAt && <span className="muted small">{formatDate(skill.achievedAt)} にできた</span>}
+            {skill.achievedAt && <span className="muted small">{formatDateTime(skill.achievedAt)} にできた</span>}
           </div>
         </div>
       </div>

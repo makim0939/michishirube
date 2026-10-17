@@ -76,7 +76,7 @@ function currentPlatform(): FeedbackPlatform {
   return p === 'ios' || p === 'android' ? p : 'web'
 }
 
-export class FeedbackError extends Error {}
+class FeedbackError extends Error {}
 
 /** 要望を送る。ログインは要らない */
 export async function sendFeedback(draft: FeedbackDraft): Promise<void> {

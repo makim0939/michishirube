@@ -14,12 +14,12 @@ export const PRACTICING_DAYS = 21
  * 前提がすべて「達成」か「練習中」。このときは並行して練習できる。
  * 例：スチームを練習しながら、同じミルクでドットやハートも練習する
  */
-export function prereqsStarted(skill: Skill, byId: Map<string, Skill>, practicing: ReadonlySet<string>): boolean {
+function prereqsStarted(skill: Skill, byId: Map<string, Skill>, practicing: ReadonlySet<string>): boolean {
   return skill.prereqIds.every((id) => byId.get(id)?.status === 'done' || practicing.has(id))
 }
 
 /** practicing は、最近記録した型（練習中）の id */
-export function skillState(skill: Skill, byId: Map<string, Skill>, practicing: ReadonlySet<string>): SkillState {
+function skillState(skill: Skill, byId: Map<string, Skill>, practicing: ReadonlySet<string>): SkillState {
   if (skill.status === 'done') return 'done'
   if (practicing.has(skill.id)) return 'active'
   return prereqsStarted(skill, byId, practicing) ? 'available' : 'locked'
@@ -92,7 +92,7 @@ export function descendants(skillId: string, skills: Skill[]): Set<string> {
 }
 
 /** 前提の深さ（最長経路）。並び順に使う */
-export function depths(skills: Skill[]): Map<string, number> {
+function depths(skills: Skill[]): Map<string, number> {
   const byId = indexById(skills)
   const memo = new Map<string, number>()
   const visit = (s: Skill, path: Set<string>): number => {

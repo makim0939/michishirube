@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { shareFileNative } from '../data/files'
 import { isAndroidApp } from '../platform'
-import { formatDateTime } from '../domain/format'
 import type { Media, SkillState } from '../domain/types'
 import { PlayIcon } from './icons'
 
@@ -26,8 +25,6 @@ export function StateBadge({ state }: { state: SkillState }) {
 }
 
 const DAY = 24 * 60 * 60 * 1000
-
-export const formatDate = formatDateTime
 
 /** 今日から何日前か（今日は 0） */
 function daysAgo(ts: number, now: number): number {
