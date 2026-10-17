@@ -39,6 +39,72 @@ export function cameraConstraints(quality: VideoQuality): MediaTrackConstraints 
   }
 }
 
+/**
+ * 画面の押した場所（映像の枠の中の座標）が、カメラの元の映像のどこ（0〜1）に当たるか。
+ * プレビューは object-fit: cover で映していて、はみ出た分は見えないので、その分をずらして計算する。
+ * 見えていないところ（はみ出た側）を押すことはないが、念のため 0〜1 に収める
+ */
+export function tapToSourcePoint(
+  box: { width: number; height: number },
+  source: { width: number; height: number },
+  tap: { x: number; y: number },
+): { x: number; y: number } | undefined {
+  if (!box.width || !box.height || !source.width || !source.height) return undefined
+  const scale = Math.max(box.width / source.width, box.height / source.height)
+  const offsetX = (box.width - source.width * scale) / 2
+  const offsetY = (box.height - source.height * scale) / 2
+  const clamp = (n: number) => Math.min(1, Math.max(0, n))
+  return {
+    x: clamp((tap.x - offsetX) / (source.width * scale)),
+    y: clamp((tap.y - offsetY) / (source.height * scale)),
+  }
+}
+
+/** ピントの合わせ方。ブラウザの型定義に focusMode・pointsOfInterest が無いので、MediaTrackConstraintSet に型を合わせて渡す */
+type FocusMode = 'continuous' | 'single-shot' | 'manual' | 'none'
+
+/** 1回合わせたあと自動に戻すタイマー（続けて押したとき、前のタイマーが後の指定を壊さないよう、トラックごとに1つだけ持つ） */
+const revertTimers = new WeakMap<MediaStreamTrack, ReturnType<typeof setTimeout>>()
+
+/** 自動でピントを合わせ続ける（動くカップに追いつく）。対応していない端末では何もしない */
+export async function keepAutoFocus(track: MediaStreamTrack): Promise<boolean> {
+  const modes = (track.getCapabilities?.() as { focusMode?: string[] } | undefined)?.focusMode
+  if (!modes?.includes('continuous')) return false
+  try {
+    await track.applyConstraints({ advanced: [{ focusMode: 'continuous' } as MediaTrackConstraintSet] })
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * 押した場所（0〜1）にピントを合わせ、合わせたら自動に戻す。
+ * 場所を指定できない端末（pointsOfInterest が無い）では、押しても何も起こさず false を返す
+ */
+export async function focusAt(track: MediaStreamTrack, point: { x: number; y: number }): Promise<boolean> {
+  const modes = (track.getCapabilities?.() as { focusMode?: string[] } | undefined)?.focusMode
+  if (!modes || !(navigator.mediaDevices?.getSupportedConstraints?.() as Record<string, boolean> | undefined)?.pointsOfInterest) return false
+  const mode: FocusMode | undefined = modes.includes('single-shot') ? 'single-shot' : modes.includes('continuous') ? 'continuous' : undefined
+  if (!mode) return false
+  try {
+    await track.applyConstraints({ advanced: [{ focusMode: mode, pointsOfInterest: [point] } as MediaTrackConstraintSet] })
+  } catch {
+    return false
+  }
+  // 1回合わせたあとは、また自動で合わせ続ける（ピントが固定されたままにしない）
+  clearTimeout(revertTimers.get(track))
+  if (mode === 'single-shot') {
+    revertTimers.set(
+      track,
+      setTimeout(() => {
+        if (track.readyState === 'live') void keepAutoFocus(track)
+      }, 1500),
+    )
+  }
+  return true
+}
+
 /** 録画は5分まで（撮り忘れで大きくなりすぎないように） */
 export const MAX_RECORDING_MS = 5 * 60 * 1000
 
