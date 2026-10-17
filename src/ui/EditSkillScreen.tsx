@@ -44,48 +44,9 @@ function SkillForm({
         <input value={form.name} onChange={(e) => set('name', e.target.value)} required placeholder="例：ハート" />
       </label>
       <label className="field">
-        <span>参考の目安（任意）</span>
-        <textarea
-          rows={2}
-          value={form.criteria}
-          onChange={(e) => set('criteria', e.target.value)}
-          placeholder="例：中央に左右対称のハートが10回中8回描ける"
-        />
-        <small className="muted">「できた」は、最近の調子（直近10杯の結果）を見て自分で決めます。目安を書いておくと、そのときの参考になります。</small>
-      </label>
-      <label className="field">
         <span>説明・やり方</span>
         <textarea rows={5} value={form.description} onChange={(e) => set('description', e.target.value)} />
       </label>
-
-      <fieldset className="field">
-        <legend>出典</legend>
-        {form.sources.map((s, i) => (
-          <div key={i} className="source-row">
-            <input
-              value={s.title}
-              placeholder="タイトル（教本名、講座名など）"
-              onChange={(e) => set('sources', form.sources.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)))}
-            />
-            <input
-              value={s.url ?? ''}
-              type="url"
-              placeholder="URL（任意）"
-              onChange={(e) => set('sources', form.sources.map((x, j) => (j === i ? { ...x, url: e.target.value } : x)))}
-            />
-            <button
-              type="button"
-              className="btn small ghost"
-              onClick={() => set('sources', form.sources.filter((_, j) => j !== i))}
-            >
-              外す
-            </button>
-          </div>
-        ))}
-        <button type="button" className="btn small" onClick={() => set('sources', [...form.sources, { title: '', url: '' }])}>
-          ＋ 出典を追加
-        </button>
-      </fieldset>
 
       <fieldset className="field">
         <legend>前提（おすすめの順で、先にする型。前提がまだでも始められます）</legend>
@@ -112,6 +73,7 @@ function SkillForm({
             ))}
           </ul>
         )}
+        {candidates.length > 1 && <small className="muted">複数選んだときは、どれか1つでよい</small>}
       </fieldset>
 
       <div className="row">
@@ -156,8 +118,6 @@ export function EditSkillScreen({ id }: { id: string }) {
         initial={{
           name: skill.name,
           description: skill.description,
-          criteria: skill.criteria,
-          sources: skill.sources,
           prereqIds: skill.prereqIds,
         }}
         candidates={candidates}
@@ -214,7 +174,7 @@ export function NewSkillScreen({ domainId }: { domainId: string }) {
         <h1>{data.domain.name} に型を追加</h1>
       </header>
       <SkillForm
-        initial={{ name: '', description: '', criteria: '', sources: [], prereqIds: [] }}
+        initial={{ name: '', description: '', prereqIds: [] }}
         candidates={sortByDepth(data.skills)}
         cancelPath={`/map/${domainId}`}
         onSubmit={async (input) => {

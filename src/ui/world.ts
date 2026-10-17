@@ -14,6 +14,7 @@ export type Pattern =
   | 'tulip4'
   | 'rosetta'
   | 'wing'
+  | 'wingheart'
   | 'swan'
   | 'layerheart'
 
@@ -27,6 +28,8 @@ export function patternFor(name: string): Pattern | undefined {
   if (n.includes('ドット')) return 'dot'
   if (n.includes('レイヤーハート')) return 'layerheart'
   if (n.includes('スワン')) return 'swan'
+  // 「ウィングハート」は、ウィングチューリップの絵にならないよう、先に判定する
+  if (n.includes('ウィングハート') || n.includes('ウイングハート')) return 'wingheart'
   if (n.includes('ウイング') || n.includes('ウィング')) return 'wing'
   if (n.includes('ロゼッタ') || n.includes('リーフ')) return 'rosetta'
   // ウェーブ（スタックドチューリップ）は層を重ねたチューリップなので、層の多い絵を使う

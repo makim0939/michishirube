@@ -9,7 +9,7 @@ import { logout } from './account'
 import { selectVideosToDrop } from './tidy'
 import { uploadNow, uploadVideo, videoMeta, youtubePlayable } from './youtube'
 
-const input = (name: string) => ({ name, description: '', criteria: '', sources: [], prereqIds: [] })
+const input = (name: string) => ({ name, description: '', prereqIds: [] })
 
 afterEach(() => {
   vi.unstubAllGlobals()

@@ -8,7 +8,7 @@ import { splitName, STATE_LABEL } from './common'
 import { PatternImage } from './PatternImage'
 import { go } from './router'
 
-const NODE_WIDTH = 196
+const NODE_WIDTH = 208
 const NODE_HEIGHT = 60
 
 type SkillNode = Node<{ name: string; state: SkillState }, 'skill'>

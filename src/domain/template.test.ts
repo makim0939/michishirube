@@ -5,26 +5,41 @@ import { TemplateError, entitiesToTemplate, parseTemplate, templateToEntities } 
 const base = { version: 1, domain: 'ピアノ' }
 
 describe('parseTemplate', () => {
-  it('同梱のラテアートのロードマップは正しい形式で、どのスキルにも出典と達成条件がある', () => {
+  it('同梱のラテアートのロードマップは正しい形式で、説明・目安・出典を持たない', () => {
     const t = parseTemplate(latteArt)
-    expect(t.skills.length).toBeGreaterThan(5)
-    for (const s of t.skills) {
-      // レイヤーハートだけは信頼できる出典が見つかっていない（達成条件も自分で決める）
-      if (s.key !== 'layer-heart') expect(s.sources?.length, s.name).toBeGreaterThan(0)
-      expect(s.criteria, s.name).not.toBe('')
-    }
+    expect(t.skills.map((s) => s.name)).toEqual([
+      'ハート',
+      'チューリップ',
+      'ロゼッタ（リーフ）',
+      'レイヤーハート',
+      'ウィングチューリップ',
+      'ウィングハート',
+      'スワン',
+    ])
+    for (const s of t.skills) expect(s.description, s.name).toBe('')
+    // 順序は開発者が決める。スワンは、どちらのウィングからでも進める（前提はどれか1つでよい）
+    const prereqs = Object.fromEntries(t.skills.map((s) => [s.key, s.prereqs]))
+    expect(prereqs).toEqual({
+      heart: [],
+      tulip: ['heart'],
+      rosetta: ['tulip'],
+      'layer-heart': ['rosetta'],
+      'wing-tulip': ['rosetta'],
+      'wing-heart': ['layer-heart'],
+      swan: ['wing-tulip', 'wing-heart'],
+    })
   })
 
   it('存在しない前提・重複した key・循環をはじく', () => {
-    expect(() => parseTemplate({ ...base, skills: [{ key: 'a', name: 'A', criteria: '', prereqs: ['z'] }] })).toThrow(
+    expect(() => parseTemplate({ ...base, skills: [{ key: 'a', name: 'A', prereqs: ['z'] }] })).toThrow(
       TemplateError,
     )
     expect(() =>
       parseTemplate({
         ...base,
         skills: [
-          { key: 'a', name: 'A', criteria: '' },
-          { key: 'a', name: 'B', criteria: '' },
+          { key: 'a', name: 'A' },
+          { key: 'a', name: 'B' },
         ],
       }),
     ).toThrow(/重複/)
@@ -32,8 +47,8 @@ describe('parseTemplate', () => {
       parseTemplate({
         ...base,
         skills: [
-          { key: 'a', name: 'A', criteria: '', prereqs: ['b'] },
-          { key: 'b', name: 'B', criteria: '', prereqs: ['a'] },
+          { key: 'a', name: 'A', prereqs: ['b'] },
+          { key: 'b', name: 'B', prereqs: ['a'] },
         ],
       }),
     ).toThrow(/循環/)
@@ -46,8 +61,8 @@ describe('templateToEntities / entitiesToTemplate', () => {
     const t = parseTemplate({
       ...base,
       skills: [
-        { key: 'scale', name: 'スケール', criteria: 'ハ長調を両手で' },
-        { key: 'song', name: '曲', criteria: '通して弾ける', prereqs: ['scale'] },
+        { key: 'scale', name: 'スケール' },
+        { key: 'song', name: '曲', prereqs: ['scale'] },
       ],
     })
     const { domain, skills } = templateToEntities(t, { now: 1000, order: 1, newId: () => `id${++n}` })
@@ -62,13 +77,13 @@ describe('templateToEntities / entitiesToTemplate', () => {
   })
 })
 
-describe('出典の URL', () => {
-  it('http(s) 以外の URL をはじく', () => {
-    const t = (url: string) => ({
+describe('古い形式', () => {
+  it('出典・参考の目安（criteria）が入っていても、読み込んで捨てる', () => {
+    const t = parseTemplate({
       ...base,
-      skills: [{ key: 'a', name: 'A', criteria: '', sources: [{ title: 't', url }] }],
+      skills: [{ key: 'a', name: 'A', criteria: '10回中8回', sources: [{ title: 't', url: 'javascript:alert(1)' }] }],
     })
-    expect(() => parseTemplate(t('javascript:alert(1)'))).toThrow(/http/)
-    expect(parseTemplate(t('https://example.com')).skills[0].sources?.[0].url).toBe('https://example.com')
+    expect(t.skills[0]).not.toHaveProperty('sources')
+    expect(t.skills[0]).not.toHaveProperty('criteria')
   })
 })

@@ -21,7 +21,7 @@ import {
   updateSkill,
 } from './repo'
 
-const input = (name: string, prereqIds: string[] = []) => ({ name, description: '', criteria: '', sources: [], prereqIds })
+const input = (name: string, prereqIds: string[] = []) => ({ name, description: '', prereqIds })
 
 async function chain() {
   const domainId = await createDomain('ピアノ')

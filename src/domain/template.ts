@@ -1,4 +1,4 @@
-import type { Domain, Reference, Skill, Source } from './types'
+import type { Domain, Reference, Skill } from './types'
 
 /**
  * ロードマップの配布形式。key でスキル同士の前提を表し、取り込むときに id へ置き換える。
@@ -14,10 +14,9 @@ export interface TemplateSkill {
   key: string
   name: string
   description?: string
-  criteria: string
-  sources?: Source[]
   /** 練習中に見返す動画や記事 */
   references?: Omit<Reference, 'id'>[]
+  /** 前提の key。どれか1つが達成か練習中なら、おすすめに上がる */
   prereqs?: string[]
 }
 
@@ -56,8 +55,6 @@ export function parseTemplate(input: unknown): RoadmapTemplate {
 
   const skills: TemplateSkill[] = input.skills.map((raw, i) => {
     if (!isRecord(raw)) throw new TemplateError(`skills[${i}] がオブジェクトではありません`)
-    const sources = raw.sources === undefined ? [] : raw.sources
-    if (!Array.isArray(sources)) throw new TemplateError(`skills[${i}].sources は配列にしてください`)
     const references = raw.references === undefined ? [] : raw.references
     if (!Array.isArray(references)) throw new TemplateError(`skills[${i}].references は配列にしてください`)
     const prereqs = raw.prereqs === undefined ? [] : raw.prereqs
@@ -68,14 +65,6 @@ export function parseTemplate(input: unknown): RoadmapTemplate {
       key: str(raw.key, `skills[${i}].key`),
       name: str(raw.name, `skills[${i}].name`),
       description: typeof raw.description === 'string' ? raw.description : '',
-      criteria: typeof raw.criteria === 'string' ? raw.criteria : '',
-      sources: sources.map((s, j) => {
-        if (!isRecord(s)) throw new TemplateError(`skills[${i}].sources[${j}] がオブジェクトではありません`)
-        return {
-          title: str(s.title, `skills[${i}].sources[${j}].title`),
-          ...(typeof s.url === 'string' && s.url ? { url: webUrl(s.url, `skills[${i}].sources[${j}].url`) } : {}),
-        }
-      }),
       references: references.map((r, j) => {
         if (!isRecord(r)) throw new TemplateError(`skills[${i}].references[${j}] がオブジェクトではありません`)
         const field = `skills[${i}].references[${j}]`
@@ -128,8 +117,6 @@ export function templateToEntities(
     domainId: domain.id,
     name: s.name,
     description: s.description ?? '',
-    criteria: s.criteria,
-    sources: s.sources ?? [],
     references: (s.references ?? []).map((r) => ({ ...r, id: opts.newId() })),
     prereqIds: (s.prereqs ?? []).map((k) => idByKey.get(k)!),
     status: 'idle',
@@ -150,8 +137,6 @@ export function entitiesToTemplate(domain: Domain, skills: Skill[]): RoadmapTemp
       key: keyById.get(s.id)!,
       name: s.name,
       description: s.description,
-      criteria: s.criteria,
-      sources: s.sources,
       references: s.references.map(({ id: _id, ...r }) => r),
       prereqs: s.prereqIds.map((p) => keyById.get(p)).filter((k): k is string => !!k),
     })),

@@ -1,6 +1,6 @@
 import { newlyUnlocked, practicingFrom, PRACTICING_DAYS, wouldCreateCycle } from '../domain/logic'
 import { isWebUrl, parseTemplate, templateToEntities, type RoadmapTemplate } from '../domain/template'
-import type { Media, Outcome, PracticeRecord, Reference, Skill, Source } from '../domain/types'
+import type { Media, Outcome, PracticeRecord, Reference, Skill } from '../domain/types'
 import latteArt from '../roadmaps/latte-art.json'
 import { moveContentsToFiles, optimizeVideos } from './content'
 import { db, markDirty, newId } from './db'
@@ -100,26 +100,15 @@ export async function deleteDomain(id: string) {
 export interface SkillInput {
   name: string
   description: string
-  criteria: string
-  sources: Source[]
   prereqIds: string[]
 }
 
 function cleanInput(input: SkillInput): SkillInput {
   const name = input.name.trim()
   if (!name) throw new RepoError('型の名前を入れてください')
-  for (const s of input.sources) {
-    const url = s.url?.trim()
-    if (url && !isWebUrl(url)) throw new RepoError(`出典の URL は http:// か https:// で始めてください（${url}）`)
-  }
   return {
     name,
     description: input.description.trim(),
-    criteria: input.criteria.trim(),
-    sources: input.sources
-      .map((s) => ({ title: s.title.trim(), ...(s.url?.trim() ? { url: s.url.trim() } : {}) }))
-      .filter((s) => s.title || s.url)
-      .map((s) => ({ ...s, title: s.title || s.url! })),
     prereqIds: [...new Set(input.prereqIds)],
   }
 }
