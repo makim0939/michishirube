@@ -18,6 +18,7 @@ import {
   type AuthKind,
 } from './accounts'
 import { bearerToken, isAllowedAppScheme, isAllowedReturn, LEGACY_APP_SCHEME, parseOrigins, safeEqual, signState, verifyState } from './auth'
+import { parseFeedback, saveFeedback, tooManyFeedbacks } from './feedback'
 import { resultPage } from './resultPage'
 import { BadRequest, parseSyncRequest, sync } from './sync'
 import { accessToken, authUrl, exchangeCode, ReauthRequired, revoke, type GoogleConfig } from './youtube'
@@ -46,7 +47,7 @@ app.use(
 )
 
 /** ログインしなくても使える窓口 */
-const PUBLIC_PATHS = new Set(['/api/health', '/api/auth/start', '/api/auth/finish', '/api/youtube/callback', '/api/youtube/status'])
+const PUBLIC_PATHS = new Set(['/api/health', '/api/auth/start', '/api/auth/finish', '/api/youtube/callback', '/api/youtube/status', '/api/feedback'])
 
 // ログインした人だけが使える。だれのデータかは、ログインしたときに渡したトークンで決める
 app.use('/api/*', async (c, next) => {
@@ -74,6 +75,16 @@ async function jsonBody(c: Context<App>): Promise<Record<string, unknown>> {
 app.get('/api/health', (c) => c.json({ ok: true }))
 
 app.post('/api/sync', async (c) => c.json(await sync(c.env.DB, c.get('userId'), parseSyncRequest(await jsonBody(c)))))
+
+// ---- ご意見・ご要望 ----
+
+/** アプリの「ご意見・ご要望」から届く。ログインしていなくても送れる（使いにくさを伝えたい人が、ログインで離れないように） */
+app.post('/api/feedback', async (c) => {
+  const input = parseFeedback(await jsonBody(c))
+  if (await tooManyFeedbacks(c.env.DB)) return c.json({ error: 'busy', message: '混み合っています。少しおいてから送ってください' }, 429)
+  await saveFeedback(c.env.DB, input)
+  return c.json({ ok: true })
+})
 
 // ---- 写真 ----
 

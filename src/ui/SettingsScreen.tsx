@@ -22,11 +22,12 @@ import { isYoutubeConnected, resumeUploads } from '../data/youtube'
 import { ConfirmButton, formatBytes, requestPersist, saveFile } from './common'
 import { clearImageCaches } from './imageCache'
 import { useAction, useToast } from './feedback'
+import { FeedbackPage } from './FeedbackPage'
 import { RoadmapSettings } from './RoadmapSettings'
 import { backHandler, go, href, type SettingsSection } from './router'
 import { SyncSettings } from './SyncSettings'
 import { forgetToday } from './TodayScreen'
-import { isNativeApp, SITE_URL, YOUTUBE_TERMS_URL } from '../platform'
+import { APP_STORE_REVIEW_URL, isIosApp, isNativeApp, SITE_URL, YOUTUBE_TERMS_URL } from '../platform'
 import { AlertIcon, BackIcon, CheckIcon, ForwardIcon } from './icons'
 
 function StorageStatus() {
@@ -93,6 +94,7 @@ const TITLES: Record<SettingsSection, string> = {
   backup: 'バックアップ',
   roadmaps: 'ロードマップ',
   data: 'データの削除',
+  feedback: 'ご意見・ご要望',
 }
 
 /**
@@ -113,6 +115,7 @@ export function SettingsScreen({ section, notice }: { section?: SettingsSection;
       {section === 'backup' && <BackupPage />}
       {section === 'roadmaps' && <RoadmapSettings />}
       {section === 'data' && <DataPage />}
+      {section === 'feedback' && <FeedbackPage />}
     </div>
   )
 }
@@ -171,6 +174,16 @@ function SettingsHome() {
       <section className="section">
         <h2>その他</h2>
         <ul className="settings-list">
+          <Row to="feedback" label="ご意見・ご要望" />
+          {/* 評価の導線は、App Store があるアプリ（iPhone・iPad）だけ。出すのは設定の1行だけで、評価のお願いは出さない */}
+          {isIosApp && (
+            <li>
+              <a className="settings-row" href={APP_STORE_REVIEW_URL} target="_blank" rel="noopener noreferrer">
+                <span className="settings-label">App Store で評価する</span>
+                <ForwardIcon size={16} />
+              </a>
+            </li>
+          )}
           <Row to="data" label="この端末のデータを削除" />
           <li>
             <a
