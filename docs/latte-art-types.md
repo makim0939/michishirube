@@ -41,7 +41,7 @@
 - 新しい型は、利用者が「型の一覧 → 型を追加」で自分で足せる。同梱は、新規の人に最初から入るだけで、既存の人には入らない。
 - 保存データの項目は、足すだけにするのが基本（古い端末の同期・バックアップが届くため）。消すときは、次の4つをそろえる。例：参考の目安・出典（`criteria`・`sources`）。
   1. 端末の移行（`src/data/db.ts` の Dexie の version）
-  2. 同期・写しからの復元・バックアップの取り込みで、届いた分を落とす（`shared/protocol.ts` の `withoutLegacySkillFields`）
+  2. 同期・写しからの復元・バックアップの取り込み、サーバーの書き込み（`worker/src/sync.ts`）で、届いた分を落とす（`shared/protocol.ts` の `withoutLegacySkillFields`）。更新前の端末が送ってきても、戻らないように
   3. サーバーの migration（`worker/migrations/0005_…`。`main` に入ると自動で本番に当たる）
   4. 型の定義（`src/domain/types.ts`）から消す
 - 原因ボタン（`src/domain/causes.ts`）は、記録に文字列のまま保存して集計する。名前は変えず、足す。

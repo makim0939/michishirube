@@ -3,4 +3,5 @@
 -- 元に戻せない（消した値は、端末のバックアップ ZIP や、D1 の Time Travel にしか残らない）。
 UPDATE user_entities
 SET data = json_remove(data, '$.criteria', '$.sources')
-WHERE kind = 'skill' AND data IS NOT NULL;
+-- json_valid：壊れた JSON が1行でもあると、json_remove が全体を止めてしまい、Worker のデプロイまで止まる
+WHERE kind = 'skill' AND data IS NOT NULL AND json_valid(data);
