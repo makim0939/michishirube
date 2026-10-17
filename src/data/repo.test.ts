@@ -236,6 +236,78 @@ describe('記録を直す', () => {
     expect((await db.outbox.toArray()).map((e) => e.id).sort()).toEqual([photo, video, added.id, id].sort())
   })
 
+  it('型を付け替えると、記録と動画・写真が新しい型に移り、同期の対象になる', async () => {
+    const { a, b } = await chain()
+    const id = await addRecord({
+      skillId: a,
+      reason: '',
+      nextAction: '',
+      files: [new Blob(['v'], { type: 'video/mp4' }), new Blob(['p'], { type: 'image/jpeg' })],
+    })
+    const mediaIds = (await db.records.get(id))!.mediaIds
+    await db.outbox.clear()
+
+    await updateRecord({ recordId: id, skillId: b, reason: '', nextAction: '', addFiles: [], removeMediaIds: [], replace: [] })
+
+    expect((await db.records.get(id))!.skillId).toBe(b)
+    for (const m of mediaIds) expect((await db.media.get(m))!.skillId).toBe(b)
+    expect(await recordsOf(a)).toHaveLength(0)
+    expect(await recordsOf(b)).toHaveLength(1)
+    expect((await db.outbox.toArray()).map((e) => e.id).sort()).toEqual([...mediaIds, id].sort())
+  })
+
+  it('型を付け替えるとき、足した動画・写真も新しい型になる', async () => {
+    const { a, b } = await chain()
+    const id = await addRecord({ skillId: a, reason: 'x', nextAction: '', files: [] })
+    await updateRecord({
+      recordId: id,
+      skillId: b,
+      reason: 'x',
+      nextAction: '',
+      addFiles: [{ blob: new Blob(['v'], { type: 'video/mp4' }) }],
+      removeMediaIds: [],
+      replace: [],
+    })
+    const [added] = (await db.records.get(id))!.mediaIds
+    expect((await db.media.get(added))!.skillId).toBe(b)
+  })
+
+  it('型を付け替えるとき、外した動画は戻らず、切り取った動画も新しい型になる', async () => {
+    const { a, b } = await chain()
+    const id = await addRecord({
+      skillId: a,
+      reason: '',
+      nextAction: '',
+      files: [new Blob(['v'], { type: 'video/mp4' }), new Blob(['p'], { type: 'image/jpeg' })],
+    })
+    const [video, photo] = (await db.records.get(id))!.mediaIds
+    await db.outbox.clear()
+
+    await updateRecord({
+      recordId: id,
+      skillId: b,
+      reason: '',
+      nextAction: '',
+      addFiles: [],
+      removeMediaIds: [photo],
+      replace: [{ id: video, blob: new Blob(['trimmed'], { type: 'video/mp4' }) }],
+    })
+
+    expect(await db.media.get(photo)).toBeUndefined()
+    expect((await db.media.get(video))!.skillId).toBe(b)
+    expect((await db.records.get(id))!.mediaIds).toEqual([video])
+    expect((await db.outbox.toArray()).map((e) => e.id).sort()).toEqual([photo, video, id].sort())
+  })
+
+  it('無い型には付け替えられない', async () => {
+    const { a } = await chain()
+    const id = await addRecord({ skillId: a, reason: 'x', nextAction: '', files: [] })
+    await expect(
+      updateRecord({ recordId: id, skillId: 'nothing', reason: 'x', nextAction: '', addFiles: [], removeMediaIds: [], replace: [] }),
+    ).rejects.toThrow(/型が見つかりません/)
+    expect((await db.records.get(id))!.skillId).toBe(a)
+  })
+
   it('全部消して空にはできない', async () => {
     const { a } = await chain()
     const id = await addRecord({ skillId: a, reason: '', nextAction: '', files: [new Blob(['v'], { type: 'video/mp4' })] })
