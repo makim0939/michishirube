@@ -3404,3 +3404,19 @@ h1.wordmark {
 .today .btn.small {
   min-height: 44px;
 }
+
+/* ご意見・ご要望：連絡先は、返信がほしい人だけが開く */
+.feedback-contact summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.9rem;
+  padding: 6px 0;
+}
+
+.feedback-contact input {
+  margin-top: 6px;
+}
+
+.feedback-kinds {
+  align-self: stretch;
+}

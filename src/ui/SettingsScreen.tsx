@@ -22,6 +22,7 @@ import { isYoutubeConnected, resumeUploads } from '../data/youtube'
 import { ConfirmButton, formatBytes, requestPersist, saveFile } from './common'
 import { clearImageCaches } from './imageCache'
 import { useAction, useToast } from './feedback'
+import { FeedbackPage } from './FeedbackPage'
 import { RoadmapSettings } from './RoadmapSettings'
 import { backHandler, go, href, type SettingsSection } from './router'
 import { SyncSettings } from './SyncSettings'
@@ -93,6 +94,7 @@ const TITLES: Record<SettingsSection, string> = {
   backup: 'バックアップ',
   roadmaps: 'ロードマップ',
   data: 'データの削除',
+  feedback: 'ご意見・ご要望',
 }
 
 /**
@@ -113,6 +115,7 @@ export function SettingsScreen({ section, notice }: { section?: SettingsSection;
       {section === 'backup' && <BackupPage />}
       {section === 'roadmaps' && <RoadmapSettings />}
       {section === 'data' && <DataPage />}
+      {section === 'feedback' && <FeedbackPage />}
     </div>
   )
 }
@@ -171,6 +174,7 @@ function SettingsHome() {
       <section className="section">
         <h2>その他</h2>
         <ul className="settings-list">
+          <Row to="feedback" label="ご意見・ご要望" />
           <Row to="data" label="この端末のデータを削除" />
           <li>
             <a

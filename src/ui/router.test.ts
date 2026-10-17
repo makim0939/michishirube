@@ -8,6 +8,10 @@ describe('設定の画面', () => {
     expect(parseHash('#/settings/roadmaps')).toEqual({ name: 'settings', section: 'roadmaps' })
   })
 
+  it('ご意見・ご要望の画面を開く', () => {
+    expect(parseHash('#/settings/feedback')).toEqual({ name: 'settings', section: 'feedback' })
+  })
+
   it('YouTube の連携から戻ったら、同期の画面で結果を受け取る', () => {
     expect(parseHash('#/settings/youtube-connected')).toEqual({
       name: 'settings',
