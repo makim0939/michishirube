@@ -129,12 +129,39 @@ export function moveContentsToFiles(ids?: string[]): Promise<void> {
  * アプリで、ファイルの動画を決めた画質にそろえる（アルバムの大きな動画を軽くする・日がたった高画質の動画を軽くする）。
  * 起動したとき・記録を保存したあと・設定を変えたときに呼ぶ（ids を省くと、全部を見る）
  */
-export function optimizeVideos(ids?: string[]): Promise<void> {
+export function optimizeVideos(ids?: string[], options?: { force?: boolean }): Promise<void> {
   if (!usesFiles) return Promise.resolve()
-  return enqueue(() => optimizeNow(ids))
+  return enqueue(() => optimizeNow(ids, options?.force))
 }
 
-async function optimizeNow(ids?: string[]) {
+/** 作り直しがこの時間たっても終わらなければ、止まったものとして先へ進む（あとの動画が、ずっと待たされないように） */
+export const optimizeLimit = { ms: 5 * 60 * 1000 }
+
+function transcodeWithTimeout(...args: Parameters<typeof transcodeVideoFile>): ReturnType<typeof transcodeVideoFile> {
+  let timer: ReturnType<typeof setTimeout>
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error('動画の作り直しが終わりませんでした')), optimizeLimit.ms)
+  })
+  return Promise.race([transcodeVideoFile(...args), timeout]).finally(() => clearTimeout(timer))
+}
+
+/**
+ * 「今すぐアップ」の前に、上げ待ちの動画を上げられる形にする（ファイルに移し、画質をそろえる）。
+ * 作り直せない動画は待たずに元のまま使う（起動のたびに試すのは、自動のときだけ）
+ */
+export async function prepareUploads(): Promise<void> {
+  if (!usesFiles) return
+  const ids = (await db.media
+    .where('upload')
+    .anyOf('pending', 'uploading', 'failed')
+    .filter((m) => m.type.startsWith('video/') && !(m.file && m.optimized))
+    .primaryKeys()) as string[]
+  if (ids.length === 0) return
+  await moveContentsToFiles(ids)
+  await optimizeVideos(ids, { force: true })
+}
+
+async function optimizeNow(ids?: string[], force = false) {
   const settings = await getVideoSettings()
   const now = Date.now()
   const targets = ids ?? ((await db.media.filter((m) => m.type.startsWith('video/') && !!m.file).primaryKeys()) as string[])
@@ -152,15 +179,23 @@ async function optimizeNow(ids?: string[]) {
     const out = optimizedPath(m, quality)
     let result: { skipped: boolean; size?: number }
     try {
-      result = await transcodeVideoFile(source, out, QUALITY[quality])
+      result = await transcodeWithTimeout(source, out, QUALITY[quality])
     } catch (e) {
-      // 作り直す仕組みが入っていない（古いアプリなど）ときは、印を付けずにやめる（入ったらそろえる）
-      if ((e as { code?: string } | null)?.code === 'UNIMPLEMENTED') return
+      // 作り直す仕組みが入っていない（古いアプリなど）ときは、印を付けずにやめる（入ったらそろえる）。
+      // 上げるよう頼まれたときは、待たずに元のまま使う
+      if ((e as { code?: string } | null)?.code === 'UNIMPLEMENTED') {
+        if (!force) return
+        await db.media.update(id, { optimized: m.optimized ?? quality })
+        continue
+      }
       console.warn('動画の画質をそろえられませんでした', id, e)
       // アプリが裏に回ったなどで止まったのかもしれないので、次に起動したときにまた試す。
-      // 何度も失敗する動画（端末が読めない形式など）は、元のまま使う（YouTube にもそのまま上げる）
+      // 何度も失敗する動画（端末が読めない形式など）・上げるよう頼まれた動画は、元のまま使う（YouTube にもそのまま上げる）
       const tries = (m.optimizeTries ?? 0) + 1
-      await db.media.update(id, tries >= MAX_OPTIMIZE_TRIES ? { optimized: m.optimized ?? quality } : { optimizeTries: tries })
+      await db.media.update(
+        id,
+        force || tries >= MAX_OPTIMIZE_TRIES ? { optimized: m.optimized ?? quality } : { optimizeTries: tries },
+      )
       continue
     }
     // 作り直しても軽くならなければ（もともと軽い動画）、元のまま使う

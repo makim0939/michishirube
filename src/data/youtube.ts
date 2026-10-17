@@ -1,13 +1,13 @@
 import { liveQuery } from 'dexie'
 import { formatDateTime, OUTCOME_LABEL } from '../domain/format'
 import type { Media } from '../domain/types'
-import { ContentUnavailableError, contentBlob, hasContent } from './content'
+import { ContentUnavailableError, contentBlob, hasContent, prepareUploads } from './content'
 import { usesFiles } from './files'
 import { db, markDirty, mediaByIndex } from './db'
 import { authorizeWithGoogle } from './account'
 import { api, getSyncConfig, SyncError, type SyncConfig } from './sync'
 import { SITE_URL } from '../platform'
-import { getVideoSettings, getVideoStorage, type YoutubePrivacy } from './videoStorage'
+import { getVideoSettings, getVideoStorage, uploadBacklog, type YoutubePrivacy } from './videoStorage'
 
 /**
  * 動画を YouTube に上げる（公開範囲は設定から。はじめは限定公開）。上げるのは、動画の保存先が YouTube の端末だけ。
@@ -307,7 +307,26 @@ export async function retryUpload(id: string) {
   return resumeUploads()
 }
 
-/** 上げる動画ができたら上げる。画面に戻ったとき・電波が戻ったときにも試す */
+/**
+ * 設定の「今すぐアップ」。止まっている理由（画質をそろえ終えていない・自動で上げ直すのをやめた・上限で休んでいる）を
+ * 取り除いてから上げ、そのあとの状況を返す（押して何も起きないように見えないよう、画面で知らせる）
+ */
+export async function uploadNow(): Promise<{ waiting: number; failed: number; error?: string }> {
+  await prepareUploads()
+  await db.meta.delete(PAUSE_KEY)
+  const failed = (await db.media.where('upload').equals('failed').primaryKeys()) as string[]
+  for (const id of failed) await setUpload(id, { upload: 'pending', uploadError: undefined, uploadAttempts: 0 })
+  await resumeUploads()
+  const backlog = await uploadBacklog()
+  // 理由は、blob を持たせずに読む（索引から読んだ Blob は使わないので、エラーの文だけ見る）
+  const stuck = await db.media
+    .where('upload')
+    .anyOf('pending', 'uploading', 'failed')
+    .filter((m) => !!m.uploadError)
+    .first()
+  return { ...backlog, error: stuck?.uploadError }
+}
+
 /**
  * 上げられる状態か。アプリでは、ファイルに移して画質をそろえ終えてから上げる
  * （アルバムの大きな動画を、そのまま長い時間かけて上げないように）
