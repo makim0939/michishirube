@@ -36,4 +36,10 @@ describe("recommendLabel", () => {
     expect(recommendLabel(skills[0], recorded)).toBe("最近の記録はありません");
     expect(recommendLabel(skills[1], recorded)).toBe("最近の記録はありません");
   });
+
+  it("ほかの型の記録は数えず、その型自身の記録だけで決まる", () => {
+    const onlyHeart = new Set(["heart"]);
+    expect(recommendLabel(skills[1], onlyHeart)).toBe("まだ記録がありません");
+    expect(recommendLabel(skills[0], onlyHeart)).toBe("最近の記録はありません");
+  });
 });

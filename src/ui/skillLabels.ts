@@ -2,7 +2,7 @@ import type { Skill } from '../domain/types'
 import { splitName } from './common'
 
 /**
- * 型の一覧で、名前の下に添える一言。前提は「おすすめの順」なので、決まりではなく順番のめやすとして書く
+ * 型の一覧で、名前の下に添える一言。次のおすすめは記録の有無だけ、その先の型は前提を「おすすめの順」のめやすとして書く（決まりではない）
  */
 
 function names(list: Skill[]): string {
