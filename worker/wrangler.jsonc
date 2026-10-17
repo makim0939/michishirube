@@ -14,6 +14,8 @@
     "ALLOWED_ORIGINS": "https://makim0939.github.io,http://localhost:5179,http://localhost:5180,capacitor://localhost,https://localhost"
   },
   // database_id を書かないと、初回の deploy で自動作成される
-  "d1_databases": [{ "binding": "DB", "database_name": "michishirube", "migrations_dir": "./migrations" }]
-  // シークレット（wrangler secret put で登録）: APP_TOKEN, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+  "d1_databases": [{ "binding": "DB", "database_name": "michishirube", "migrations_dir": "./migrations" }],
+  // 要望が届いたときの通知メール。宛先は、Email Routing で確認済みのアドレスだけ
+  "send_email": [{ "name": "MAIL" }]
+  // シークレット（wrangler secret put で登録）: APP_TOKEN, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, FEEDBACK_NOTIFY_TO, FEEDBACK_NOTIFY_FROM
 }
