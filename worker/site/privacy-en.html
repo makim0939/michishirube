@@ -31,7 +31,7 @@
   </head>
   <body>
     <h1>Latte-chō (ラテ帳) Privacy Policy</h1>
-    <p class="muted">Last updated: October 15, 2026 ・ <a href="/privacy">日本語</a></p>
+    <p class="muted">Last updated: October 17, 2026 ・ <a href="/privacy">日本語</a></p>
 
     <p>
       Latte-chō (ラテ帳, formerly "Laterie" and "Michishirube"; "the app") is a personal practice journal for latte art. This page explains what information the app handles and where it is stored.
@@ -40,7 +40,7 @@
     <h2>1. Information the app handles, and where it is stored</h2>
     <ul>
       <li>
-        <strong>Practice records, roadmap, photos and videos</strong>: stored on your device (in the browser's IndexedDB for the web version, and in the app's own files for the iPhone and Android apps). They are not sent anywhere unless you sign in.
+        <strong>Practice records, roadmap, photos and videos</strong>: stored on your device (in the browser's IndexedDB for the web version, and in the app's own files for the iPhone and Android apps). They are not sent anywhere unless you sign in (except when you send feedback, described below).
       </li>
       <li>
         <strong>If you sign in with Google</strong>: so that you can use the same records on other devices, the following is stored on the app's server (Cloudflare Workers and D1, operated by the developer).
@@ -53,6 +53,9 @@
         <strong>The content of your videos, your Google email address, name and password, and your YouTube authorization are not stored on the server as records.</strong>
         The only exception is a short hold during sign-in or YouTube linking: the result (your email address, or your YouTube authorization) is kept temporarily in the server's database until your device receives it, and is deleted the moment it is received. A result that is never received becomes unusable after 10 minutes and is deleted the next time anyone starts signing in.
         Data is sent over encrypted connections and can be read and written only from your signed-in devices. The developer does not look at users' data except when necessary for operations such as investigating a failure.
+      </li>
+      <li>
+        <strong>If you send feedback from "Settings → Feedback"</strong> (no sign-in required): the message you write, its type (idea, bug, other), a reply address (only if you write one), device information (iPhone / Android / web, the OS version and screen type, and the browser type for the web version) and the app version are stored on the app's server (D1), and the same content is emailed to the developer (using Cloudflare Email Routing). It is used only to investigate problems and to improve the app. It is not linked to your Google account or to your practice records. If you write an email address or other personal information in the message or the reply address, that is stored as well.
       </li>
       <li>
         <strong>If you link YouTube and choose YouTube as the place to keep videos</strong>: the practice videos you record are uploaded to <strong>your own YouTube channel</strong>. Videos are sent directly from your device to YouTube and do not pass through the app's server. Videos are "Unlisted" at first (only people with the link can see them; they do not appear in search or lists). They become "Public" (visible to everyone and in search) only if you choose "Public" in the settings or for a specific video.
@@ -113,6 +116,7 @@
       </li>
       <li>Videos uploaded to YouTube can be deleted from the YouTube app or website.</li>
       <li>Data on your device can be deleted with "Settings → Delete data on this device".</li>
+      <li>Feedback you sent is deleted by the developer when it is no longer needed. If you would like it deleted, please contact the developer via the "Contact" section below.</li>
     </ul>
 
     <h2>5. Sharing with third parties</h2>
