@@ -2574,6 +2574,73 @@ a.notice {
 }
 
 
+/* 記録画面の見出し。型の名前を押すと、同じ分野の別の型に選び直せる（▾ は押せる印） */
+.title-switch {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  min-height: 44px;
+  margin: -8px 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.title-switch .icon {
+  flex: none;
+  color: var(--muted);
+}
+
+/* 型を選び直すシートの一覧 */
+.skill-pick-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+}
+
+.skill-pick {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 64px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.skill-pick.selected {
+  background: var(--surface-2);
+}
+
+.skill-pick .pattern-image {
+  width: 48px;
+  height: 48px;
+}
+
+.skill-pick-name {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 /* ---- 記録：よくある原因 ---- */
 
 .cause-chips {

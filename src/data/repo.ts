@@ -366,6 +366,8 @@ export async function addRecord(input: RecordInput): Promise<string> {
 
 export interface RecordUpdate {
   recordId: string
+  /** 型を付け替えるとき（練習の途中で、描く型を変えたなど）。省くと、いまの型のまま */
+  skillId?: string
   outcome?: Outcome
   reason: string
   causes?: string[]
@@ -383,13 +385,15 @@ export async function updateRecord(input: RecordUpdate) {
   const reason = input.reason.trim()
   const nextAction = input.nextAction.trim()
   let changed: string[] = []
-  await db.transaction('rw', db.records, db.media, db.outbox, async () => {
+  await db.transaction('rw', db.records, db.media, db.skills, db.outbox, async () => {
     const record = await db.records.get(input.recordId)
     if (!record) throw new RepoError('記録が見つかりません')
     const now = Date.now()
+    const skillId = input.skillId ?? record.skillId
+    if (skillId !== record.skillId && !(await db.skills.get(skillId))) throw new RepoError('型が見つかりません')
     const removed = new Set(input.removeMediaIds)
     const kept = record.mediaIds.filter((id) => !removed.has(id))
-    const added = newMediaRows(record.id, record.skillId, input.addFiles, now)
+    const added = newMediaRows(record.id, skillId, input.addFiles, now)
     const causes = input.causes ?? []
     if (!reason && !nextAction && causes.length === 0 && !input.outcome && kept.length + added.length === 0) {
       throw new RepoError('動画・写真か、メモを1つ以上入れてください')
@@ -400,7 +404,11 @@ export async function updateRecord(input: RecordUpdate) {
       if (removed.has(r.id)) continue
       await db.media.update(r.id, { ...contentFields(r, now), updatedAt: now })
     }
+    // 型を付け替えたら、動画・写真も新しい型に移す（型の画面は、型の id で動画・写真を探すため）
+    const moved = skillId !== record.skillId ? kept : []
+    if (moved.length > 0) await db.media.where('id').anyOf(moved).modify({ skillId, updatedAt: now })
     await db.records.update(record.id, {
+      skillId,
       outcome: input.outcome,
       reason,
       causes: causes.length > 0 ? causes : undefined,
@@ -408,7 +416,7 @@ export async function updateRecord(input: RecordUpdate) {
       mediaIds: [...kept, ...added.map((m) => m.id)],
       updatedAt: now,
     })
-    await markDirty('media', [...removed, ...added.map((m) => m.id), ...input.replace.map((r) => r.id)])
+    await markDirty('media', [...removed, ...added.map((m) => m.id), ...input.replace.map((r) => r.id), ...moved])
     await markDirty('record', [record.id])
     changed = [...added.map((m) => m.id), ...input.replace.map((r) => r.id).filter((id) => !removed.has(id))]
   })

@@ -8,6 +8,7 @@ import { getVideoSettings, type VideoQuality, type YoutubePrivacy } from '../dat
 import { isAndroidApp } from '../platform'
 import { causeTip, LATTE_CAUSES } from '../domain/causes'
 import { OUTCOME_LABEL } from '../domain/format'
+import { sortByDepth } from '../domain/logic'
 import type { Media, Outcome } from '../domain/types'
 import { ConfirmButton, Empty, formatBytes, isVideo, MediaView, requestPersist, splitName } from './common'
 import { useCupImageUrl } from './cupImage'
@@ -15,9 +16,10 @@ import { useAction, useToast } from './feedback'
 import { canRecordInApp, Recorder } from './Recorder'
 import { backHandler, go, goBack, href } from './router'
 import { readStorage, removeStorage, writeStorage } from './storage'
+import { SkillPicker } from './SkillPicker'
 import { Trimmer } from './Trimmer'
 import { patternFor } from './world'
-import { BackIcon, CameraIcon, PhotoIcon, PlusIcon, ScissorsIcon, VideoIcon } from './icons'
+import { BackIcon, CameraIcon, ChevronDownIcon, PhotoIcon, PlusIcon, ScissorsIcon, VideoIcon } from './icons'
 
 const OUTCOMES: { value: Outcome; label: string }[] = (['good', 'meh', 'bad'] as const).map((value) => ({
   value,
@@ -25,7 +27,8 @@ const OUTCOMES: { value: Outcome; label: string }[] = (['good', 'meh', 'bad'] as
 }))
 
 // 書きかけのメモは、カメラから戻ったときにページが再読み込みされても残るようにする
-type Draft = { reason?: string; nextAction?: string; causes?: string[] }
+// skillId は、記録の途中で選び直した型（route の型と違うとき）
+type Draft = { skillId?: string; reason?: string; nextAction?: string; causes?: string[] }
 
 function useDraft(key: string, enabled: boolean) {
   const [draft, setDraft] = useState<Draft>(() => {
@@ -93,25 +96,35 @@ const nextKey = () => `item-${++keySeq}`
 /**
  * 記録する画面。recordId があれば、保存した記録を編集する
  */
-export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?: string }) {
+export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: string; recordId?: string }) {
   const editing = !!recordId
   const run = useAction()
   const toast = useToast()
   const videoSettings = useLiveQuery(getVideoSettings)
   const storage = videoSettings?.storage
-  const data = useLiveQuery(async () => {
-    const skill = await db.skills.get(skillId)
-    return {
-      skill,
-      next: skill && !editing ? await lastNextAction(skillId) : undefined,
+  // 型は、同じ分野の中から選び直せる（練習の途中で、描く型を変えることがある）
+  const skills = useLiveQuery(async () => {
+    const first = await db.skills.get(routeSkillId)
+    return first ? sortByDepth(await db.skills.where('domainId').equals(first.domainId).toArray()) : []
+  }, [routeSkillId])
+  const [draft, setDraft, clearDraft] = useDraft(`michishirube:draft:${routeSkillId}`, !editing)
+  const skillId = draft.skillId ?? routeSkillId
+  const skill = skills?.find((s) => s.id === skillId)
+  const stats = useLiveQuery(
+    async () => ({
+      next: !editing ? await lastNextAction(skillId) : undefined,
       count: await db.records.where('skillId').equals(skillId).count(),
-    }
-  }, [skillId, editing])
+    }),
+    [skillId, editing],
+  )
+  // 型を選び直した瞬間に、画面が空にならないよう、読み直しの間は前の値を使う
+  const lastStats = useRef(stats)
+  if (stats) lastStats.current = stats
+  const data = skills && (stats ?? lastStats.current) ? { skills, ...(stats ?? lastStats.current!) } : undefined
 
   const [items, setItems] = useState<Item[]>([])
   const [removed, setRemoved] = useState<string[]>([])
   const [outcome, setOutcome] = useState<Outcome>()
-  const [draft, setDraft, clearDraft] = useDraft(`michishirube:draft:${skillId}`, !editing)
   const [loaded, setLoaded] = useState(!editing)
   const [missing, setMissing] = useState(false)
   const [dirty, setDirty] = useState(false)
@@ -120,6 +133,7 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
   const [confirmLeave, setConfirmLeave] = useState<{ back: true } | { to: string } | null>(null)
   const [recording, setRecording] = useState(false)
   const [trimming, setTrimming] = useState<string | null>(null)
+  const [pickingSkill, setPickingSkill] = useState(false)
   const videoInput = useRef<HTMLInputElement>(null)
   const photoInput = useRef<HTMLInputElement>(null)
   const libraryInput = useRef<HTMLInputElement>(null)
@@ -129,10 +143,10 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
 
   // 新しく記録するときは、すぐカメラを開く（撮ってから結果を付ける。注ぐ前に見たい「次の一手」はカメラの上に出す）
   useEffect(() => {
-    if (editing || autoOpened.current || !data?.skill) return
+    if (editing || autoOpened.current || !skill) return
     autoOpened.current = true
     if (canRecordInApp()) setRecording(true)
-  }, [editing, data?.skill])
+  }, [editing, skill])
 
   // 直すときは、保存した内容を一度だけ読み込む（同期で書き換わっても、入力中の内容を上書きしない）
   useEffect(() => {
@@ -152,7 +166,7 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
       )
       if (cancelled) return
       setOutcome(record.outcome)
-      setDraft({ reason: record.reason, nextAction: record.nextAction, causes: record.causes })
+      setDraft({ skillId: record.skillId, reason: record.reason, nextAction: record.nextAction, causes: record.causes })
       setItems(media.map((m) => ({ kind: 'existing' as const, key: nextKey(), media: m })))
       setLoaded(true)
     })()
@@ -162,7 +176,7 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
   }, [recordId, setDraft])
 
   if (!data || !loaded) return missing ? <Empty>記録が見つかりません。</Empty> : null
-  const { skill, next, count } = data
+  const { next, count } = data
   if (!skill) return <Empty>型が見つかりません。</Empty>
 
   const fallback = editing ? `/skill/${skillId}` : '/'
@@ -178,6 +192,15 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
   const nothingToSave = !editing && items.length === 0 && !hasInput
 
   const change = () => setDirty(true)
+
+  /** 型を選び直す。原因の選択肢は型ごとなので、選べなくなる型へ移るときは、選んでいた原因を外す */
+  const pickSkill = (id: string) => {
+    setPickingSkill(false)
+    if (id === skillId) return
+    const target = skills?.find((s) => s.id === id)
+    setDraft((d) => ({ ...d, skillId: id, ...(target && patternFor(target.name) ? {} : { causes: undefined }) }))
+    change()
+  }
 
   /** 動画のサムネイルは後から作って付ける（撮ってすぐ一覧に出す） */
   const attachPoster = (key: string, file: File) => {
@@ -282,6 +305,7 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
         if (recordId) {
           await updateRecord({
             recordId,
+            skillId,
             outcome,
             reason,
             causes,
@@ -290,7 +314,7 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
             removeMediaIds: removed,
             replace,
           })
-          toast.show('記録を保存しました')
+          toast.show(skillId === routeSkillId ? '記録を保存しました' : `「${splitName(skill.name).main}」に移して保存しました`)
         } else {
           await addRecord({ skillId, outcome, reason, causes, nextAction, files: added })
           clearDraft()
@@ -300,7 +324,8 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
             toast.show(`No.${total} を記録しました`)
             setItems([])
             setOutcome(undefined)
-            setDraft({})
+            // 型を変えて描き直したなら、続けて同じ型で撮ることが多いので、型は残す
+            setDraft(skillId === routeSkillId ? {} : { skillId })
             setMemoOpen(false)
             window.scrollTo(0, 0)
             if (canRecordInApp()) setRecording(true)
@@ -351,7 +376,23 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
         </a>
         <div className="title-block">
           {editing ? <span className="muted">記録を編集</span> : <span className="muted">{count + 1}杯目</span>}
-          <h1>{splitName(skill.name).main}</h1>
+          <h1>
+            {/* 同じ分野に別の型があるときは、名前を押して選び直せる（ボタンを足さずに、見出しに寄せる） */}
+            {skills && skills.length > 1 ? (
+              <button
+                type="button"
+                className="title-switch"
+                aria-label={`${splitName(skill.name).main}：型を変える`}
+                aria-haspopup="dialog"
+                onClick={() => setPickingSkill(true)}
+              >
+                {splitName(skill.name).main}
+                <ChevronDownIcon size={18} />
+              </button>
+            ) : (
+              splitName(skill.name).main
+            )}
+          </h1>
         </div>
       </header>
 
@@ -637,6 +678,10 @@ export function RecordScreen({ skillId, recordId }: { skillId: string; recordId?
             ;(mode === 'photo' ? photoInput : videoInput).current?.click()
           }}
         />
+      )}
+
+      {pickingSkill && skills && (
+        <SkillPicker skills={skills} current={skillId} onPick={pickSkill} onClose={() => setPickingSkill(false)} />
       )}
 
       {trimItem && trimBlob && (
