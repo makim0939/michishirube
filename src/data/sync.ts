@@ -1,6 +1,7 @@
 import { liveQuery } from 'dexie'
 import type { EntityChange, EntityKind, SyncResponse } from '../../shared/protocol'
 import { PHOTO_MAX_BYTES, posterPhotoId, SYNC_LIMITS, withoutLegacySkillFields } from '../../shared/protocol'
+import { dlog } from '../debug'
 import { DEFAULT_SETTINGS, type Media, type Settings } from '../domain/types'
 import { ContentUnavailableError, contentBlob, hasContent, moveContentsToFiles } from './content'
 import { db } from './db'
@@ -412,9 +413,15 @@ export async function fetchPhoto(media: Media): Promise<Blob | undefined> {
   const config = await getSyncConfig()
   if (!config || !media.cloudPhoto) return undefined
   const blob = await (await api(config, `/api/photos/${encodeURIComponent(media.id)}`, { cache: 'no-store' })).blob()
-  // 写真は小さいので、次からは端末から出す（同期の対象にはしない）。アプリではファイルに移す
-  await db.media.update(media.id, { blob })
-  void moveContentsToFiles([media.id])
+  // 写真は小さいので、次からは端末から出す（同期の対象にはしない）。アプリではファイルに移す。
+  // 端末に保存できなくても（容量不足・プライベートブラウズなどで、IndexedDB に Blob を書けないことがある）、
+  // 取ってきた写真は見せる。保存の失敗を「写真が無い」にしない（次に開いたとき、また取りに行く）
+  try {
+    await db.media.update(media.id, { blob })
+    void moveContentsToFiles([media.id])
+  } catch (e) {
+    dlog('写真を端末に保存できませんでした', media.id.slice(0, 8), String(e))
+  }
   return blob
 }
 
