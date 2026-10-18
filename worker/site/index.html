@@ -205,13 +205,17 @@
       }
 
 
-      @media (min-width: 800px) {
+      /* キャッチは折り返さない（499px）ので、画面（280px）と並べるには、中身の幅が 851px 要る。
+         800〜960px で並べると、iPad の縦向きで横にはみ出すため、並べるのは 960px から */
+      @media (min-width: 960px) {
         .hero {
           grid-template-columns: 1fr auto;
           align-items: center;
           gap: 72px;
           padding: 56px 0 96px;
         }
+      }
+      @media (min-width: 800px) {
         .hero .catch {
           font-size: 2.4rem;
         }
