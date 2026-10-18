@@ -73,4 +73,5 @@ def to_appstore(src, target):  # target = (幅, 高さ)。例：(1179, 2556)、(
 ## 紹介サイトに使うとき
 
 - 置き場所：`worker/site/img/`（`today`・`cups`・`compare`・`tips`・`types`・`review`）。`index.html` が読み込む。`src/site.test.ts` が、画像のファイルとリンクがそろっているかを確かめる。
+- シェア用の画像 `worker/site/og.png`（1200×630）は、`today.webp` を使って作る。画面写真を撮り直したら、`python3 -I .claude/skills/app-screenshots/make-og.py worker/site` で作り直す（macOS のフォントを使う）。
 - できたら、紹介サイトをブラウザペインで、スマホ幅とパソコン幅で確認する（スキル `verify-on-device`）。
