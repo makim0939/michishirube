@@ -4,7 +4,7 @@ import { db } from './db'
 import { pickRecorderMimeType } from './mediaPrep'
 import { addRecord, createDomain, createSkill, ensureSeeded } from './repo'
 import { getVideoStorage, setVideoStorage, setYoutubePrivacy } from './videoStorage'
-import { applyRemote, connectWithConfig, getSyncStatus, postJson, runSync } from './sync'
+import { applyRemote, connectWithConfig, fetchPhoto, getSyncStatus, postJson, runSync } from './sync'
 import { logout } from './account'
 import { selectVideosToDrop } from './tidy'
 import { uploadNow, uploadVideo, videoMeta, youtubePlayable } from './youtube'
@@ -123,6 +123,55 @@ describe('同期', () => {
     const after = await db.media.get(m.id)
     expect(after?.keep).toBe(true)
     expect(await after?.blob?.text()).toBe('photo')
+  })
+})
+
+describe('サーバーの写真を取ってくる', () => {
+  /** サーバーに写真（中身は img）があり、端末には中身の無い行だけがある */
+  async function withServerPhoto() {
+    const server = fakeServer()
+    const base = server.fetch.getMockImplementation()!
+    server.fetch.mockImplementation(async (url: string, init?: RequestInit) =>
+      new URL(url).pathname === '/api/photos/m1' && !init?.method
+        ? new Response(new Blob(['img'], { type: 'image/jpeg' }))
+        : base(url, init),
+    )
+    vi.stubGlobal('fetch', server.fetch)
+    await connectWithConfig({ url: 'https://api.example', token: 't' })
+    const row = { id: 'm1', recordId: 'r1', skillId: 's1', type: 'image/jpeg', size: 3, createdAt: 1, updatedAt: 1, cloudPhoto: true }
+    await db.media.add(row)
+    return row
+  }
+
+  it('取ってきて、端末に保存する（次からは端末から出す）', async () => {
+    const media = await withServerPhoto()
+    expect(await (await fetchPhoto(media))?.text()).toBe('img')
+    expect(await (await db.media.get('m1'))?.blob?.text()).toBe('img')
+  })
+
+  it('端末に保存できなくても、取ってきた写真は見せる（保存の失敗を「写真が無い」にしない）', async () => {
+    const media = await withServerPhoto()
+    const update = vi
+      .spyOn(db.media, 'update')
+      .mockRejectedValue(new DOMException('Error preparing Blob/File data to be stored in object store', 'UnknownError'))
+    try {
+      expect(await (await fetchPhoto(media))?.text()).toBe('img')
+      expect((await db.media.get('m1'))?.blob).toBeUndefined()
+    } finally {
+      update.mockRestore()
+    }
+  })
+
+  it('サーバーが断ったときは、取れなかったとして知らせる', async () => {
+    const media = await withServerPhoto()
+    const fetchMock = vi.fn(async () => new Response('x', { status: 500 }))
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(fetchPhoto(media)).rejects.toThrow()
+  })
+
+  it('サーバーに置いた印が無ければ、取りに行かない', async () => {
+    const media = await withServerPhoto()
+    expect(await fetchPhoto({ ...media, cloudPhoto: undefined })).toBeUndefined()
   })
 })
 

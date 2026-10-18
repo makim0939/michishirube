@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ensurePoster, needsLocalPoster, needsRemotePoster } from '../data/poster'
 import { contentBlob } from '../data/content'
+import { dlog } from '../debug'
 import { fetchPhoto } from '../data/sync'
 import { youtubeThumbnail } from '../data/youtube'
 import type { Media } from '../domain/types'
@@ -55,8 +56,9 @@ export function useContent(media: Media | undefined): { blob?: Blob; loading: bo
         if (b) rememberContent(key, b)
         if (!cancelled) setLoaded({ key, blob: b })
       })
-      .catch(() => {
-        // 読めない・電波が無いなどで取れなければ、無いまま
+      .catch((e: unknown) => {
+        // 読めない・電波が無いなどで取れなければ、無いまま（理由は ?debug で画面に出す）
+        dlog('写真を読めませんでした', media.id.slice(0, 8), String(e))
         if (!cancelled) setLoaded({ key })
       })
     return () => {
