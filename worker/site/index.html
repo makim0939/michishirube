@@ -171,17 +171,20 @@
         letter-spacing: 0.05em;
         margin-bottom: 1.6em;
         text-wrap: pretty;
+        /* 本文は、ブラウザに任せて文字単位で折り返す。小さい仮名（っ・ゃ）や「ー」が行頭に来ないようにする。
+           Chrome では、文節で折り返す指定も効く（Safari は非対応なので、効かなくてよい） */
+        line-break: strict;
+        word-break: auto-phrase;
       }
       /* 文章の右端は、線や画像（347px）より少し手前で折り返す */
       section h2,
       section p {
         padding-right: 7px;
       }
-      /* 日本語は、文節の切れ目（HTML の <wbr>）でだけ折り返す。Safari にも効く。
+      /* 見出しとキャッチの補足は短いので、文節の切れ目（HTML の <wbr>）でだけ折り返す。Safari にも効く。
          はみ出すほど長いときだけ、語の途中で切る */
       .sub,
-      section h2,
-      section p {
+      section h2 {
         word-break: keep-all;
         overflow-wrap: break-word;
       }
@@ -301,9 +304,9 @@
 
         <section class="first">
           <h2>うまくできない。<wbr />うぅ…<wbr />何が<wbr />ダメなんだろう？</h2>
-          <p>ラテアートって<wbr />一瞬の<wbr />出来事で、<wbr />うまくできなかった<wbr />原因を<wbr />見つけるのが<wbr />とても<wbr />難しいですよね。</p>
-          <p>なので、<wbr />動画を<wbr />撮って<wbr />あとから<wbr />見返せるように<wbr />しました。<wbr />野球で<wbr />素振りの<wbr />フォームを<wbr />撮るような<wbr />ものですね。</p>
-          <p class="last">気づいたことは<wbr />「次の一手」として<wbr />メモすると、<wbr />次に<wbr />動画を<wbr />撮るときに<wbr />表示されます。</p>
+          <p>ラテアートって一瞬の出来事で、うまくできなかった原因を見つけるのがとても難しいですよね。</p>
+          <p>なので、動画を撮ってあとから見返せるようにしました。野球で素振りのフォームを撮るようなものですね。</p>
+          <p class="last">気づいたことは「次の一手」としてメモすると、次に動画を撮るときに表示されます。</p>
           <figure class="shot">
             <img src="/img/review.webp" width="780" height="695" alt="記録の画面。成功・惜しい・失敗の選択、原因のタグ、次の一手の入力欄" loading="lazy" decoding="async" />
           </figure>
@@ -312,8 +315,8 @@
         <section class="storage">
           <h2>動画は容量が... <span class="arrow">→</span> <u>関係ありません！！</u></h2>
           <p class="note">開発者自身、iPhoneの容量は64GBです（笑）</p>
-          <p>動画の保存場所は スマホ と YouTube（限定公開）が<wbr />選べます。<wbr />YouTubeを<wbr />選べば、<wbr />スマホの<wbr />容量は<wbr />取りません。</p>
-          <p class="last">写真アプリに、<wbr />練習記録が<wbr />散らばることは<wbr />もう<wbr />ありません。<wbr />アプリの中で<wbr />見やすく<wbr />整理されます。</p>
+          <p>動画の保存場所は スマホ と YouTube（限定公開）が選べます。YouTubeを選べば、スマホの容量は取りません。</p>
+          <p class="last">写真アプリに、練習記録が散らばることはもうありません。アプリの中で見やすく整理されます。</p>
           <figure class="shot">
             <img src="/img/cups.webp" width="780" height="1272" alt="カップ帳の画面。1杯ずつの写真に、番号と◎△✕が付いて並ぶ" loading="lazy" decoding="async" />
           </figure>
@@ -321,7 +324,7 @@
 
         <section class="progress">
           <h2>上達が目に見えて、うれしくなります。</h2>
-          <p>型ごとに、<wbr />最新と<wbr />最初を<wbr />並べてみられます。</p>
+          <p>型ごとに、最新と最初を並べてみられます。</p>
           <figure class="shot">
             <img src="/img/compare.webp" width="780" height="1272" alt="型の画面。直近の結果の点と、最新と最初のラテアートの写真が並ぶ" loading="lazy" decoding="async" />
           </figure>
