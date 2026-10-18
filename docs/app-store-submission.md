@@ -46,8 +46,7 @@ Guideline 4.8（Login Services）：第三者のログイン（Google など）�
 
 ### 2-2. iPad
 
-いまは、iPhone と iPad の両方に対応する設定（`TARGETED_DEVICE_FAMILY = "1,2"`）。iPad に対応すると、**iPad の画面写真が必須**で、iPad での見た目も確認される。
-→ 最初は、**iPhone だけ**にするのがおすすめ（Xcode の Targeted Device Family を iPhone のみにする）。iPad 対応は、あとで足せる。
+**最初のリリースは iPhone のみ**（2026-10-18 に決定。`TARGETED_DEVICE_FAMILY = 1`）。iPad の画面写真は不要。以前は、iPhone と iPad の両対応（`"1,2"`）だった。iPad に対応すると、iPad の画面写真が必須で、iPad での見た目も確認される。iPad 対応は、あとで足せる。
 
 ### 2-3. YouTube の鍵（トークン）の扱い（5.1.1(v)）
 
