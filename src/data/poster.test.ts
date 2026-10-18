@@ -35,5 +35,8 @@ describe('動画のサムネイル（できあがりのコマ）', () => {
     expect(hasCupImage(video({ cloudPosterEnd: true }))).toBe(false)
     expect(hasCupImage(video({ type: 'image/jpeg', blob }))).toBe(true)
     expect(hasCupImage(video({ type: 'image/jpeg', cloudPhoto: true }))).toBe(true)
+    // サーバーに置いた印が端末の行に無くても、サーバーにあるかもしれない（取りに行く）
+    expect(hasCupImage(video({ type: 'image/jpeg' }))).toBe(true)
+    expect(hasCupImage(video({ type: 'image/jpeg', size: 3 * 1024 * 1024 }))).toBe(false)
   })
 })

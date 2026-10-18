@@ -1,5 +1,5 @@
 import type { Media } from '../domain/types'
-import { contentBlob, hasContent } from './content'
+import { contentBlob, hasContent, mayBeOnServer } from './content'
 import { db } from './db'
 import { inMemory, makePoster } from './mediaPrep'
 import { fetchPoster } from './sync'
@@ -25,7 +25,7 @@ export function needsRemotePoster(m: Media): boolean {
  * 今日の大きな写真に出せるか。写真だけを使う（動画の最後のコマに、きれいにカップが写っているとは限らないので）
  */
 export function hasCupImage(m: Media | undefined): boolean {
-  return !!m && !isVideo(m) && (hasContent(m) || !!m.cloudPhoto)
+  return !!m && !isVideo(m) && (hasContent(m) || mayBeOnServer(m))
 }
 
 // 動画を読み込むのは重いので、1本ずつ順に作る。同じ動画を二重に作らない

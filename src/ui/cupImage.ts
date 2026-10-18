@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ensurePoster, needsLocalPoster, needsRemotePoster } from '../data/poster'
-import { contentBlob } from '../data/content'
+import { contentBlob, mayBeOnServer } from '../data/content'
 import { dlog } from '../debug'
 import { fetchPhoto } from '../data/sync'
 import { youtubeThumbnail } from '../data/youtube'
@@ -36,7 +36,8 @@ export function useContent(media: Media | undefined): { blob?: Blob; loading: bo
   //（読み終わるまで一瞬消えないように。IndexedDB から消した blob は読めなくなることがあるので、読めたらファイルのほうに替える）
   const shown = useRef<{ id: string; blob: Blob }>(undefined)
   if (id && media?.blob) shown.current = { id, blob: media.blob }
-  const cloud = !!media && !isVideo(media) && !!media.cloudPhoto
+  // サーバーに置いた印が端末の行に無くても、サーバーにはあることがある（印だけで決めない）
+  const cloud = !!media && mayBeOnServer(media)
   const source = media && !media.blob ? (media.file ?? (cloud ? `cloud:${media.id}` : undefined)) : undefined
   // どの中身を・どこから読んだ結果か（別の杯に切り替わった直後・差し替えた直後に、前の中身を出さないように）。
   // blob が無ければ、読めなかった

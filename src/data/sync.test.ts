@@ -169,9 +169,31 @@ describe('サーバーの写真を取ってくる', () => {
     await expect(fetchPhoto(media)).rejects.toThrow()
   })
 
-  it('サーバーに置いた印が無ければ、取りに行かない', async () => {
+  it('サーバーに置いた印が端末の行に無くても、サーバーにあれば取ってきて、印を直す', async () => {
     const media = await withServerPhoto()
-    expect(await fetchPhoto({ ...media, cloudPhoto: undefined })).toBeUndefined()
+    const { cloudPhoto: _flag, ...stuck } = media
+    await db.media.put(stuck)
+    expect(await (await fetchPhoto(stuck))?.text()).toBe('img')
+    const row = await db.media.get('m1')
+    expect(await row?.blob?.text()).toBe('img')
+    // 印だけ直す。updatedAt は進めない（サーバーの行には、もう印がある）
+    expect(row?.cloudPhoto).toBe(true)
+    expect(row?.updatedAt).toBe(1)
+  })
+
+  it('サーバーに無い写真は、取れなかったとして知らせる（無いものを、あることにしない）', async () => {
+    const media = await withServerPhoto()
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ error: 'not_found' }, { status: 404 })))
+    await expect(fetchPhoto({ ...media, cloudPhoto: undefined })).rejects.toThrow()
+    expect((await db.media.get('m1'))?.blob).toBeUndefined()
+  })
+
+  it('ログインしていなければ、取りに行かない', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const media = { id: 'm2', recordId: 'r1', skillId: 's1', type: 'image/jpeg', size: 3, createdAt: 1, updatedAt: 1 }
+    expect(await fetchPhoto(media)).toBeUndefined()
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })
 
