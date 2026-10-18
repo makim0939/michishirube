@@ -28,11 +28,8 @@ describe('アプリのトップページ（サーバーと同じドメインで�
     expect(read('../worker/site/privacy-en.html')).toContain('Limited Use')
   })
 
-  it('トップページに、英語の説明と、英語のプライバシーポリシーへのリンクがある', () => {
-    const html = read('../worker/site/index.html')
-    expect(html).toContain('lang="en"')
-    expect(html).toContain('href="/privacy-en"')
-  })
+  // 英語の説明（Google の審査で、ホームページに求められる）は、トップページには置かず、
+  // 英語版のページ（/en）に分ける方針。/en ができたら、そのページに英文と /privacy-en へのリンクがあることを、ここで確かめる
 })
 
 describe('トップページの紹介（アプリの画面）', () => {
