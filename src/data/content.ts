@@ -1,3 +1,4 @@
+import { PHOTO_MAX_BYTES } from '../../shared/protocol'
 import type { Media } from '../domain/types'
 import { db } from './db'
 import {
@@ -22,6 +23,16 @@ export { ContentUnavailableError } from './files'
 
 export function hasContent(m: Pick<Media, 'blob' | 'file'>): boolean {
   return !!m.blob || !!m.file
+}
+
+/**
+ * 写真がサーバーにありそうか。サーバーに置いた印（cloudPhoto）が端末の行に無くても、サーバーにはあることがある
+ * （端末の行とサーバーの行の更新時刻が同じだと、サーバーの行を受け取り直さないので、印が戻らない）。
+ * 印だけで決めると、サーバーにある写真を、取りに行かず「この端末にはありません」にしてしまう。
+ * サーバーに置くのは、縮小した写真（PHOTO_MAX_BYTES 以下）だけなので、それより大きい写真は探さない
+ */
+export function mayBeOnServer(m: Pick<Media, 'type' | 'size' | 'cloudPhoto'>): boolean {
+  return m.type.startsWith('image/') && (!!m.cloudPhoto || m.size <= PHOTO_MAX_BYTES)
 }
 
 /** 中身を読む。無ければ undefined */

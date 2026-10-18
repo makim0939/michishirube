@@ -408,16 +408,20 @@ export async function fetchPoster(media: Media): Promise<Blob | undefined> {
   return poster
 }
 
-/** この端末に中身が無い写真を、サーバーから取ってきて保存する */
+/**
+ * この端末に中身が無い写真を、サーバーから取ってきて保存する。
+ * 端末の行にサーバーに置いた印が無くても取りに行く（サーバーに無ければ、サーバーが断る）。取れたら、印も直す
+ */
 export async function fetchPhoto(media: Media): Promise<Blob | undefined> {
   const config = await getSyncConfig()
-  if (!config || !media.cloudPhoto) return undefined
+  if (!config) return undefined
   const blob = await (await api(config, `/api/photos/${encodeURIComponent(media.id)}`, { cache: 'no-store' })).blob()
   // 写真は小さいので、次からは端末から出す（同期の対象にはしない）。アプリではファイルに移す。
   // 端末に保存できなくても（容量不足・プライベートブラウズなどで、IndexedDB に Blob を書けないことがある）、
   // 取ってきた写真は見せる。保存の失敗を「写真が無い」にしない（次に開いたとき、また取りに行く）
   try {
-    await db.media.update(media.id, { blob })
+    // 印の直しは端末だけ（updatedAt は進めない。サーバーの行には、もう印がある）。印が無いまま中身だけあると、また置き直してしまう
+    await db.media.update(media.id, { blob, cloudPhoto: true })
     void moveContentsToFiles([media.id])
   } catch (e) {
     dlog('写真を端末に保存できませんでした', media.id.slice(0, 8), String(e))
