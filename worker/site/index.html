@@ -126,27 +126,34 @@
         color: var(--sub);
       }
 
-      /* デモ（動画・画像）。2枚目が右にのぞくので、横に動かせるとわかる。スクロールは CSS だけ */
-      .demo {
+      /* 横に動かせる並び（.scroller）。次の1枚が右にのぞくので、動かせるとわかる。スクロールは CSS だけ。
+         左右は、画面の端（余白の外）まで伸ばす。ヒーローと、「上達」のセクションで使う */
+      .scroller {
         display: flex;
         gap: 16px;
-        margin: 20px -16px 0 -12px;
+        margin: 0 -16px 0 -12px;
         padding: 0 16px 0 12px;
         overflow-x: auto;
         scroll-snap-type: x mandatory;
         scroll-padding-left: 12px;
         scrollbar-width: none;
       }
-      .demo::-webkit-scrollbar {
+      .scroller::-webkit-scrollbar {
         display: none;
       }
-      .demo figure {
+      .scroller > * {
         flex: none;
-        width: 258px;
-        margin: 0;
         scroll-snap-align: start;
       }
-      .demo img {
+      .hero .scroller {
+        margin-top: 20px;
+      }
+      /* ヒーローの画面は、枠なしで 258px */
+      .demo-item {
+        width: 258px;
+        margin: 0;
+      }
+      .demo-item img {
         display: block;
         width: 100%;
         height: auto;
@@ -227,10 +234,12 @@
         overflow: hidden;
         background: #faf7f2;
       }
-      .section > .shot {
+      .section > .shot,
+      .section > .scroller {
         margin-top: 16px;
       }
-      .shot img {
+      .shot img,
+      .shot video {
         display: block;
         width: 100%;
         height: auto;
@@ -276,11 +285,11 @@
           <p class="sub">成功／失敗と、次の一手をメモ。<br />かんたんな<wbr />ステップで<wbr />記録でき、<wbr />次の<wbr />一杯で<wbr />改善できます。</p>
 
           <!-- 記録のデモ動画／上達が見えるデモ動画。動画ができたら、<img> を <video muted playsinline loop autoplay> に替える -->
-          <div class="demo" role="region" aria-label="ラテ帳の画面" tabindex="0">
-            <figure>
+          <div class="scroller" role="region" aria-label="ラテ帳の画面" tabindex="0">
+            <figure class="demo-item">
               <img src="/img/today.webp" width="780" height="1272" alt="ラテ帳の「今日」の画面。最新の1杯の写真と、練習中の型、次の一手、「記録する」ボタン" />
             </figure>
-            <figure>
+            <figure class="demo-item">
               <img src="/img/compare.webp" width="780" height="1272" alt="型の画面。直近の結果の点と、最新と最初のラテアートの写真が並ぶ" loading="lazy" decoding="async" />
             </figure>
           </div>
@@ -310,10 +319,16 @@
 
         <section class="section">
           <h2 class="section-title">上達が目に見えて、うれしくなります。</h2>
-          <p class="section-text">型ごとに、最新と最初を並べてみられます。</p>
-          <figure class="shot">
-            <img src="/img/compare.webp" width="780" height="1272" alt="型の画面。直近の結果の点と、最新と最初のラテアートの写真が並ぶ" loading="lazy" decoding="async" />
-          </figure>
+          <p class="section-text">ホームを開くと、撮ってきた1杯が写真で並んでいて、指でめくれます。前の自分の1杯を、すぐに見返せます。</p>
+          <p class="section-text">型の画面では、最新と最初の1杯を並べて見られます。はじめの頃と比べると、うまくなったなあと思えます。</p>
+          <div class="scroller" role="region" aria-label="ラテ帳の画面" tabindex="0">
+            <figure class="shot">
+              <img src="/img/compare.webp" width="780" height="1272" alt="型の画面。直近の結果の点と、最新と最初のラテアートの写真が並ぶ" loading="lazy" decoding="async" />
+            </figure>
+            <figure class="shot">
+              <video src="/img/home.mp4" poster="/img/home-poster.webp" width="540" height="882" muted playsinline loop autoplay preload="metadata" aria-label="ホームの画面。撮ってきた1杯を、横にめくって見返す"></video>
+            </figure>
+          </div>
         </section>
       </main>
 
@@ -326,5 +341,15 @@
         <p class="copy">© 2026 Soma Makimura</p>
       </footer>
     </div>
+    <script>
+      // 動きを減らす設定の人には、動画を自動で再生しない（操作で再生できるようにする）
+      if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        document.querySelectorAll('video').forEach((v) => {
+          v.removeAttribute('autoplay')
+          v.pause()
+          v.controls = true
+        })
+      }
+    </script>
   </body>
 </html>

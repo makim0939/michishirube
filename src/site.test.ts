@@ -44,7 +44,7 @@ describe('アプリのトップページ（サーバーと同じドメインで�
 describe('トップページの紹介（アプリの画面）', () => {
   it('ページが読み込む画像と、アプリへのリンクがそろっている', () => {
     const html = read('../worker/site/index.html')
-    const images = [...html.matchAll(/src="\/(img\/[\w-]+\.webp)"/g)].map((m) => m[1])
+    const images = [...html.matchAll(/(?:src|poster)="\/(img\/[\w-]+\.(?:webp|mp4))"/g)].map((m) => m[1])
     expect(images.length).toBeGreaterThan(0)
     for (const path of images) expect(() => read(`../worker/site/${path}`)).not.toThrow()
     expect(html).toContain('href="https://makim0939.github.io/michishirube/"')
