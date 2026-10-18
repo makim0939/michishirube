@@ -22,10 +22,12 @@ export function needsRemotePoster(m: Media): boolean {
 }
 
 /**
- * 今日の大きな写真に出せるか。写真だけを使う（動画の最後のコマに、きれいにカップが写っているとは限らないので）
+ * 今日の大きな写真に出せるか。写真だけを使う（動画の最後のコマに、きれいにカップが写っているとは限らないので）。
+ * canFetch は、サーバーから取ってこられるか（ログインしているか）。サーバーに置いた印が端末の行に無くても、
+ * 取ってこられるなら、サーバーにあるかもしれない写真を候補にする。取ってこられないのに候補にすると、写真の出ない空の枠が出る
  */
-export function hasCupImage(m: Media | undefined): boolean {
-  return !!m && !isVideo(m) && (hasContent(m) || mayBeOnServer(m))
+export function hasCupImage(m: Media | undefined, canFetch = false): boolean {
+  return !!m && !isVideo(m) && (hasContent(m) || !!m.cloudPhoto || (canFetch && mayBeOnServer(m)))
 }
 
 // 動画を読み込むのは重いので、1本ずつ順に作る。同じ動画を二重に作らない

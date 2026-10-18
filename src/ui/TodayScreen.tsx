@@ -345,11 +345,13 @@ async function loadToday() {
   // 練習中＝最近記録した型（「できた」の型も、続けて練習していれば出す）
   const active = skills.filter((s) => practicing.has(s.id))
   const perSkill = await Promise.all(active.map(async (skill) => ({ skill, records: await recordsOf(skill.id) })))
+  // サーバーから写真を取ってこられるか（印が無くても、サーバーにある写真は候補にする）
+  const canFetch = !!(await getSyncConfig())
   // 新しい記録から、大きな写真でめくる杯を選ぶ。最後に「はじまりの1杯」（いちばん古い、写真のある杯）を置く
   const [latest, firstMedia] = await Promise.all([
     db.records.orderBy('createdAt').reverse().limit(HERO_LOOKBACK).toArray(),
     // いちばん古い写真。古い順にたどって最初に見つかったもの
-    db.media.orderBy('createdAt').filter((m) => hasCupImage(m)).first(),
+    db.media.orderBy('createdAt').filter((m) => hasCupImage(m, canFetch)).first(),
   ])
   const firstCandidate = firstMedia && (await db.records.get(firstMedia.recordId))
   // 動画・写真は、大きな写真の候補と各型の最近の杯の分をまとめて1回で読む
@@ -361,8 +363,8 @@ async function loadToday() {
   const mediaById = new Map(media.filter((m) => !!m).map((m) => [m.id, m]))
   const cupOf = (r: PracticeRecord) => pickCupMedia((r.mediaIds ?? []).map((id) => mediaById.get(id)))
   // 写真のある杯（動画のコマは、きれいにカップが写っているとは限らないので使わない）
-  const heroRecords = latest.filter((r) => hasCupImage(cupOf(r))).slice(0, HERO_SLIDES)
-  const firstRecord = firstCandidate && hasCupImage(cupOf(firstCandidate)) ? firstCandidate : undefined
+  const heroRecords = latest.filter((r) => hasCupImage(cupOf(r), canFetch)).slice(0, HERO_SLIDES)
+  const firstRecord = firstCandidate && hasCupImage(cupOf(firstCandidate), canFetch) ? firstCandidate : undefined
   const withFirst = firstRecord && !heroRecords.some((r) => r.id === firstRecord.id)
   // 練習中ではない型（できた・並行して記録した型）の新しい杯も、ホームで見返せるようにする
   const activeIds = new Set(active.map((s) => s.id))
