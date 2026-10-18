@@ -24,7 +24,7 @@
     <meta name="twitter:image" content="https://latte.makimura.me/og.png" />
     <style>
       /* 余白・字間・色は、デザイン（Figma）を 375px 幅で書き出した画像から測った値。
-         字の大きさ・行の高さ・字間は、makimura.me のブログ記事に合わせた（本文 16px／行 32px／字間 0.03em、見出し 24px／字間 0.15em、
+         基本的に字の大きさ・行の高さ・字間は、makimura.me のブログ記事に合わせた（本文 16px／行 32px／字間 0.03em、見出し 24px／字間 0.15em、
          補足 14px、注記・フッター 12px。768px 以上は、本文 18px・見出し 30px）。rem なので、文字サイズの設定に従う */
       :root {
         color-scheme: light dark;
@@ -62,7 +62,7 @@
       .page {
         max-width: 480px;
         margin: 0 auto;
-        padding: 0 16px 16px 12px;
+        padding: 0 16px 32px 32px;
       }
       h1,
       h2,
@@ -91,6 +91,7 @@
 
       .hero {
         padding-top: 49px;
+        margin-bottom: 60px;
       }
       .catch {
         font-size: 1.375rem;
@@ -149,42 +150,61 @@
         height: auto;
       }
 
-      section {
-        margin-top: 60px;
-        padding: 32px 0 31px;
+      /* ---- 部品 ----
+         セクション（.section）は、見出し（.section-title）・本文（.section-text）・画面写真（.shot）を並べる。
+         セクションごとの個別のスタイルは作らず、部品の組み合わせだけで作る。間隔は、親が子の並びで決める */
+      .section {
+        padding: 32px 0;
         border-top: 1px solid var(--line);
       }
-      section + section {
-        margin-top: 0;
+      .section > * + * {
+        margin-top: 20px;
       }
-      section h2 {
-        font-size: 1.5rem;
+      /* 見出しと補足は、ひとまとまり（.section-head）。補足は見出しのすぐ下に付く */
+      .section-title {
+        font-size: 1.375rem;
         font-weight: 600;
         line-height: 1.3333;
         letter-spacing: 0.15em;
         color: var(--ink);
-        margin-bottom: 24px;
         text-wrap: balance;
       }
-      section p {
+      .section-title .arrow {
+        font-size: 1.1em;
+        font-weight: 400;
+        color: var(--sub);
+      }
+      .section-title u {
+        text-decoration-color: var(--sub);
+        text-underline-offset: 3px;
+      }
+      .section-note {
+        margin-top: 6px;
+        font-size: 0.875rem;
+        line-height: 1.5;
+        letter-spacing: 0.06em;
+        color: var(--note);
+      }
+      .section-text {
         font-size: 1rem;
         line-height: 2;
-        letter-spacing: 0.03em;
-        margin-bottom: 20px;
-        text-wrap: pretty;
-        /* 本文は、ブラウザに任せて文字単位で折り返す。小さい仮名（っ・ゃ）や「ー」が行頭に来ないようにする。
-           Chrome では、文節で折り返す指定も効く（Safari は非対応なので、効かなくてよい） */
+        letter-spacing: 0.06em;
         line-break: strict;
         word-break: auto-phrase;
       }
+      .section-text + .section-text {
+        margin-top: 20px;
+      }
       /* 広い画面（md：768px 以上）は、makimura.me と同じく、本文 18px・見出し 30px */
       @media (min-width: 768px) {
-        section h2 {
+        .section-title {
           font-size: 1.875rem;
           line-height: 1.2;
-          margin-bottom: 30px;
         }
-        section p {
+        .section > * + * {
+          margin-top: 30px;
+        }
+        .section-text {
           font-size: 1.125rem;
           line-height: 2.2222;
         }
@@ -192,72 +212,26 @@
       /* 見出しとキャッチの補足は短いので、文節の切れ目（HTML の <wbr>）でだけ折り返す。Safari にも効く。
          はみ出すほど長いときだけ、語の途中で切る */
       .sub,
-      section h2 {
+      .section-title {
         word-break: keep-all;
         overflow-wrap: break-word;
-      }
-      section .last {
-        margin-bottom: 0;
       }
       .shot {
         display: block;
         width: 229px;
-        margin: 10px 0 0;
+        margin: 0;
         border: 1px solid var(--line);
         border-radius: 12px;
         overflow: hidden;
         background: #faf7f2;
       }
+      .section > .shot {
+        margin-top: 16px;
+      }
       .shot img {
         display: block;
         width: 100%;
         height: auto;
-      }
-
-      .first .shot {
-        width: 228px;
-      }
-
-      /* 2つ目：「容量が…→関係ありません」 */
-      .storage {
-        padding-top: 42px;
-        padding-bottom: 36px;
-      }
-      .storage h2 {
-        margin-bottom: 6px;
-      }
-      .storage .arrow {
-        font-size: 1.1em;
-        font-weight: 400;
-        color: var(--sub);
-      }
-      .storage u {
-        text-decoration-color: var(--sub);
-        text-underline-offset: 3px;
-      }
-      .storage .note {
-        font-size: 0.75rem;
-        line-height: 1.5;
-        letter-spacing: 0.06em;
-        color: var(--note);
-        margin-bottom: 24px;
-      }
-      .storage .shot {
-        width: 230.5px;
-        margin-top: 8px;
-      }
-      .progress {
-        padding-top: 32px;
-      }
-      .progress h2 {
-        margin-bottom: 16px;
-      }
-      .progress p {
-        color: var(--body);
-        margin-bottom: 0;
-      }
-      .progress .shot {
-        margin-top: 16px;
       }
 
       /* フッターは、画面全体（左右の余白を含む幅）の中央に置く */
@@ -290,13 +264,13 @@
   <body>
     <div class="page">
       <header>
-        <img src="/icon.png" width="32" height="32" alt="" />
+        <img src="/icon.png" width="48" height="48" alt="lattecho-logo" />
         <h1>ラテ帳</h1>
       </header>
 
       <main>
         <div class="hero">
-          <p class="catch">動画<span class="s1">と</span>写真<span class="s2">で、</span><br />毎日の<span class="accent">ラテアート</span>を記録しよう。</p>
+          <h2 class="catch">動画<span class="s2">と</span>写真<span class="s2">で、</span><br />毎日の<span class="accent">ラテアート</span>を記録しよう。</h2>
           <p class="sub">成功／失敗と、次の一手をメモ。<br />かんたんな<wbr />ステップで<wbr />記録でき、<wbr />次の<wbr />一杯で<wbr />改善できます。</p>
 
           <!-- 記録のデモ動画／上達が見えるデモ動画。動画ができたら、<img> を <video muted playsinline loop autoplay> に替える -->
@@ -310,29 +284,31 @@
           </div>
         </div>
 
-        <section class="first">
-          <h2>うまくできない。<wbr />うぅ…<wbr />何が<wbr />ダメなんだろう？</h2>
-          <p>ラテアートって一瞬の出来事で、うまくできなかった原因を見つけるのがとても難しいですよね。</p>
-          <p>なので、動画を撮ってあとから見返せるようにしました。野球で素振りのフォームを撮るようなものですね。</p>
-          <p class="last">気づいたことは「次の一手」としてメモすると、次に動画を撮るときに表示されます。</p>
+        <section class="section">
+          <h2 class="section-title">動画で自分の注ぎ方を確認できます</h2>
+          <p class="section-text">ラテアートって一瞬の出来事で、うまくできなかった原因を見つけるのがとても難しいですよね。</p>
+          <p class="section-text">なので、動画を撮ってあとから見返せるようにしました。野球で素振りのフォームを撮るようなものですね。</p>
+          <p class="section-text">気づいたことは「次の一手」としてメモすると、次に動画を撮るときに表示されます。</p>
           <figure class="shot">
             <img src="/img/review.webp" width="780" height="695" alt="記録の画面。成功・惜しい・失敗の選択、原因のタグ、次の一手の入力欄" loading="lazy" decoding="async" />
           </figure>
         </section>
 
-        <section class="storage">
-          <h2>動画は容量が... <span class="arrow">→</span> <u>関係ありません！！</u></h2>
-          <p class="note">開発者自身、iPhoneの容量は64GBです（笑）</p>
-          <p>動画の保存場所は スマホ と YouTube（限定公開）が選べます。YouTubeを選べば、スマホの容量は取りません。</p>
-          <p class="last">写真アプリに、練習記録が散らばることはもうありません。アプリの中で見やすく整理されます。</p>
+        <section class="section">
+          <div class="section-head">
+            <h2 class="section-title">動画は容量が...<span class="arrow">→</span><u>問題ありません！</u></h2>
+            <p class="section-note">開発者自身、iPhoneの容量は64GBです（笑）</p>
+          </div>
+          <p class="section-text">動画の保存場所は スマホ と YouTube（限定公開）が選べます。YouTubeを選べば、スマホの容量は取りません。</p>
+          <p class="section-text">写真アプリに、練習記録が散らばることはもうありません。アプリの中で見やすく整理されます。</p>
           <figure class="shot">
             <img src="/img/cups.webp" width="780" height="1272" alt="カップ帳の画面。1杯ずつの写真に、番号と◎△✕が付いて並ぶ" loading="lazy" decoding="async" />
           </figure>
         </section>
 
-        <section class="progress">
-          <h2>上達が目に見えて、うれしくなります。</h2>
-          <p>型ごとに、最新と最初を並べてみられます。</p>
+        <section class="section">
+          <h2 class="section-title">上達が目に見えて、うれしくなります。</h2>
+          <p class="section-text">型ごとに、最新と最初を並べてみられます。</p>
           <figure class="shot">
             <img src="/img/compare.webp" width="780" height="1272" alt="型の画面。直近の結果の点と、最新と最初のラテアートの写真が並ぶ" loading="lazy" decoding="async" />
           </figure>
