@@ -28,8 +28,17 @@ describe('アプリのトップページ（サーバーと同じドメインで�
     expect(read('../worker/site/privacy-en.html')).toContain('Limited Use')
   })
 
-  // 英語の説明（Google の審査で、ホームページに求められる）は、トップページには置かず、
-  // 英語版のページ（/en）に分ける方針。/en ができたら、そのページに英文と /privacy-en へのリンクがあることを、ここで確かめる
+  // 英語の説明は、トップページではなく、英語版のページ（/en）に置く
+  it('英語版のページ（/en）に、英語の説明と、英語のプライバシーポリシーへのリンクがある', () => {
+    const html = read('../worker/site/en.html')
+    expect(html).toContain('<html lang="en">')
+    expect(html).toContain('YouTube upload permission')
+    expect(html).toContain('href="/privacy-en"')
+  })
+
+  it('トップページから、英語版のページ（/en）が見つかる', () => {
+    expect(read('../worker/site/index.html')).toContain('hreflang="en" href="https://latte.makimura.me/en"')
+  })
 })
 
 describe('トップページの紹介（アプリの画面）', () => {
