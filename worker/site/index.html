@@ -14,8 +14,14 @@
     <meta property="og:title" content="ラテ帳｜ラテアートの練習を、動画と写真で記録するアプリ" />
     <meta property="og:description" content="1杯ずつ撮って、◎△✕と次の一手をメモ。最初と最新を見くらべて、上達を目で見られます。" />
     <meta property="og:url" content="https://latte.makimura.me/" />
-    <meta property="og:image" content="https://latte.makimura.me/icon.png" />
-    <meta name="twitter:card" content="summary" />
+    <meta property="og:site_name" content="ラテ帳" />
+    <meta property="og:locale" content="ja_JP" />
+    <meta property="og:image" content="https://latte.makimura.me/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="ラテ帳の「今日」の画面と、キャッチコピー「ラテアートの練習を、動画と写真で記録するアプリ」" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://latte.makimura.me/og.png" />
     <style>
       :root {
         color-scheme: light dark;
@@ -153,6 +159,23 @@
       .worries li {
         margin-bottom: 0.4em;
       }
+      /* 記録の置き場所：何がどこに残るかを、3つに分けて見せる */
+      .places {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        font-size: 1.05rem;
+      }
+      .places li {
+        margin-bottom: 1em;
+        color: var(--sub);
+        word-break: auto-phrase;
+        text-wrap: pretty;
+      }
+      .places strong {
+        display: block;
+        color: var(--ink);
+      }
 
       .step {
         display: grid;
@@ -213,11 +236,16 @@
         font-size: 0.95rem;
         max-width: 560px;
       }
+      .contact {
+        margin: 40px 0 0;
+        color: var(--sub);
+        font-size: 0.9rem;
+      }
       nav {
         display: flex;
         flex-wrap: wrap;
         gap: 4px 24px;
-        margin: 40px 0 0;
+        margin: 16px 0 0;
         padding-bottom: 64px;
         font-size: 0.95rem;
       }
@@ -282,7 +310,7 @@
         <div>
           <span class="label">3. 見くらべる</span>
           <h3>最初の1杯と、最新の1杯を並べる。</h3>
-          <p>型ごとに、動画でも写真でも並べて見られます。直近10杯の結果も、点で見られます。</p>
+          <p>型ごとに、動画でも写真でも並べて見られます。直近10杯の結果は、色のついた点で並びます。</p>
         </div>
         <figure class="shot">
           <img src="/img/compare.webp" width="780" height="1272" alt="型の画面。直近の結果の点と、最新と最初のラテアートの写真が並ぶ" loading="lazy" decoding="async" />
@@ -313,8 +341,15 @@
 
       <section class="plain">
         <h2>記録の置き場所</h2>
-        <p>はじめは、端末の中だけに保存します。Google でログインすると、機種を変えても、別の端末でも、同じ記録を使えます。</p>
-        <p>動画の保存先を YouTube にすると、スマホの容量を使わずに残せます（標準は限定公開）。</p>
+        <ul class="places">
+          <li><strong>はじめは、端末の中だけ。</strong>記録・写真・動画は、この端末にだけ保存します。</li>
+          <li>
+            <strong>Google でログインすると、別の端末でも。</strong>記録と、縮小した写真・動画のサムネイルを、機種を変えても使えます。動画の本体は、サーバーに置きません。
+          </li>
+          <li>
+            <strong>動画の保存先は、YouTube にもできます。</strong>自分の YouTube チャンネルに上げるので、スマホの容量を使わず、機種を変えても見られます。標準は限定公開（URL を知っている人だけが見られます）。連携するときだけ、アップロードの許可をお願いします。
+          </li>
+        </ul>
       </section>
 
       <section lang="en" class="en">
@@ -328,11 +363,12 @@
     </main>
 
     <footer>
+      <p class="contact">アプリの「設定 → ご意見・ご要望」からも送れます。GitHub への投稿は公開されるので、個人情報は書かないでください。</p>
       <nav>
         <a href="https://makim0939.github.io/michishirube/">Web 版（お試し）</a>
         <a href="/privacy">プライバシーポリシー</a>
         <a href="/privacy-en">Privacy Policy (English)</a>
-        <a href="https://github.com/makim0939/michishirube/issues">お問い合わせ</a>
+        <a href="https://github.com/makim0939/michishirube/issues">お問い合わせ（GitHub）</a>
       </nav>
     </footer>
   </body>
