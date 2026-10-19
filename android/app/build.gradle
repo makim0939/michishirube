@@ -12,6 +12,23 @@ if (keystorePropsFile.exists()) {
 def signingValue = { String key, String envName -> keystoreProps.getProperty(key) ?: System.getenv(envName) }
 def releaseStoreFile = signingValue('storeFile', 'LATTECHO_STORE_FILE')
 def hasReleaseSigning = releaseStoreFile != null
+if (hasReleaseSigning) {
+    // 設定が一部だけのとき（パスワードの書き忘れなど）は、どれが足りないか分かるように止める
+    [storePassword: 'LATTECHO_STORE_PASSWORD', keyAlias: 'LATTECHO_KEY_ALIAS', keyPassword: 'LATTECHO_KEY_PASSWORD'].each { key, envName ->
+        if (!signingValue(key, envName)) {
+            throw new GradleException("リリース署名の設定が足りません：${key}（keystore.properties か、環境変数 ${envName}）")
+        }
+    }
+} else if (project.hasProperty('requireSigning')) {
+    // Google Play に上げるリリースは、-PrequireSigning を付けて作る。鍵を置き忘れても、署名なしの AAB が黙ってできないように
+    throw new GradleException('リリース署名の鍵がありません：android/keystore.properties か、環境変数 LATTECHO_STORE_FILE を設定してください')
+}
+
+// Play は、versionCode が前より大きい整数でないと受け付けない。-PversionName と取り違えた値（1.1 など）は、ここで止める
+def versionCodeValue = (findProperty('versionCode') ?: '1').toString()
+if (!(versionCodeValue ==~ /[1-9][0-9]*/)) {
+    throw new GradleException("versionCode は 1 以上の整数にしてください（指定：${versionCodeValue}）")
+}
 
 android {
     namespace = "me.makimura.lattecho"
@@ -22,7 +39,7 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         // Google Play に上げるたびに、versionCode を前より大きくする必要がある。
         // ビルドのときに -PversionCode=2 -PversionName=1.1 で渡す（無ければ 1 と 1.0）
-        versionCode((findProperty('versionCode') ?: '1').toString().toInteger())
+        versionCode(versionCodeValue.toInteger())
         versionName((findProperty('versionName') ?: '1.0').toString())
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
