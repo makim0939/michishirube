@@ -33,3 +33,11 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm app:build
+      # Google Play に上げる形式（AAB）が作れるかも確かめる。鍵は CI に置かないので、署名なしで作る
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+      - run: ./gradlew bundleRelease
+        working-directory: android

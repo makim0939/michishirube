@@ -1,5 +1,18 @@
 apply plugin: 'com.android.application'
 
+// リリース署名の情報。鍵とパスワードは公開リポジトリに入れない。
+// android/keystore.properties（git に入れない。storeFile・storePassword・keyAlias・keyPassword）か、
+// 環境変数（LATTECHO_STORE_FILE・LATTECHO_STORE_PASSWORD・LATTECHO_KEY_ALIAS・LATTECHO_KEY_PASSWORD）から読む。
+// どちらも無いときは、署名しないリリースを作る（CI で、ビルドが通るかだけ確かめるため）
+def keystoreProps = new Properties()
+def keystorePropsFile = rootProject.file('keystore.properties')
+if (keystorePropsFile.exists()) {
+    keystorePropsFile.withInputStream { keystoreProps.load(it) }
+}
+def signingValue = { String key, String envName -> keystoreProps.getProperty(key) ?: System.getenv(envName) }
+def releaseStoreFile = signingValue('storeFile', 'LATTECHO_STORE_FILE')
+def hasReleaseSigning = releaseStoreFile != null
+
 android {
     namespace = "me.makimura.lattecho"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,8 +20,10 @@ android {
         applicationId "me.makimura.lattecho.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // Google Play に上げるたびに、versionCode を前より大きくする必要がある。
+        // ビルドのときに -PversionCode=2 -PversionName=1.1 で渡す（無ければ 1 と 1.0）
+        versionCode((findProperty('versionCode') ?: '1').toString().toInteger())
+        versionName((findProperty('versionName') ?: '1.0').toString())
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,10 +31,23 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            if (hasReleaseSigning) {
+                storeFile rootProject.file(releaseStoreFile)
+                storePassword signingValue('storePassword', 'LATTECHO_STORE_PASSWORD')
+                keyAlias signingValue('keyAlias', 'LATTECHO_KEY_ALIAS')
+                keyPassword signingValue('keyPassword', 'LATTECHO_KEY_PASSWORD')
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 }
