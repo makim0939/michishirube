@@ -18,6 +18,7 @@ import { backHandler, go, goBack, href } from './router'
 import { readStorage, removeStorage, writeStorage } from './storage'
 import { SkillPicker } from './SkillPicker'
 import { Trimmer } from './Trimmer'
+import { useBackHandler } from './useBackHandler'
 import { patternFor } from './world'
 import { BackIcon, CameraIcon, ChevronDownIcon, PhotoIcon, PlusIcon, ScissorsIcon, VideoIcon } from './icons'
 
@@ -193,6 +194,26 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
     }
   }, [recordId, setDraft])
 
+  // 結果・原因・次の一手・メモのどれかを入れてある（空白だけは入れていないのと同じ。保存の条件と同じ数え方）
+  const hasInput =
+    !!outcome || !!draft.reason?.trim() || !!draft.nextAction?.trim() || (draft.causes?.length ?? 0) > 0
+  // 新しい記録は、動画・写真か入力が1つでもあれば残す価値がある（無いまま戻ると何も失わない）
+  const unsaved = editing ? dirty : items.length > 0 || hasInput
+
+  // Android の「戻る」（ボタン・端からのスワイプ）。画面の「<」と同じく、保存前の内容は黙って捨てずに確認を出す。
+  // 確認が出ているときの「戻る」は、確認を閉じて続ける。カメラ・編集・型の選択は、それぞれが先に受け止める
+  useBackHandler(() => {
+    if (confirmLeave) {
+      setConfirmLeave(null)
+      return true
+    }
+    if (unsaved) {
+      setConfirmLeave({ back: true })
+      return true
+    }
+    return false
+  })
+
   if (!data || !loaded) return missing ? <Empty>記録が見つかりません。</Empty> : null
   const { next, count } = data
   if (!skill) return <Empty>型が見つかりません。</Empty>
@@ -201,11 +222,6 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
   // ラテアートの型では、うまくいかなかった原因をワンタップで選べる
   const causeOptions: readonly string[] = patternFor(skill.name) ? LATTE_CAUSES : []
   const hasNewMedia = items.some((i) => i.kind === 'new' || (i.kind === 'existing' && i.replaced))
-  // 結果・原因・次の一手・メモのどれかを入れてある（空白だけは入れていないのと同じ。保存の条件と同じ数え方）
-  const hasInput =
-    !!outcome || !!draft.reason?.trim() || !!draft.nextAction?.trim() || (draft.causes?.length ?? 0) > 0
-  // 新しい記録は、動画・写真か入力が1つでもあれば残す価値がある（無いまま戻ると何も失わない）
-  const unsaved = editing ? dirty : items.length > 0 || hasInput
   // 新しい記録で、まだ何も無い（保存しても「何か入れてください」になるだけなので、押せないようにする）
   const nothingToSave = !editing && items.length === 0 && !hasInput
 

@@ -17,6 +17,7 @@ import { isWebUrl } from '../domain/template'
 import type { Reference } from '../domain/types'
 import { readStorage, writeStorage } from './storage'
 import { MicIcon, PhotoIcon } from './icons'
+import { useBackHandler } from './useBackHandler'
 
 const AUDIO_KEY = 'michishirube:recorder-audio'
 const MODE_KEY = 'michishirube:recorder-mode'
@@ -248,6 +249,12 @@ export function Recorder({
   }
 
   const recording = startedAt !== undefined
+
+  // Android の「戻る」は、「閉じる」と同じ。録画している間は、何も起こさない（「閉じる」も押せないのと同じ）
+  useBackHandler(() => {
+    if (!recording) onClose()
+    return true
+  })
 
   /** 映像を押した場所にピントを合わせる（対応していない端末では、押しても何も起きない） */
   const tapToFocus = async (e: React.MouseEvent<HTMLVideoElement>) => {
