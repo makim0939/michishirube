@@ -20,7 +20,7 @@ import { readStorage, writeStorage } from './storage'
 import { PatternImage } from './PatternImage'
 import { recommendLabel } from './skillLabels'
 import { LIGHT_LABEL, lightFor, lightUrl, type Light } from './world'
-import { isIosDevice, isNativeApp, SITE_URL } from '../platform'
+import { APP_STORE_URL, isIosDevice, isNativeApp } from '../platform'
 
 const HINT_KEY = 'michishirube:install-hint-dismissed'
 /** メイン写真を探しにいく、新しい記録の数 */
@@ -148,7 +148,7 @@ function WebTrialNote() {
   return (
     <p className="web-trial-note">
       Web 版はお試し版です。記録を長く残すなら、
-      <a href={SITE_URL} target="_blank" rel="noopener noreferrer">
+      <a href={APP_STORE_URL} target="_blank" rel="noopener noreferrer">
         iOS 版アプリ
       </a>
       がおすすめです
