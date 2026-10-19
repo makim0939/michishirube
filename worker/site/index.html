@@ -62,7 +62,7 @@
       }
       /* 読む幅は、スマホの画面（375px）のまま。広い画面では、中央に置く */
       .page {
-        max-width: 480px;
+        max-width: 540px;
         margin: 0 auto;
         padding: 0 16px 32px 32px;
       }
@@ -206,6 +206,8 @@
       .section-text + .section-text {
         margin-top: 20px;
       }
+      /* 広い画面（768px 以上）は、キャッチ以外の文字を、スマホより一回り小さくする（PC は目と画面の距離が近く、同じ大きさだと大きく見えるため）。
+         キャッチは、そのまま 22px */
       @media (min-width: 768px) {
         header h1 {
           font-size: 0.875rem;
@@ -259,14 +261,22 @@
         padding-top: 33px;
         text-align: center;
       }
+      /* リンクは、狭い幅では2列の格子（2×2）にして、行ごとの個数がそろうようにする。
+         折り返しに任せると、3つ＋1つのように不ぞろいになる。4つが1行に入る幅（520px 以上）では、1行に並べる */
       footer nav {
-        display: flex;
-        justify-content: center;
-        flex-wrap: wrap;
-        gap: 4px 9px;
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px 12px;
         font-size: 0.75rem;
         line-height: 1.6;
         letter-spacing: 0.06em;
+      }
+      @media (min-width: 520px) {
+        footer nav {
+          display: flex;
+          justify-content: center;
+          gap: 4px 24px;
+        }
       }
       footer a {
         color: var(--link);
@@ -353,8 +363,8 @@
       <footer>
         <nav>
           <a href="https://makim0939.github.io/michishirube/">Web版（お試し）</a>
+          <a href="https://www.makimura.me">makimura.me</a>
           <a href="/privacy">プライバシーポリシー</a>
-          <a href="https://www.makimura.me">開発者のホームページ</a>
           <a href="https://github.com/makim0939/michishirube/issues">お問い合わせ</a>
         </nav>
         <p class="copy">© 2026 Soma Makimura</p>
