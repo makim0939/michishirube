@@ -32,6 +32,10 @@ description: 画面や動作を、ブラウザ・iOS シミュレーター・And
 - SDK は `~/Library/Android/sdk`（`emulator`・`platform-tools/adb`）。ビルドには **JDK 21** が要る（Android Studio の JDK を使う。`JAVA_HOME` を指定する）。`android/local.properties` に `sdk.dir`（元のフォルダにある。作業ツリーには無いので、`ANDROID_HOME` で渡す）。
 - エミュレーターには、H.264 のハードウェアエンコーダーが無く、**録画の挙動が実機と違う**。録画まわりは、エミュレーターの結果を、実機の結果とみなさない。
 - WebView のデバッグは、`adb forward` と Chrome DevTools Protocol（CDP）。
+- 使える AVD：`Pixel_6_API_Baklava`（Android 16）、`Pixel_3a_API_30_x86`。JDK 21 は sdkman（`~/.sdkman/candidates/java/21*`）にある。起動は `emulator -avd <名前> -no-snapshot-save -no-audio`（バックグラウンドで。`adb shell getprop sys.boot_completed` が 1 になるまで待つ）。
+- 画面を作って入れる流れ：`pnpm app:build` → `cd android && ./gradlew assembleDebug` → `adb install -r app/build/outputs/apk/debug/app-debug.apk` → `adb shell am start -n me.makimura.lattecho.app/me.makimura.lattecho.MainActivity`。許可ダイアログを飛ばすなら `adb shell pm grant me.makimura.lattecho.app android.permission.CAMERA`（`RECORD_AUDIO` も）。
+- 操作は `adb shell input tap / swipe / keyevent KEYCODE_BACK`、画面は `adb exec-out screencap -p > x.png`。**エミュレーターは遅い**（起動直後は「System UI が応答していません」が出る。「待つ」を押す）。タップのあとは数秒〜10秒待ち、1手ずつ画面を見て進める（連続で押すと、別の画面に入る）。`screencap` は、たまに古い画面を返すので、撮り直す。
+- **画面の端（左右 4% ほど）から始めるスワイプは、システムの「戻る」になる**。ハンドルなどをドラッグするときは、端から離して始める。戻るの確認は `KEYCODE_BACK` で。
 
 ## 実機（iPhone）
 
