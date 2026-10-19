@@ -20,7 +20,7 @@ import { readStorage, writeStorage } from './storage'
 import { PatternImage } from './PatternImage'
 import { recommendLabel } from './skillLabels'
 import { LIGHT_LABEL, lightFor, lightUrl, type Light } from './world'
-import { isIosDevice, isNativeApp } from '../platform'
+import { isIosDevice, isNativeApp, SITE_URL } from '../platform'
 
 const HINT_KEY = 'michishirube:install-hint-dismissed'
 /** メイン写真を探しにいく、新しい記録の数 */
@@ -136,6 +136,24 @@ function Notice() {
     )
   }
   return null
+}
+
+/**
+ * Web 版（ブラウザ・ホーム画面に追加した PWA）は、お試し版であることと、iOS 版をすすめることを、ホームに1行だけ出す。
+ * 閉じられない常設の一行だが、色を付けず小さくして、同期の失敗などのお知らせ（Notice）とは別に置く。
+ * アプリ（ストアから入れたもの）には出さない
+ */
+function WebTrialNote() {
+  if (isNativeApp) return null
+  return (
+    <p className="web-trial-note">
+      Web 版はお試し版です。記録を長く残すなら、
+      <a href={SITE_URL} target="_blank" rel="noopener noreferrer">
+        iOS 版アプリ
+      </a>
+      がおすすめです
+    </p>
+  )
 }
 
 type Slide = {
@@ -444,6 +462,7 @@ export function TodayScreen() {
 
       <div className="today-sheet">
         <Notice />
+        <WebTrialNote />
 
         {data.practices.length > 0 ? (
           <>
@@ -452,7 +471,7 @@ export function TodayScreen() {
               <span className="muted small">
                 {/* 週の初め（まだ0杯）は、数を出さない */}
                 {data.thisWeek > 0 && <>今週 {data.thisWeek}杯 · </>}
-                <a href={href('/records')}>カップ帳</a>
+                <a href={href('/records')}>ラテ帳</a>
               </span>
             </div>
             <div className="practice-list">

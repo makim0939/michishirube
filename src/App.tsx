@@ -74,7 +74,7 @@ function Background() {
 
 const TABS = [
   { path: '/', label: '今日', Icon: CupIcon, match: (r: Route) => ['today', 'record', 'cup'].includes(r.name) },
-  { path: '/records', label: 'カップ帳', Icon: NotebookIcon, match: (r: Route) => r.name === 'records' },
+  { path: '/records', label: 'ラテ帳', Icon: NotebookIcon, match: (r: Route) => r.name === 'records' },
   {
     path: '/map',
     label: '型',

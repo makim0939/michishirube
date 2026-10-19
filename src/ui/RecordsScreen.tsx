@@ -12,7 +12,7 @@ import { href } from './router'
 /** 一度にたくさん読み込みすぎないよう、少しずつ出す（3列なので3の倍数） */
 const PAGE = 24
 
-/** カップ帳：全部の型の杯を新しい順に、写真の格子で。日付ごとに区切り、押すとその1杯の詳細を開く */
+/** ラテ帳：全部の型の杯を新しい順に、写真の格子で。日付ごとに区切り、押すとその1杯の詳細を開く */
 export function RecordsScreen() {
   const [limit, setLimit] = useState(PAGE)
   const [skillFilter, setSkillFilter] = useState<string>('')
@@ -66,7 +66,7 @@ export function RecordsScreen() {
   return (
     <div className="screen">
       <header className="screen-header">
-        <h1>カップ帳</h1>
+        <h1>ラテ帳</h1>
         <span className="pill">{data.total}杯</span>
       </header>
 

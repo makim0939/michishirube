@@ -198,7 +198,7 @@ Contact: makim0939@gmail.com
 1. `pnpm app:build` で、アプリ用に作って `ios/` に入れる（**`VITE_API_URL` を、ローカルの値にしたまま作らない**）。
 2. Xcode で `ios/App/App.xcworkspace` を開く（または `pnpm app:ios`）。
 3. Signing & Capabilities：Team を有料のチームにする。Bundle Identifier を確認する。
-4. バージョン（`MARKETING_VERSION` = 1.0）とビルド番号（`CURRENT_PROJECT_VERSION`）。**アップロードのたびに、ビルド番号を上げる**。
+4. バージョン（`MARKETING_VERSION`。版の決め方は `docs/versioning.md`）とビルド番号（`CURRENT_PROJECT_VERSION`）。**アップロードのたびに、ビルド番号を上げる**。
 5. 書き出しの暗号化：`Info.plist` に `ITSAppUsesNonExemptEncryption = NO`（HTTPS だけなら、免除）を入れると、アップロードのたびの質問が、出なくなる。
 6. 実機かシミュレーターで、最後の動作確認：撮る → 編集 → 保存 → 共有 → アップ。
 7. Product > Destination を「Any iOS Device (arm64)」にして、Product > Archive。Organizer で「Distribute App」→「App Store Connect」→ アップロード。

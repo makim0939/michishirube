@@ -51,7 +51,7 @@ function CupTile({ cup }: { cup: Cup }) {
   )
 }
 
-/** 杯を写真の格子で並べる（カップ帳・型の記録） */
+/** 杯を写真の格子で並べる（ラテ帳・型の記録） */
 export function CupGrid({ cups }: { cups: Cup[] }) {
   return (
     <ul className="cup-grid">
