@@ -200,18 +200,21 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
   // 新しい記録は、動画・写真か入力が1つでもあれば残す価値がある（無いまま戻ると何も失わない）
   const unsaved = editing ? dirty : items.length > 0 || hasInput
 
-  // Android の「戻る」（ボタン・端からのスワイプ）。画面の「<」と同じく、保存前の内容は黙って捨てずに確認を出す。
+  /** 保存前の内容があれば、黙って離れずに確認を出す（出したら true。false なら、そのまま離れてよい） */
+  const askBeforeLeaving = () => {
+    if (!unsaved) return false
+    setConfirmLeave({ back: true })
+    return true
+  }
+
+  // Android の「戻る」（ボタン・端からのスワイプ）も、画面の「<」と同じく確認を通す。
   // 確認が出ているときの「戻る」は、確認を閉じて続ける。カメラ・編集・型の選択は、それぞれが先に受け止める
   useBackHandler(() => {
     if (confirmLeave) {
       setConfirmLeave(null)
       return true
     }
-    if (unsaved) {
-      setConfirmLeave({ back: true })
-      return true
-    }
-    return false
+    return askBeforeLeaving()
   })
 
   if (!data || !loaded) return missing ? <Empty>記録が見つかりません。</Empty> : null
@@ -397,12 +400,8 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
           href={href(fallback)}
           onClick={(e) => {
             // 撮った動画・写真や直した内容は、ここで保存しないと消えるので、黙って戻らない
-            if (unsaved) {
-              e.preventDefault()
-              setConfirmLeave({ back: true })
-            } else {
-              backHandler(fallback)(e)
-            }
+            if (askBeforeLeaving()) e.preventDefault()
+            else backHandler(fallback)(e)
           }}
           aria-label="戻る"
         >

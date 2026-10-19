@@ -250,9 +250,10 @@ export function Recorder({
 
   const recording = startedAt !== undefined
 
-  // Android の「戻る」は、「閉じる」と同じ。録画している間は、何も起こさない（「閉じる」も押せないのと同じ）
+  // Android の「戻る」は、「閉じる」と同じ。録画している間は、何も起こさない（「閉じる」も押せないのと同じ）。
+  // 録画のあと、できあがりの写真を撮る段階も同じ：動画はこの画面にしか無く、「閉じる」も無い（撮り直す・スキップだけ）ので、黙って捨てない
   useBackHandler(() => {
-    if (!recording) onClose()
+    if (!recording && !finished) onClose()
     return true
   })
 
