@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Latte-chō (ラテ帳) | A practice journal for latte art</title>
+    <meta name="description" content="Latte-chō (ラテ帳) is a practice journal for latte art. Record each cup with a photo and a short video, mark how it went, and look back to improve your next cup." />
+    <link rel="canonical" href="https://latte.makimura.me/en" />
+    <link rel="alternate" hreflang="ja" href="https://latte.makimura.me/" />
+    <link rel="alternate" hreflang="en" href="https://latte.makimura.me/en" />
+    <link rel="icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" href="/icon.png" />
+    <meta name="theme-color" content="#faf7f2" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#1d1814" media="(prefers-color-scheme: dark)" />
+    <style>
+      /* 色・字の大きさ・字間は、トップページ（index.html）と同じ */
+      :root {
+        color-scheme: light dark;
+        --bg: #faf7f2;
+        --ink: #252528;
+        --body: #252528;
+        --line: #e3d9cc;
+        --link: #1a1a1a;
+        font-family: system-ui, -apple-system, 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #1d1814;
+          --ink: #f1e9df;
+          --body: #e3d9cc;
+          --line: #3a3029;
+          --link: #f1e9df;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--body);
+      }
+      .page {
+        max-width: 480px;
+        margin: 0 auto;
+        padding: 0 16px 32px 32px;
+      }
+      h1,
+      p {
+        margin: 0;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding-top: 16px;
+      }
+      header img {
+        width: 32px;
+        height: 32px;
+        border-radius: 7px;
+      }
+      header .name {
+        font-size: 1rem;
+        font-weight: 500;
+        line-height: 1.5;
+        letter-spacing: 0.04em;
+        color: var(--ink);
+      }
+      .section {
+        margin-top: 49px;
+        padding: 32px 0;
+        border-top: 1px solid var(--line);
+      }
+      .section > * + * {
+        margin-top: 20px;
+      }
+      .section-text {
+        font-size: 1rem;
+        line-height: 2;
+        letter-spacing: 0.03em;
+      }
+      @media (min-width: 768px) {
+        .section > * + * {
+          margin-top: 30px;
+        }
+        .section-text {
+          font-size: 1.125rem;
+          line-height: 2.2222;
+        }
+      }
+      footer nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 16px;
+        font-size: 0.75rem;
+        line-height: 1.6;
+        letter-spacing: 0.06em;
+      }
+      footer a {
+        color: var(--link);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header>
+        <img src="/icon.png" width="48" height="48" alt="" />
+        <h1 class="name">Latte-chō (ラテ帳)</h1>
+      </header>
+
+      <main>
+        <section class="section">
+          <p class="section-text">
+            Latte-chō (ラテ帳) is a practice journal for latte art. You record each cup with a photo and a short video, mark how it went, and look back to improve your next cup.
+          </p>
+          <p class="section-text">
+            Records stay on your device by default. If you sign in with Google, you can use the same records on other devices. If you link YouTube, your practice videos can be uploaded to your own YouTube channel (unlisted by default) using the YouTube upload permission, which the app requests only when you link YouTube.
+          </p>
+        </section>
+      </main>
+
+      <footer>
+        <nav>
+          <a href="/privacy-en">Privacy Policy</a>
+          <a href="/">日本語</a>
+        </nav>
+      </footer>
+    </div>
+  </body>
+</html>

@@ -6,6 +6,8 @@
     <title>ラテ帳｜ラテアートの練習を、動画と写真で記録するアプリ</title>
     <meta name="description" content="ラテアートの練習を、1杯ずつ動画と写真で記録するアプリ。◎△✕と原因、次の一手をメモして、最初の1杯と最新の1杯を見くらべられます。" />
     <link rel="canonical" href="https://latte.makimura.me/" />
+    <link rel="alternate" hreflang="ja" href="https://latte.makimura.me/" />
+    <link rel="alternate" hreflang="en" href="https://latte.makimura.me/en" />
     <link rel="icon" href="/favicon.ico" />
     <link rel="apple-touch-icon" href="/icon.png" />
     <meta name="theme-color" content="#faf7f2" media="(prefers-color-scheme: light)" />
@@ -23,27 +25,31 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:image" content="https://latte.makimura.me/og.png" />
     <style>
+      /* 余白・字間・色は、デザイン（Figma）を 375px 幅で書き出した画像から測った値。
+         基本的に字の大きさ・行の高さ・字間は、makimura.me のブログ記事に合わせた（本文 16px／行 32px／字間 0.03em、見出し 24px／字間 0.15em、
+         補足 14px、注記・フッター 12px。768px 以上は、本文 18px・見出し 30px）。rem なので、文字サイズの設定に従う */
       :root {
         color-scheme: light dark;
         --bg: #faf7f2;
-        --ink: #2a1f19;
-        --sub: #5f5046;
+        --ink: #252528;
+        --body: #252528;
+        --sub: #757578;
+        --note: #858587;
         --line: #e3d9cc;
-        --button: #2a1f19;
-        --button-ink: #faf7f2;
         --accent: #a8622f;
+        --link: #1a1a1a;
         font-family: system-ui, -apple-system, 'Hiragino Sans', 'Noto Sans JP', sans-serif;
-        line-height: 1.7;
       }
       @media (prefers-color-scheme: dark) {
         :root {
           --bg: #1d1814;
           --ink: #f1e9df;
-          --sub: #c4b5a5;
+          --body: #e3d9cc;
+          --sub: #a89a8c;
+          --note: #968a7d;
           --line: #3a3029;
-          --button: #f1e9df;
-          --button-ink: #1d1814;
           --accent: #d9a373;
+          --link: #f1e9df;
         }
       }
       * {
@@ -52,328 +58,330 @@
       body {
         margin: 0;
         background: var(--bg);
-        color: var(--ink);
+        color: var(--body);
       }
-      main,
-      header,
-      footer {
-        max-width: 960px;
+      /* 読む幅は、スマホの画面（375px）のまま。広い画面では、中央に置く */
+      .page {
+        max-width: 540px;
         margin: 0 auto;
-        padding-left: 24px;
-        padding-right: 24px;
+        padding: 0 16px 32px 32px;
       }
-      p {
-        margin: 0 0 0.8em;
-      }
-      a {
-        color: inherit;
-      }
+      h1,
       h2,
-      h3 {
-        margin: 0 0 12px;
-        font-size: 1.5rem;
-        line-height: 1.4;
-        text-wrap: balance;
-      }
       p {
-        word-break: auto-phrase;
+        margin: 0;
       }
 
       header {
         display: flex;
         align-items: center;
-        gap: 12px;
-        padding-top: 20px;
-        padding-bottom: 20px;
+        gap: 4px;
+        padding-top: 16px;
       }
       header img {
-        width: 36px;
-        height: 36px;
-        border-radius: 8px;
+        width: 32px;
+        height: 32px;
+        border-radius: 7px;
       }
       header h1 {
-        margin: 0;
-        font-size: 1.15rem;
-        font-weight: 700;
-      }
-      header a {
-        margin-left: auto;
-        font-size: 0.95rem;
+        font-size: 1rem;
+        font-weight: 500;
+        line-height: 1.5;
+        letter-spacing: 0.04em;
+        color: var(--ink);
       }
 
       .hero {
-        display: grid;
-        gap: 32px;
-        padding: 32px 0 64px;
+        padding-top: 49px;
+        margin-bottom: 60px;
       }
-      .hero .catch {
-        margin: 0 0 16px;
-        font-size: clamp(1.35rem, 6.2vw, 2.1rem);
-        font-weight: 700;
-        line-height: 1.4;
+      .catch {
+        /* 2行目（15字）が1行に収まる大きさ：幅（画面 − 左右の余白 48px）÷ 15.4。22px が上限。
+           画面が狭い（375px 以下）ときだけ、少し小さくなる */
+        font-size: min(1.375rem, calc((100vw - 48px) / 15.4));
+        font-weight: 600;
+        line-height: 1.5;
+        letter-spacing: 0.02em;
+        color: var(--ink);
       }
-      .hero .catch span {
-        display: block;
-        white-space: nowrap;
+      .catch .accent {
+        color: var(--accent);
       }
-      .hero .sub {
-        margin: 0 0 28px;
-        font-size: 1.1rem;
+      /* 「と」「で、」は、名詞（動画・写真）より小さく */
+      .catch .s1 {
+        font-size: 0.9em;
+      }
+      .catch .s2 {
+        font-size: 0.75em;
+      }
+      /* 小さい字が行の高さを広げないように */
+      .catch .s1,
+      .catch .s2 {
+        line-height: 1;
+      }
+      .sub {
+        margin-top: 4px;
+        font-weight: 500;
+        font-size: 0.875rem;
+        line-height: 1.4286;
+        letter-spacing: 0.06em;
         color: var(--sub);
-      }
-      /* 押せないものを、ボタンのように枠で囲まない */
-      .coming {
-        margin: 0;
-        font-size: 1.05rem;
-        font-weight: 700;
-      }
-      .note {
-        margin: 12px 0 0;
-        color: var(--sub);
-        font-size: 0.9rem;
       }
 
-      .shot {
-        width: min(72vw, 280px);
-        margin: 0;
-        border: 1px solid var(--line);
-        border-radius: 24px;
-        overflow: hidden;
-        background: #faf7f2;
+      /* 横に動かせる並び（.scroller）。次の1枚が右にのぞくので、動かせるとわかる。スクロールは CSS だけ。
+         左右は、画面の端（余白の外）まで伸ばす。ヒーローと、「上達」のセクションで使う */
+      .scroller {
+        display: flex;
+        gap: 16px;
+        margin: 0 -16px 0 -12px;
+        padding: 0 16px 0 12px;
+        overflow-x: auto;
+        scroll-snap-type: x mandatory;
+        scroll-padding-left: 12px;
+        scrollbar-width: none;
       }
-      .shot img {
+      .scroller::-webkit-scrollbar {
+        display: none;
+      }
+      .scroller > * {
+        flex: none;
+        scroll-snap-align: start;
+      }
+      .hero .scroller {
+        margin-top: 20px;
+      }
+      /* ヒーローの画面は、枠なしで 258px */
+      .demo-item {
+        width: 258px;
+        margin: 0;
+      }
+      .demo-item img {
         display: block;
         width: 100%;
         height: auto;
       }
 
-      section.plain {
-        padding: 48px 0;
+      /* ---- 部品 ----
+         セクション（.section）は、見出し（.section-title）・本文（.section-text）・画面写真（.shot）を並べる。
+         セクションごとの個別のスタイルは作らず、部品の組み合わせだけで作る。間隔は、親が子の並びで決める */
+      .section {
+        padding: 32px 0;
         border-top: 1px solid var(--line);
       }
-      .worries {
-        margin: 0;
-        padding-left: 1.2em;
-        font-size: 1.05rem;
+      .section > * + * {
+        margin-top: 20px;
       }
-      .worries li {
-        margin-bottom: 0.4em;
-      }
-      /* 記録の置き場所：何がどこに残るかを、3つに分けて見せる */
-      .places {
-        margin: 0;
-        padding: 0;
-        list-style: none;
-        font-size: 1.05rem;
-      }
-      .places li {
-        margin-bottom: 1em;
-        color: var(--sub);
-        word-break: auto-phrase;
-        text-wrap: pretty;
-      }
-      .places strong {
-        display: block;
+      /* 見出しと補足は、ひとまとまり（.section-head）。補足は見出しのすぐ下に付く */
+      .section-title {
+        font-size: 1.375rem;
+        font-weight: 600;
+        line-height: 1.3333;
+        letter-spacing: 0.15em;
         color: var(--ink);
+        text-wrap: balance;
       }
-
-      .step {
-        display: grid;
-        gap: 24px;
-        justify-items: start;
-        padding: 48px 0;
-        border-top: 1px solid var(--line);
+      .section-title .arrow {
+        font-size: 1.1em;
+        font-weight: 400;
+        color: var(--sub);
       }
-      .step .label {
+      .section-title u {
+        text-decoration-color: var(--sub);
+        text-underline-offset: 3px;
+      }
+      .section-note {
+        margin-top: 6px;
+        font-size: 0.875rem;
+        line-height: 1.5;
+        letter-spacing: 0.06em;
+        color: var(--note);
+      }
+      .section-text {
+        font-size: 1rem;
+        line-height: 2;
+        letter-spacing: 0.06em;
+        line-break: strict;
+        word-break: auto-phrase;
+      }
+      .section-text + .section-text {
+        margin-top: 20px;
+      }
+      /* 広い画面（768px 以上）は、キャッチ以外の文字を、スマホより一回り小さくする（PC は目と画面の距離が近く、同じ大きさだと大きく見えるため）。
+         キャッチは、そのまま 22px */
+      @media (min-width: 768px) {
+        header h1 {
+          font-size: 0.875rem;
+        }
+        .sub,
+        .section-note {
+          font-size: 0.75rem;
+        }
+        .section-title {
+          font-size: 1.5rem;
+          line-height: 1.3333;
+        }
+        .section > * + * {
+          margin-top: 24px;
+        }
+        .section-text {
+          font-size: 1rem;
+          line-height: 2;
+        }
+      }
+      /* 見出しとキャッチの補足は短いので、文節の切れ目（HTML の <wbr>）でだけ折り返す。Safari にも効く。
+         はみ出すほど長いときだけ、語の途中で切る */
+      .sub,
+      .section-title {
+        word-break: keep-all;
+        overflow-wrap: break-word;
+      }
+      .shot {
         display: block;
-        margin-bottom: 4px;
-        color: var(--accent);
-        font-size: 0.95rem;
-        font-weight: 700;
-      }
-      .step p {
+        width: 229px;
         margin: 0;
-        color: var(--sub);
-        font-size: 1.05rem;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        overflow: hidden;
+        background: #faf7f2;
       }
-      .steps-title {
-        padding: 48px 0 0;
-        border-top: 1px solid var(--line);
+      .section > .shot,
+      .section > .scroller {
+        margin-top: 16px;
       }
-      .steps-title h2 {
-        margin: 0;
-      }
-
-
-      /* キャッチは折り返さない（499px）ので、画面（280px）と並べるには、中身の幅が 851px 要る。
-         800〜960px で並べると、iPad の縦向きで横にはみ出すため、並べるのは 960px から */
-      @media (min-width: 960px) {
-        .hero {
-          grid-template-columns: 1fr auto;
-          align-items: center;
-          gap: 72px;
-          padding: 56px 0 96px;
-        }
-      }
-      @media (min-width: 800px) {
-        .hero .catch {
-          font-size: 2.4rem;
-        }
-        .step {
-          grid-template-columns: 1fr auto;
-          align-items: center;
-          gap: 72px;
-        }
-        .step.flip {
-          grid-template-columns: auto 1fr;
-        }
-        .step.flip .shot {
-          order: -1;
-        }
+      .shot img,
+      .shot video {
+        display: block;
+        width: 100%;
+        height: auto;
       }
 
-      .en {
-        margin-top: 8px;
-        padding-top: 24px;
-        border-top: 1px solid var(--line);
-        color: var(--sub);
-        font-size: 0.95rem;
-        max-width: 560px;
-      }
-      .contact {
-        margin: 40px 0 0;
-        color: var(--sub);
-        font-size: 0.9rem;
-      }
-      nav {
+      /* フッターは、画面全体（左右の余白を含む幅）の中央に置く */
+      footer {
         display: flex;
-        flex-wrap: wrap;
-        gap: 4px 24px;
-        margin: 16px 0 0;
-        padding-bottom: 64px;
-        font-size: 0.95rem;
+        flex-direction: column;
+        align-items: center;
+        padding-top: 33px;
+        text-align: center;
+      }
+      /* リンクは、狭い幅では2列の格子（2×2）にして、行ごとの個数がそろうようにする。
+         折り返しに任せると、3つ＋1つのように不ぞろいになる。4つが1行に入る幅（520px 以上）では、1行に並べる */
+      footer nav {
+        display: grid;
+        width: fit-content;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px 12px;
+        font-size: 0.75rem;
+        line-height: 1.6;
+        letter-spacing: 0.06em;
+      }
+      @media (min-width: 520px) {
+        footer nav {
+          display: flex;
+          justify-content: center;
+          gap: 4px 24px;
+        }
+      }
+      footer a {
+        color: var(--link);
+      }
+      footer .copy {
+        margin-top: 32px;
+        font-size: 0.75rem;
+        line-height: 1.5;
+        letter-spacing: 0.08em;
+        color: var(--note);
+      }
+      @media (min-width: 768px) {
+        footer nav,
+        footer .copy {
+          font-size: 0.6875rem;
+        }
       }
     </style>
   </head>
   <body>
-    <header>
-      <img src="/icon.png" width="36" height="36" alt="" />
-      <h1>ラテ帳</h1>
-      <a href="https://makim0939.github.io/michishirube/">Web 版（お試し）</a>
-    </header>
+    <div class="page">
+      <header>
+        <img src="/icon.png" width="48" height="48" alt="lattecho-logo" />
+        <h1>ラテ帳</h1>
+      </header>
 
-    <main>
-      <section class="hero">
-        <div>
-          <p class="catch"><span>ラテアートの練習を、</span><span>動画と写真で記録するアプリ</span></p>
-          <p class="sub">1杯ずつ撮って、◎△✕と次の一手をメモ。最初の1杯と並べれば、上達が目で見えます。</p>
-          <p class="coming">iPhone 版は、準備中です。</p>
-          <p class="note">それまでは、<a href="https://makim0939.github.io/michishirube/">Web 版</a>でお試しいただけます（お試し用です）。</p>
+      <main>
+        <div class="hero">
+          <h2 class="catch">動画<span class="s2">と</span>写真<span class="s2">で、</span><br />毎日の<span class="accent">ラテアート</span>を記録しよう。</h2>
+          <p class="sub">成功／失敗と、次の一手をメモ。<br />かんたんな<wbr />ステップで<wbr />記録でき、<wbr />次の<wbr />一杯で<wbr />改善できます。</p>
+
+          <!-- 記録のデモ動画／上達が見えるデモ動画。動画ができたら、<img> を <video muted playsinline loop autoplay> に替える -->
+          <div class="scroller" role="region" aria-label="ラテ帳の画面" tabindex="0">
+            <figure class="demo-item">
+              <img src="/img/today.webp" width="780" height="1272" alt="ラテ帳の「今日」の画面。最新の1杯の写真と、練習中の型、次の一手、「記録する」ボタン" />
+            </figure>
+            <figure class="demo-item">
+              <img src="/img/compare.webp" width="780" height="1272" alt="型の画面。直近の結果の点と、最新と最初のラテアートの写真が並ぶ" loading="lazy" decoding="async" />
+            </figure>
+          </div>
         </div>
-        <figure class="shot">
-          <img src="/img/today.webp" width="780" height="1272" alt="ラテ帳の「今日」の画面。最新の1杯の写真と、練習中の型、次の一手、「記録する」ボタン" />
-        </figure>
-      </section>
 
-      <section class="plain">
-        <h2>こんなときに</h2>
-        <ul class="worries">
-          <li>練習しているのに、上達した実感がない</li>
-          <li>うまくいった理由、いかなかった理由を、次の日には忘れている</li>
-          <li>動画や写真が、スマホの中に散らばっている</li>
-        </ul>
-      </section>
+        <section class="section">
+          <h2 class="section-title">動画で自分の注ぎ方を確認できます</h2>
+          <p class="section-text">ラテアートって一瞬の出来事で、うまくできなかった原因を見つけるのがとても難しいですよね。</p>
+          <p class="section-text">なので、動画を撮ってあとから見返せるようにしました。野球で素振りのフォームを撮るようなものですね。</p>
+          <p class="section-text">気づいたことは「次の一手」としてメモすると、次に動画を撮るときに表示されます。</p>
+          <figure class="shot">
+            <img src="/img/review.webp" width="780" height="695" alt="記録の画面。成功・惜しい・失敗の選択、原因のタグ、次の一手の入力欄" loading="lazy" decoding="async" />
+          </figure>
+        </section>
 
-      <div class="steps-title">
-        <h2>使い方は、3ステップ</h2>
-      </div>
+        <section class="section">
+          <div class="section-head">
+            <h2 class="section-title">動画は容量が...<span class="arrow">→</span><u>問題ありません！</u></h2>
+            <p class="section-note">開発者自身、iPhoneの容量は64GBです（笑）</p>
+          </div>
+          <p class="section-text">動画の保存場所は スマホ と YouTube（限定公開）が選べます。YouTubeを選べば、スマホの容量は取りません。</p>
+          <p class="section-text">写真アプリに、練習記録が散らばることはもうありません。アプリの中で見やすく整理されます。</p>
+          <figure class="shot">
+            <img src="/img/cups.webp" width="780" height="1272" alt="カップ帳の画面。1杯ずつの写真に、番号と◎△✕が付いて並ぶ" loading="lazy" decoding="async" />
+          </figure>
+        </section>
 
-      <section class="step">
-        <div>
-          <span class="label">1. 撮る</span>
-          <h3>動画と写真で、1杯ずつ撮る。</h3>
-          <p>「記録する」を押すと、すぐカメラが開きます。注ぐ様子を動画で、できあがりを写真で。撮った1杯は、カップ帳に番号つきで並びます。</p>
-        </div>
-        <figure class="shot">
-          <img src="/img/cups.webp" width="780" height="1272" alt="カップ帳の画面。1杯ずつの写真に、番号と◎△✕が付いて並ぶ" loading="lazy" decoding="async" />
-        </figure>
-      </section>
+        <section class="section">
+          <h2 class="section-title">上達が目に見えて、うれしくなります</h2>
+          <p class="section-text">記録した動画と写真は、アプリ内に並べられるので上達を見て感じることができます。</p>
+          <div class="scroller" role="region" aria-label="ラテ帳の画面" tabindex="0">
+            <figure class="shot">
+              <img src="/img/compare.webp" width="780" height="1272" alt="型の画面。直近の結果の点と、最新と最初のラテアートの写真が並ぶ" loading="lazy" decoding="async" />
+            </figure>
+            <figure class="shot">
+              <video src="/img/home.mp4" poster="/img/home-poster.webp" width="540" height="882" muted playsinline loop autoplay preload="metadata" aria-label="ホームの画面。撮ってきた1杯を、横にめくって見返す"></video>
+            </figure>
+          </div>
+        </section>
 
-      <section class="step flip">
-        <div>
-          <span class="label">2. ふり返る</span>
-          <h3>◎△✕と原因を、タップで選ぶ。</h3>
-          <p>成功・惜しい・失敗を選んで、原因（注ぐ高さ、流量、振りなど）をタップ。次の一手をひとこと書いておけば、記録は終わりです。メモは書きたいときだけで大丈夫です。</p>
-        </div>
-        <figure class="shot">
-          <img src="/img/review.webp" width="780" height="695" alt="記録の画面。成功・惜しい・失敗の選択、原因のタグ、次の一手の入力欄" loading="lazy" decoding="async" />
-        </figure>
-      </section>
+        <section class="section">
+          <p class="section-text">個人的に欲しくて作ったアプリですが、ラテアート練習中の同志は是非試してみてください。</p>
+          <p class="section-text">最後までご覧いただきまして、ありがとうございます。</p>
+        </section>
+      </main>
 
-      <section class="step">
-        <div>
-          <span class="label">3. 見くらべる</span>
-          <h3>最初の1杯と、最新の1杯を並べる。</h3>
-          <p>型ごとに、動画でも写真でも並べて見られます。直近10杯の結果は、色のついた点で並びます。</p>
-        </div>
-        <figure class="shot">
-          <img src="/img/compare.webp" width="780" height="1272" alt="型の画面。直近の結果の点と、最新と最初のラテアートの写真が並ぶ" loading="lazy" decoding="async" />
-        </figure>
-      </section>
-
-      <section class="step flip">
-        <div>
-          <span class="label">次の1杯へ</span>
-          <h3>次の一手が、撮る前に出る。</h3>
-          <p>前回の次の一手は、次に撮るときカメラの上に表示されます。つまずきやすいところは、記録から自動でまとめます。</p>
-        </div>
-        <figure class="shot">
-          <img src="/img/tips.webp" width="780" height="1272" alt="自分のコツの画面。いま意識していることと、つまずきやすいところ" loading="lazy" decoding="async" />
-        </figure>
-      </section>
-
-      <section class="step">
-        <div>
-          <span class="label">型ごとに</span>
-          <h3>型ごとに、練習を分ける。</h3>
-          <p>ハート、ロゼッタ、チューリップなど、図柄（型）ごとに記録をまとめます。型はおすすめの順につながっていて、どの型からでも始められます。</p>
-        </div>
-        <figure class="shot">
-          <img src="/img/types.webp" width="780" height="860" alt="型の一覧。練習中のロゼッタとハートの、記録数と直近の結果の点" loading="lazy" decoding="async" />
-        </figure>
-      </section>
-
-      <section class="plain">
-        <h2>記録の置き場所</h2>
-        <ul class="places">
-          <li><strong>はじめは、端末の中だけ。</strong>記録・写真・動画は、この端末にだけ保存します。</li>
-          <li>
-            <strong>Google でログインすると、別の端末でも。</strong>記録と、縮小した写真・動画のサムネイルを、機種を変えても使えます。動画の本体は、サーバーに置きません。
-          </li>
-          <li>
-            <strong>動画の保存先は、YouTube にもできます。</strong>自分の YouTube チャンネルに上げるので、スマホの容量を使わず、機種を変えても見られます。標準は限定公開（URL を知っている人だけが見られます）。連携するときだけ、アップロードの許可をお願いします。
-          </li>
-        </ul>
-      </section>
-
-      <section lang="en" class="en">
-        <p>
-          Latte-chō (ラテ帳) is a practice journal for latte art. You record each cup with a photo and a short video, mark how it went, and look back to improve your next cup.
-        </p>
-        <p>
-          Records stay on your device by default. If you sign in with Google, you can use the same records on other devices. If you link YouTube, your practice videos can be uploaded to your own YouTube channel (unlisted by default) using the YouTube upload permission, which the app requests only when you link YouTube.
-        </p>
-      </section>
-    </main>
-
-    <footer>
-      <p class="contact">アプリの「設定 → ご意見・ご要望」からも送れます。GitHub への投稿は公開されるので、個人情報は書かないでください。</p>
-      <nav>
-        <a href="https://makim0939.github.io/michishirube/">Web 版（お試し）</a>
-        <a href="/privacy">プライバシーポリシー</a>
-        <a href="/privacy-en">Privacy Policy (English)</a>
-        <a href="https://github.com/makim0939/michishirube/issues">お問い合わせ（GitHub）</a>
-      </nav>
-    </footer>
+      <footer>
+        <nav>
+          <a href="https://makim0939.github.io/michishirube/">Web版（お試し）</a>
+          <a href="https://www.makimura.me">makimura.me</a>
+          <a href="/privacy">プライバシーポリシー</a>
+          <a href="https://github.com/makim0939/michishirube/issues">お問い合わせ</a>
+        </nav>
+        <p class="copy">© 2026 Soma Makimura</p>
+      </footer>
+    </div>
+    <script>
+      // 動きを減らす設定の人には、動画を自動で再生しない（操作で再生できるようにする）
+      if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        document.querySelectorAll('video').forEach((v) => {
+          v.removeAttribute('autoplay')
+          v.pause()
+          v.controls = true
+        })
+      }
+    </script>
   </body>
 </html>

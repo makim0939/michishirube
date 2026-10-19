@@ -28,17 +28,23 @@ describe('アプリのトップページ（サーバーと同じドメインで�
     expect(read('../worker/site/privacy-en.html')).toContain('Limited Use')
   })
 
-  it('トップページに、英語の説明と、英語のプライバシーポリシーへのリンクがある', () => {
-    const html = read('../worker/site/index.html')
-    expect(html).toContain('lang="en"')
+  // 英語の説明は、トップページではなく、英語版のページ（/en）に置く
+  it('英語版のページ（/en）に、英語の説明と、英語のプライバシーポリシーへのリンクがある', () => {
+    const html = read('../worker/site/en.html')
+    expect(html).toContain('<html lang="en">')
+    expect(html).toContain('YouTube upload permission')
     expect(html).toContain('href="/privacy-en"')
+  })
+
+  it('トップページから、英語版のページ（/en）が見つかる', () => {
+    expect(read('../worker/site/index.html')).toContain('hreflang="en" href="https://latte.makimura.me/en"')
   })
 })
 
 describe('トップページの紹介（アプリの画面）', () => {
   it('ページが読み込む画像と、アプリへのリンクがそろっている', () => {
     const html = read('../worker/site/index.html')
-    const images = [...html.matchAll(/src="\/(img\/[\w-]+\.webp)"/g)].map((m) => m[1])
+    const images = [...html.matchAll(/(?:src|poster)="\/(img\/[\w-]+\.(?:webp|mp4))"/g)].map((m) => m[1])
     expect(images.length).toBeGreaterThan(0)
     for (const path of images) expect(() => read(`../worker/site/${path}`)).not.toThrow()
     expect(html).toContain('href="https://makim0939.github.io/michishirube/"')
