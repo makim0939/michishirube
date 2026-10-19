@@ -206,18 +206,24 @@
       .section-text + .section-text {
         margin-top: 20px;
       }
-      /* 広い画面（md：768px 以上）は、makimura.me と同じく、本文 18px・見出し 30px */
       @media (min-width: 768px) {
+        header h1 {
+          font-size: 0.875rem;
+        }
+        .sub,
+        .section-note {
+          font-size: 0.75rem;
+        }
         .section-title {
-          font-size: 1.875rem;
-          line-height: 1.2;
+          font-size: 1.5rem;
+          line-height: 1.3333;
         }
         .section > * + * {
-          margin-top: 30px;
+          margin-top: 24px;
         }
         .section-text {
-          font-size: 1.125rem;
-          line-height: 2.2222;
+          font-size: 1rem;
+          line-height: 2;
         }
       }
       /* 見出しとキャッチの補足は短いので、文節の切れ目（HTML の <wbr>）でだけ折り返す。Safari にも効く。
@@ -271,6 +277,12 @@
         line-height: 1.5;
         letter-spacing: 0.08em;
         color: var(--note);
+      }
+      @media (min-width: 768px) {
+        footer nav,
+        footer .copy {
+          font-size: 0.6875rem;
+        }
       }
     </style>
   </head>
@@ -342,6 +354,7 @@
         <nav>
           <a href="https://makim0939.github.io/michishirube/">Web版（お試し）</a>
           <a href="/privacy">プライバシーポリシー</a>
+          <a href="https://www.makimura.me">開発者のホームページ</a>
           <a href="https://github.com/makim0939/michishirube/issues">お問い合わせ</a>
         </nav>
         <p class="copy">© 2026 Soma Makimura</p>
