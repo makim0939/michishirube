@@ -512,12 +512,15 @@ ul {
   z-index: 20;
   display: flex;
   align-items: flex-end;
+  /* iPad など広い画面では、シートを本文（.main）と同じ最大幅で中央に寄せる */
+  justify-content: center;
   background: rgb(30 20 12 / 35%);
   animation: fade-in 0.15s ease-out;
 }
 
 .picker-sheet {
   width: 100%;
+  max-width: 680px;
   max-height: 72vh;
   display: flex;
   flex-direction: column;
