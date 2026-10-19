@@ -34,11 +34,14 @@ ImageDraw.Draw(im).rounded_rectangle((0, 0, 87, 87), radius=20, fill=255)
 img.paste(icon, (80, 96), im)
 d.text((190, 118), 'ラテ帳', font=name, fill=INK)
 
+TEXT_RIGHT = 790  # 右の画面（x=810〜）に重ならない右端（画面との間に 20px）
+
 def line(x, baseline, parts):
     # 同じ行に、大きさ・色の違う字を並べる（ベースラインをそろえる）
     for text, font, fill in parts:
         d.text((x, baseline), text, font=font, fill=fill, anchor='ls')
         x += d.textlength(text, font=font)
+    assert x <= TEXT_RIGHT, f'文字が右の画面に重なる（右端 {x:.0f}px）：{parts[0][0]}…'
 
 # キャッチ：「と」「で、」は、名詞（動画・写真）より小さく。「ラテアート」は茶色
 line(80, 330, [('動画', bold, INK), ('と', small, INK), ('写真', bold, INK), ('で、', small, INK)])
