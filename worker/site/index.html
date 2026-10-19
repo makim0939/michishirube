@@ -257,7 +257,9 @@
 
       /* フッターは、画面全体（左右の余白を含む幅）の中央に置く */
       footer {
-        margin: 0 -16px 0 -12px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
         padding-top: 33px;
         text-align: center;
       }
@@ -265,6 +267,7 @@
          折り返しに任せると、3つ＋1つのように不ぞろいになる。4つが1行に入る幅（520px 以上）では、1行に並べる */
       footer nav {
         display: grid;
+        width: fit-content;
         grid-template-columns: repeat(2, 1fr);
         gap: 8px 12px;
         font-size: 0.75rem;
