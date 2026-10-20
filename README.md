@@ -18,7 +18,7 @@
 
 ## iOS アプリ（準備中）
 
-App Store で配るため、同じ画面を Capacitor で iOS アプリに入れています（Android はこのあと）。
+App Store で配るため、同じ画面を Capacitor で iOS アプリに入れています（提出の手順は [docs/app-store-submission.md](docs/app-store-submission.md)）。
 
 ```bash
 pnpm install
@@ -29,6 +29,19 @@ pnpm app:ios     # 作って Xcode で開く（Xcode から実機・シミュレ
 - 最新にするには、`git pull` して Xcode で実行するだけです。実行のたびに画面を作り直して入れます（`ios/App/scripts/build-web.sh`）。プラグインを足したときだけ `pnpm app:build` が要ります。画面を変えていないときに飛ばしたいなら、Xcode のスキームの環境変数に `SKIP_WEB_BUILD=1` を入れます。
 - アプリ用の作りでは、画面のファイルを相対パスで読み、Web 版のオフライン用の仕組み（サービスワーカー）は入れません。
 - カメラ・マイク・写真の許可の説明は `ios/App/App/Info.plist` にあります。
+
+## Android アプリ（準備中）
+
+iOS と同じ画面を、Capacitor で Android アプリに入れています。Google Play への提出の準備を進めています（手順は [docs/play-store-submission.md](docs/play-store-submission.md)）。
+
+```bash
+pnpm app:build                         # アプリ用に作って android/ へ入れる
+cd android && ./gradlew assembleDebug  # 確認用の APK を作る（JDK 21 が要る）
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+- Google Play に上げる署名つきの AAB は、`./gradlew bundleRelease -PrequireSigning`（鍵は `android/keystore.properties` に置く。git には入れない）。
+- エミュレーターには H.264 のエンコーダーが無く、録画は WebM になります。録画まわりは、実機で確かめます。
 
 ## 使い方
 
