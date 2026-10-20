@@ -26,4 +26,7 @@ iOS の `MARKETING_VERSION`（`ios/App/App.xcodeproj/project.pbxproj`。Debug・
 1. 上の表で、次の版を決める。
 2. `package.json`・iOS・Android の版と、ビルド番号を上げる PR を出して、マージする。
 3. 提出手順（`docs/app-store-submission.md`）に進む。
-4. ストアに出したら、`git tag v<版>`（例 `v1.1.0`）を、そのコミットに付ける。
+4. ストアに出したら、`git tag v<版>`（例 `v1.1.0`）を、審査に出したコミットに付けて push する。
+
+### 1.0 のタグ
+1.0 は、審査に出したコミットの `package.json` が 0.2.0 だったので、`v1.0.0` は付けず、`v1.0-build2`（注釈付き。ビルド番号 2 で提出）にしている。`v<版>` の方式は、1.1.0 以降に使う。

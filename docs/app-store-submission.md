@@ -199,6 +199,8 @@ Contact: makim0939@gmail.com
 2. Xcode で `ios/App/App.xcworkspace` を開く（または `pnpm app:ios`）。
 3. Signing & Capabilities：Team を有料のチームにする。Bundle Identifier を確認する。
 4. バージョン（`MARKETING_VERSION`。版の決め方は `docs/versioning.md`）とビルド番号（`CURRENT_PROJECT_VERSION`）。**アップロードのたびに、ビルド番号を上げる**。
+   - 上げる前に、App Store Connect の TestFlight で、**最後に送ったビルド番号を確かめる**。リポジトリの値（ふだんは 1）は、手元で上げた番号とずれていることがある（1.0 の提出で送った 2 は、コミットしていない手元の変更だった）。
+   - 確かめた番号より 1 つ大きい値にしてから、Archive する。送ったあとの番号は、リリースの PR で、リポジトリにも反映する。
 5. 書き出しの暗号化：`Info.plist` に `ITSAppUsesNonExemptEncryption = NO`（HTTPS だけなら、免除）を入れると、アップロードのたびの質問が、出なくなる。
 6. 実機かシミュレーターで、最後の動作確認：撮る → 編集 → 保存 → 共有 → アップ。
 7. Product > Destination を「Any iOS Device (arm64)」にして、Product > Archive。Organizer で「Distribute App」→「App Store Connect」→ アップロード。
