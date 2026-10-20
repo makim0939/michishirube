@@ -471,7 +471,7 @@ export function TodayScreen() {
               <span className="muted small">
                 {/* 週の初め（まだ0杯）は、数を出さない */}
                 {data.thisWeek > 0 && <>今週 {data.thisWeek}杯 · </>}
-                <a href={href('/records')}>カップ帳</a>
+                <a href={href('/records')}>ラテ帳</a>
               </span>
             </div>
             <div className="practice-list">
