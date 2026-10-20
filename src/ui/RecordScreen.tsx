@@ -18,6 +18,7 @@ import { backHandler, go, goBack, href } from './router'
 import { readStorage, removeStorage, writeStorage } from './storage'
 import { SkillPicker } from './SkillPicker'
 import { Trimmer } from './Trimmer'
+import { recordBackAction } from './recordBack'
 import { useBackHandler } from './useBackHandler'
 import { patternFor } from './world'
 import { BackIcon, CameraIcon, ChevronDownIcon, PhotoIcon, PlusIcon, ScissorsIcon, VideoIcon } from './icons'
@@ -210,11 +211,10 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
   // Android の「戻る」（ボタン・端からのスワイプ）も、画面の「<」と同じく確認を通す。
   // 確認が出ているときの「戻る」は、確認を閉じて続ける。カメラ・編集・型の選択は、それぞれが先に受け止める
   useBackHandler(() => {
-    if (confirmLeave) {
-      setConfirmLeave(null)
-      return true
-    }
-    return askBeforeLeaving()
+    const action = recordBackAction({ saving, confirming: !!confirmLeave, unsaved })
+    if (action === 'closeConfirm') setConfirmLeave(null)
+    if (action === 'askConfirm') setConfirmLeave({ back: true })
+    return action !== 'leave'
   })
 
   if (!data || !loaded) return missing ? <Empty>記録が見つかりません。</Empty> : null

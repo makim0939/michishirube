@@ -3,6 +3,7 @@ import type { Skill } from '../domain/types'
 import { splitName } from './common'
 import { go } from './router'
 import { patternFor, patternUrl } from './world'
+import { useBackHandler } from './useBackHandler'
 
 // ---- トースト ----
 
@@ -74,6 +75,11 @@ function CelebrationOverlay({
       window.removeEventListener('keydown', onKey)
     }
   }, [onClose])
+  // Android の「戻る」は、お祝いを閉じるだけ（画面ごと戻らない）。閉じ方は、画面を移ったときと同じ
+  useBackHandler(() => {
+    onClose()
+    return true
+  })
   const pieces = useMemo(
     () =>
       Array.from({ length: 36 }, (_, i) => ({
