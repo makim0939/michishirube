@@ -1,4 +1,6 @@
 :root {
+  /* 本文・タブバー・シートが揃える中央の列の最大幅 */
+  --column-w: 680px;
   /* 窓辺のラテ工房：ミルク・エスプレッソ・クレマ・オーク・影 */
   --bg: #faf7f2;
   --surface: #ffffff;
@@ -75,7 +77,7 @@ ul {
 }
 
 .main {
-  max-width: 680px;
+  max-width: var(--column-w);
   margin: 0 auto;
   padding: calc(env(safe-area-inset-top, 0px) + 12px) 16px calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px) + 24px);
 }
@@ -559,12 +561,15 @@ ul {
   z-index: 20;
   display: flex;
   align-items: flex-end;
+  /* iPad など広い画面では、シートを本文（.main）と同じ最大幅で中央に寄せる */
+  justify-content: center;
   background: rgb(30 20 12 / 35%);
   animation: fade-in 0.15s ease-out;
 }
 
 .picker-sheet {
   width: 100%;
+  max-width: var(--column-w);
   max-height: 72vh;
   display: flex;
   flex-direction: column;
@@ -1082,7 +1087,7 @@ select:focus {
   height: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px));
   padding-bottom: env(safe-area-inset-bottom, 0px);
   /* 背景と上線は全幅のまま、4つのタブの並びだけ本文（.main）と同じ最大幅に寄せる */
-  padding-inline: max(0px, calc((100% - 680px) / 2));
+  padding-inline: max(0px, calc((100% - var(--column-w)) / 2));
   background: color-mix(in srgb, var(--surface) 92%, transparent);
   backdrop-filter: blur(12px);
   border-top: 1px solid var(--border);
