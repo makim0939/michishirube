@@ -18,6 +18,16 @@ public class SignInWithApplePlugin: CAPPlugin, CAPBridgedPlugin, ASAuthorization
     private var controller: ASAuthorizationController?
 
     @objc func authorize(_ call: CAPPluginCall) {
+        // 同時に 2 つは扱わない（後から来た呼び出しで、先の呼び出しの結果を失わないように）
+        if pending != nil {
+            call.reject("サインインを処理中です。しばらく待ってから、もう一度押してください")
+            return
+        }
+        // 認証の画面は、画面に接続されている窓に出す。窓が無いときは、始めずにエラーにする
+        guard anchorWindow() != nil else {
+            call.reject("画面が見つからないため、Apple の認証を始められませんでした")
+            return
+        }
         let request = ASAuthorizationAppleIDProvider().createRequest()
         // 名前とメールだけを求める（広告には使わない。メールを隠す選択もできる）
         request.requestedScopes = [.fullName, .email]
@@ -35,7 +45,17 @@ public class SignInWithApplePlugin: CAPPlugin, CAPBridgedPlugin, ASAuthorization
     }
 
     public func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
-        bridge?.webView?.window ?? UIWindow()
+        // 上の authorize で、窓があることを確かめてから呼ばれるので、通常は nil にならない
+        anchorWindow() ?? UIWindow()
+    }
+
+    /// 画面に接続されている窓（WebView の窓、無ければキーの窓）
+    private func anchorWindow() -> UIWindow? {
+        if let window = bridge?.webView?.window { return window }
+        return UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap { $0.windows }
+            .first { $0.isKeyWindow }
     }
 
     public func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
@@ -56,9 +76,6 @@ public class SignInWithApplePlugin: CAPPlugin, CAPBridgedPlugin, ASAuthorization
         response["email"] = credential.email ?? NSNull()
         response["givenName"] = credential.fullName?.givenName ?? NSNull()
         response["familyName"] = credential.fullName?.familyName ?? NSNull()
-        if let code = credential.authorizationCode, let text = String(data: code, encoding: .utf8) {
-            response["authorizationCode"] = text
-        }
         call.resolve(["response": response])
     }
 

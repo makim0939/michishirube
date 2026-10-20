@@ -219,6 +219,11 @@ interface SignInWithApplePlugin {
 }
 const SignInWithApple = registerPlugin<SignInWithApplePlugin>('SignInWithApple')
 
+/** Apple の画面を閉じたときの取り消しか（エラーの番号は 1001。ほかの失敗とは分けて、エラーにしない） */
+export function isAppleCancelled(e: unknown): boolean {
+  return typeof e === 'object' && e !== null && (e as { code?: unknown }).code === '1001'
+}
+
 /** nonce（使い捨ての値）。Apple には、その SHA-256 を渡し、サーバーには元の値を送って、照らし合わせてもらう */
 function randomNonce(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(24))
@@ -239,7 +244,7 @@ export async function loginWithApple(): Promise<{ firstDevice: boolean } | null>
     appleEmail = response.email
   } catch (e) {
     // 途中で閉じたときは、エラーにしない（Apple の画面の取り消し。エラーの番号は 1001）
-    if ((e as { code?: string }).code === '1001') return null
+    if (isAppleCancelled(e)) return null
     // どこで失敗したかが分かるよう、Apple の認証の段階の理由をそのまま出す
     throw new SyncError(`Apple の認証でエラーになりました（${e instanceof Error ? e.message : String(e)}）`)
   }
