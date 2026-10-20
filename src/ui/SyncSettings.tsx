@@ -5,6 +5,7 @@ import {
   deleteAccount,
   isLoggedIn,
   isOurServer,
+  loginWithApple,
   loginWithGoogle,
   logout,
   resumeWebAuth,
@@ -18,7 +19,7 @@ import { ConfirmButton, formatAgo, formatBytes } from './common'
 import { PHOTO_QUOTA_BYTES } from '../../shared/protocol'
 import { useAction, useToast } from './feedback'
 import { replace } from './router'
-import { PRIVACY_URL, YOUTUBE_TERMS_URL } from '../platform'
+import { isIosApp, PRIVACY_URL, YOUTUBE_TERMS_URL } from '../platform'
 import { AlertIcon, CheckIcon } from './icons'
 
 /** ログインしたあとのトースト。アプリの中で終えたときと、Web 版で Google の画面から戻ったときで、同じ文言にする */
@@ -52,10 +53,17 @@ function LoginSection({ legacy }: { legacy: boolean }) {
   const run = useAction()
   const toast = useToast()
   const [busy, setBusy] = useState(false)
+  // ログインの方法は、同じ働きで並べる（iOS では Apple も出す。Apple は、ほかのログインと同じ扱いの方法を用意することが条件）
+  const login = async (method: () => Promise<{ firstDevice: boolean } | null>) => {
+    setBusy(true)
+    const result = await run(method)
+    setBusy(false)
+    if (result) toast.show(loginMessage(result.firstDevice))
+  }
   return (
     <section className="section">
       <div className="stack">
-        <p>Google でログインすると、記録と写真をほかの端末でも使えます。機種を変えても、ログインすれば戻ります。</p>
+        <p>{isIosApp ? 'Apple か Google でログインすると' : 'Google でログインすると'}、記録と写真をほかの端末でも使えます。機種を変えても、ログインすれば戻ります。</p>
         <p className="muted small">
           サーバーに置くのは、記録・型・写真（縮小したもの）だけです。動画は、この端末か YouTube に置きます。
           <a href={PRIVACY_URL} target="_blank" rel="noopener noreferrer">
@@ -63,18 +71,12 @@ function LoginSection({ legacy }: { legacy: boolean }) {
           </a>
         </p>
         {legacy && <p className="muted small">前の同期で置いた記録は、ログインすると引き継ぎます。</p>}
-        <button
-          className="btn primary"
-          disabled={busy}
-          onClick={async () => {
-            setBusy(true)
-            const result = await run(() => loginWithGoogle())
-            setBusy(false)
-            if (result) {
-              toast.show(loginMessage(result.firstDevice))
-            }
-          }}
-        >
+        {isIosApp && (
+          <button className="btn primary" disabled={busy} onClick={() => login(loginWithApple)}>
+            {busy ? 'ログインしています…' : 'Apple でサインイン'}
+          </button>
+        )}
+        <button className="btn primary" disabled={busy} onClick={() => login(loginWithGoogle)}>
           {busy ? 'ログインしています…' : 'Google でログイン'}
         </button>
       </div>

@@ -1,6 +1,7 @@
 import { App } from '@capacitor/app'
 import { Browser } from '@capacitor/browser'
-import { isNativeApp } from '../platform'
+import { SignInWithApple } from '@capacitor-community/apple-sign-in'
+import { isNativeApp, SITE_URL } from '../platform'
 import { db } from './db'
 import { connectWithConfig, disconnectSync, getSyncConfig, SyncError, type SyncConfig } from './sync'
 
@@ -209,6 +210,53 @@ export async function completeLogin(result: Extract<AuthResult, { kind: 'login' 
 export async function loginWithGoogle(): Promise<{ firstDevice: boolean } | null> {
   const result = await authorizeWithGoogle('login')
   return result?.kind === 'login' ? completeLogin(result) : null
+}
+
+/** Apple のアプリの Bundle ID（Sign in with Apple の宛先。サーバーの確認と同じ値） */
+const APPLE_CLIENT_ID = 'me.makimura.lattecho.app'
+
+/** nonce（使い捨ての値）。Apple には、その SHA-256 を渡し、サーバーには元の値を送って、照らし合わせてもらう */
+function randomNonce(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(24))
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+async function sha256Hex(text: string): Promise<string> {
+  const bytes = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+/**
+ * Sign in with Apple でログインする（iOS アプリだけ。Google と同じ働きで、同じ記録を使える）。
+ * Apple の画面で認可してもらい、受け取った ID トークンをサーバーで確かめてもらう。取り消したときは null
+ */
+export async function loginWithApple(): Promise<{ firstDevice: boolean } | null> {
+  const nonce = randomNonce()
+  let identityToken: string
+  let appleEmail: string | null
+  try {
+    const { response } = await SignInWithApple.authorize({
+      clientId: APPLE_CLIENT_ID,
+      // iOS のアプリでは使わない（Web 版のための値）
+      redirectURI: SITE_URL,
+      scopes: 'email name',
+      nonce: await sha256Hex(nonce),
+    })
+    identityToken = response.identityToken
+    appleEmail = response.email
+  } catch (e) {
+    // 途中で閉じたときは、エラーにしない（Apple の画面の取り消し。エラーの番号は 1001）
+    if (e instanceof Error && e.message.includes('1001')) return null
+    throw new SyncError('Apple でログインできませんでした')
+  }
+  const res = await fetch(`${SERVER_URL}/api/auth/apple`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ identityToken, nonce }),
+  })
+  if (!res.ok) throw new SyncError('Apple でログインできませんでした', res.status)
+  const { session, email } = (await res.json()) as { session: string; email?: string }
+  return completeLogin({ kind: 'login', session, email: email ?? appleEmail ?? undefined })
 }
 
 /** つながりを切り、この端末の YouTube の鍵を消す（写真をサーバーに置いた印は、次にログインしたときに見直す） */
