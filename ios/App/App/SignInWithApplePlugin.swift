@@ -18,6 +18,14 @@ public class SignInWithApplePlugin: CAPPlugin, CAPBridgedPlugin, ASAuthorization
     private var controller: ASAuthorizationController?
 
     @objc func authorize(_ call: CAPPluginCall) {
+        // Capacitor は、プラグインの呼び出しをメインスレッド以外で行う。
+        // 窓（UIKit）の参照と、認証の開始・状態の変更は、メインスレッドで行う（Apple の画面の結果も、メインスレッドで返る）
+        DispatchQueue.main.async { [self] in
+            startAuthorization(call)
+        }
+    }
+
+    private func startAuthorization(_ call: CAPPluginCall) {
         // 同時に 2 つは扱わない（後から来た呼び出しで、先の呼び出しの結果を失わないように）
         if pending != nil {
             call.reject("サインインを処理中です。しばらく待ってから、もう一度押してください")
