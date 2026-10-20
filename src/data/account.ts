@@ -2,6 +2,7 @@ import { App } from '@capacitor/app'
 import { Browser } from '@capacitor/browser'
 import { SignInWithApple } from '@capacitor-community/apple-sign-in'
 import { isNativeApp, SITE_URL } from '../platform'
+import { sha256Hex } from '../../shared/hash'
 import { db } from './db'
 import { connectWithConfig, disconnectSync, getSyncConfig, SyncError, type SyncConfig } from './sync'
 
@@ -218,11 +219,6 @@ const APPLE_CLIENT_ID = 'me.makimura.lattecho.app'
 /** nonce（使い捨ての値）。Apple には、その SHA-256 を渡し、サーバーには元の値を送って、照らし合わせてもらう */
 function randomNonce(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(24))
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
-}
-
-async function sha256Hex(text: string): Promise<string> {
-  const bytes = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
 }
 

@@ -1,5 +1,6 @@
-import { beforeAll, describe, expect, it } from 'vitest'
-import { APPLE_AUDIENCE, APPLE_ISSUER, AppleTokenInvalid, sha256Hex, verifyAppleIdToken } from './apple'
+import { beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { sha256Hex } from '../../shared/hash'
+import { APPLE_AUDIENCE, APPLE_ISSUER, AppleTokenInvalid, AppleUnavailable, resetAppleKeysCache, verifyAppleIdToken } from './apple'
 
 const enc = (value: unknown) => btoa(JSON.stringify(value)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 const NOW = 1_800_000_000_000
@@ -45,6 +46,8 @@ beforeAll(async () => {
 })
 
 describe('Sign in with Apple の ID トークン', () => {
+  beforeEach(() => resetAppleKeysCache())
+
   it('正しいトークンなら、Apple のユーザーの番号を返す', async () => {
     const token = await signToken({ email: 'user@privaterelay.appleid.com' })
     const id = await verifyAppleIdToken(token, NONCE, { now: NOW, fetchImpl: fetchKeys })
@@ -84,5 +87,40 @@ describe('Sign in with Apple の ID トークン', () => {
 
   it('形が違うものは受け取らない', async () => {
     await expect(verifyAppleIdToken('not-a-token', NONCE, { now: NOW, fetchImpl: fetchKeys })).rejects.toThrow('形')
+  })
+
+  it('形の壊れたトークンは、サーバーの不具合（500）ではなく、不正（AppleTokenInvalid）として扱う', async () => {
+    await expect(verifyAppleIdToken('!!!.@@@.###', NONCE, { now: NOW, fetchImpl: fetchKeys })).rejects.toBeInstanceOf(AppleTokenInvalid)
+  })
+
+  it('鍵が入れ替わったら、Apple から新しい鍵を取り直して確かめる', async () => {
+    // 最初は古い鍵だけを持っている
+    const first = await verifyAppleIdToken(await signToken({}), NONCE, { now: NOW, fetchImpl: fetchKeys })
+    expect(first.sub).toBe('001234.abcdef.0001')
+    // Apple が新しい鍵（kid が違う）で署名したトークン。1 分以上たってから来る
+    const other = await newRsaPair()
+    const newJwk = { ...((await crypto.subtle.exportKey('jwk', other.publicKey)) as JsonWebKey), kid: 'rotated-key' }
+    const rotatedFetch = (async () => new Response(JSON.stringify({ keys: [newJwk] }))) as unknown as typeof fetch
+    const token = await signToken({ sub: 'rotated-user' }, { kid: 'rotated-key', key: other.privateKey })
+    const id = await verifyAppleIdToken(token, NONCE, { now: NOW + 120_000, fetchImpl: rotatedFetch })
+    expect(id.sub).toBe('rotated-user')
+  })
+
+  it('知らない kid が続いても、Apple への再取得は 1 分に 1 回まで', async () => {
+    let calls = 0
+    const counting = (async () => {
+      calls++
+      return new Response(JSON.stringify({ keys: [jwk] }))
+    }) as unknown as typeof fetch
+    await verifyAppleIdToken(await signToken({}), NONCE, { now: NOW, fetchImpl: counting })
+    expect(calls).toBe(1)
+    const unknown = await signToken({}, { kid: 'no-such-key' })
+    await expect(verifyAppleIdToken(unknown, NONCE, { now: NOW + 10_000, fetchImpl: counting })).rejects.toThrow('署名の鍵')
+    expect(calls).toBe(1)
+  })
+
+  it('Apple の公開鍵が取れないときは、トークンの不正ではなく AppleUnavailable にする', async () => {
+    const down = (async () => new Response('error', { status: 500 })) as unknown as typeof fetch
+    await expect(verifyAppleIdToken(await signToken({}), NONCE, { now: NOW, fetchImpl: down })).rejects.toBeInstanceOf(AppleUnavailable)
   })
 })

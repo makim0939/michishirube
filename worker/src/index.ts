@@ -18,7 +18,7 @@ import {
   userForSession,
   type AuthKind,
 } from './accounts'
-import { AppleTokenInvalid, verifyAppleIdToken } from './apple'
+import { AppleTokenInvalid, AppleUnavailable, verifyAppleIdToken } from './apple'
 import { bearerToken, isAllowedAppScheme, isAllowedReturn, LEGACY_APP_SCHEME, parseOrigins, safeEqual, signState, verifyState } from './auth'
 import { notifyFeedback, parseFeedback, saveFeedback, tooManyFeedbacks, type FeedbackMailEnv } from './feedback'
 import { resultPage } from './resultPage'
@@ -209,6 +209,8 @@ app.post('/api/auth/apple', async (c) => {
     identity = await verifyAppleIdToken(identityToken, nonce)
   } catch (e) {
     if (e instanceof AppleTokenInvalid) return c.json({ error: 'invalid_token', message: e.message }, 401)
+    // Apple の公開鍵が取れないのは、こちら（サーバー）側の一時的な問題。トークンのせいではない
+    if (e instanceof AppleUnavailable) return c.json({ error: 'apple_unavailable', message: e.message }, 503)
     throw e
   }
   const userId = await upsertAppleUser(c.env.DB, identity.sub)
