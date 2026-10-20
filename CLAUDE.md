@@ -16,7 +16,7 @@
 
 ## 開発の流れ
 
-- 変更は PR で出す（`main` に直接コミットしない。**例外：`.claude/board/` だけの変更は、`main` に直接 push してよい**）。PR を出したら `code-review` → `ReportFindings`（直したら `outcome` 付きで再報告）→ ユーザーに報告 → **「マージして」と言われるまでマージしない**。マージ後は、ブランチと作業ツリーを消す。
+- 変更は PR で出す（`main` に直接コミットしない。**例外：`.claude/board/` だけの変更は、`main` に直接 push してよい**）。PR を出したら `code-review` → `ReportFindings` → 指摘ごとに、直すか見送るかを**自分で判断して対応**し（見送り・変更不要は理由を PR に書く）、`outcome` 付きで再報告 → ユーザーに報告 → **「マージして」と言われるまでマージしない**。マージ後は、ブランチと作業ツリーを消す。指摘への対応で、方針・費用・外に出る操作・実機でしか分からないことなど、自分では決められないものだけ、ユーザーに聞く。
 - **作業ツリーを分ける。** 別のセッションが同じフォルダで作業していることがある。`git worktree add ../michishirube-xxx -b <ブランチ> origin/main`（`node_modules` は `ln -s ../michishirube/node_modules node_modules`）。作業ツリーで `cap sync` をすると `ios/App/CapApp-SPM/Package.swift` と `android/capacitor.settings.gradle` のパスが書き換わることがある。**既存の行が書き換わる差分は、コミットしない**（`git checkout -- <ファイル>` で戻す）。プラグインを足すための追加行は、コミットに含めて、PR の説明に書く。
 - **ユーザーの未コミットの変更を触らない。** 特に `ios/signing.xcconfig`（署名のチーム ID。git に入れない。`clean -x` で消さない）。元のフォルダで `checkout -- .`・`stash -u`・`clean` をしない。
 - マージ・デプロイ・Google Cloud や App Store Connect の画面の送信など、外に出る操作は、その場でユーザーの許可を取る。
