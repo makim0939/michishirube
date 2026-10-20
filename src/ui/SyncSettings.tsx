@@ -15,6 +15,7 @@ import { getSyncConfig, getSyncStatus, runSync } from '../data/sync'
 import { getVideoStorage } from '../data/videoStorage'
 import { connectYoutube, disconnectYoutube, saveYoutubeKey, uploadNow, youtubeStatus, type YoutubeStatus } from '../data/youtube'
 import { formatDateTime } from '../domain/format'
+import { accountLabel } from '../data/accountLabel'
 import { ConfirmButton, formatAgo, formatBytes } from './common'
 import { PHOTO_QUOTA_BYTES } from '../../shared/protocol'
 import { useAction, useToast } from './feedback'
@@ -75,10 +76,11 @@ function LoginSection({ legacy }: { legacy: boolean }) {
           {isIosApp && (
             <button className="login-btn apple" disabled={busy} onClick={() => login(loginWithApple)}>
               {!busy && <AppleLogo />}
-              {busy ? 'ログインしています…' : 'Apple でサインイン'}
+              {busy ? 'ログインしています…' : 'Apple でログイン'}
             </button>
           )}
           <button className="login-btn google" disabled={busy} onClick={() => login(loginWithGoogle)}>
+            {!busy && <GoogleLogo />}
             {busy ? 'ログインしています…' : 'Google でログイン'}
           </button>
         </div>
@@ -92,6 +94,18 @@ function AppleLogo() {
   return (
     <svg className="login-btn-logo" viewBox="0 0 24 24" aria-hidden="true">
       <path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701" fill="currentColor" />
+    </svg>
+  )
+}
+
+/** Google 公式の「G」マーク（標準の4色。ブランドガイドラインで、色・形を変えないことが条件。白い背景の上に置く） */
+function GoogleLogo() {
+  return (
+    <svg className="login-btn-logo" viewBox="0 0 48 48" aria-hidden="true">
+      <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+      <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+      <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+      <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
     </svg>
   )
 }
@@ -160,7 +174,7 @@ function YoutubeSection() {
         </div>
       ) : (
         <button
-          className="btn primary"
+          className="btn"
           disabled={busy}
           onClick={async () => {
             setBusy(true)
@@ -173,13 +187,13 @@ function YoutubeSection() {
           {busy ? '連携しています…' : 'YouTube と連携'}
         </button>
       )}
+      {/* YouTube API の審査で求められた表示（利用規約に沿うことの確認・子ども向けではない）。連携ボタンの下に残す */}
       <p className="muted small">
-        設定の「動画」で保存先を YouTube にすると、動画をあなたの YouTube チャンネルに上げます（はじめは限定公開）。YouTube
-        の鍵はこの端末にだけ置くので、ほかの端末ではその端末で連携してください。YouTube に上げる動画は、
+        YouTube に上げる動画は、
         <a href={YOUTUBE_TERMS_URL} target="_blank" rel="noopener noreferrer">
           YouTube 利用規約
         </a>
-        に沿った内容であることを、あなたが確認したものとみなされます。動画は「子ども向けではない」として上げます（変えるときは、YouTube で設定してください）。
+        に沿った内容であることを、あなたが確認したものとみなされます。動画は「子ども向けではない」として上げます。
       </p>
     </div>
   )
@@ -216,7 +230,7 @@ export function SyncSettings({ notice }: { notice?: string }) {
         <div className="stack">
           <p className="status-line">
             {status.error ? <AlertIcon size={16} /> : <CheckIcon size={16} />}
-            {config.email ?? 'Google アカウント'}
+            {accountLabel(config.email)}
           </p>
           <p className="muted small">
             {status.error
