@@ -26,6 +26,8 @@ public class SignInWithApplePlugin: CAPPlugin, CAPBridgedPlugin, ASAuthorization
     }
 
     private func startAuthorization(_ call: CAPPluginCall) {
+        // 別の経路から呼ばれて、メインスレッド以外になったら、Debug の実行で気づけるようにする（リリースでは何もしない）
+        assert(Thread.isMainThread, "startAuthorization は、メインスレッドで呼ぶ")
         // 同時に 2 つは扱わない（後から来た呼び出しで、先の呼び出しの結果を失わないように）
         if pending != nil {
             call.reject("サインインを処理中です。しばらく待ってから、もう一度押してください")
@@ -59,6 +61,7 @@ public class SignInWithApplePlugin: CAPPlugin, CAPBridgedPlugin, ASAuthorization
 
     /// 画面に接続されている窓（WebView の窓、無ければキーの窓）
     private func anchorWindow() -> UIWindow? {
+        assert(Thread.isMainThread, "anchorWindow（UIKit）は、メインスレッドで呼ぶ")
         if let window = bridge?.webView?.window { return window }
         return UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
