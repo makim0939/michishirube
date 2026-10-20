@@ -71,7 +71,8 @@ export const SITE_URL = 'https://latte.makimura.me/'
 export const PRIVACY_URL = isNativeApp ? `${SITE_URL}privacy` : `${import.meta.env.BASE_URL}privacy.html`
 
 /**
- * App Store の評価の画面。数字は App Store Connect の Apple ID（ストアの URL に出る公開の値。チーム ID とは別）。
+ * App Store のページ・評価の画面。数字は App Store Connect の Apple ID（ストアの URL に出る公開の値。チーム ID とは別）。
  * 開くとき（Safari 経由で App Store アプリへ）は、アプリのリンクと同じく別の窓で開く
  */
-export const APP_STORE_REVIEW_URL = 'https://apps.apple.com/app/id6823908010?action=write-review'
+export const APP_STORE_URL = 'https://apps.apple.com/app/id6823908010'
+export const APP_STORE_REVIEW_URL = `${APP_STORE_URL}?action=write-review`

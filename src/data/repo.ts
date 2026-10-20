@@ -414,7 +414,7 @@ export async function deleteRecord(id: string) {
 
 /**
  * 杯の通し番号（No.）。型に関係なく、全部の記録の中で古いほうから何杯目か。
- * これまでどれだけ練習したかが分かるよう、カップ帳・今日の画面で同じ番号を使う
+ * これまでどれだけ練習したかが分かるよう、ラテ帳・今日の画面で同じ番号を使う
  */
 export async function cupNumbers(records: PracticeRecord[]): Promise<Map<string, number>> {
   if (records.length === 0) return new Map()

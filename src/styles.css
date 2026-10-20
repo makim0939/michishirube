@@ -2774,7 +2774,7 @@ a.notice {
   font-size: 0.82rem;
 }
 
-/* ---- 杯の格子（カップ帳・型の記録） ---- */
+/* ---- 杯の格子（ラテ帳・型の記録） ---- */
 
 .cup-grid {
   display: grid;
@@ -3426,6 +3426,21 @@ a.notice {
   color: var(--muted);
   font-size: 0.9rem;
   text-decoration: none;
+}
+
+/* Web 版のホームに出す、お試し版の案内（常設なので、静かに） */
+.web-trial-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.web-trial-note a {
+  color: inherit;
+  text-decoration: underline;
+  /* リンクの途中で折り返さない */
+  white-space: nowrap;
 }
 
 /* 閉じられるお知らせの中のリンク（文を押すと設定を開く） */
