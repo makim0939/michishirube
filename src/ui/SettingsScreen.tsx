@@ -1,3 +1,4 @@
+import { accountLabel } from '../data/accountLabel'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { estimateBackupSize, exportBackup, importBackup, type BackupPart } from '../data/backup'
@@ -137,7 +138,7 @@ function SettingsHome() {
   })
   if (!data) return null
   const loggedIn = isLoggedIn(data.config)
-  const sync = !loggedIn ? 'ログインしていません' : data.status.error ? '同期できていません' : (data.config?.email ?? 'ログイン中')
+  const sync = !loggedIn ? 'ログインしていません' : data.status.error ? '同期できていません' : accountLabel(data.config?.email)
   return (
     <div className="screen">
       <header className="screen-header">
