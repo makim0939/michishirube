@@ -226,6 +226,53 @@ ul {
   width: 100%;
 }
 
+/* ログインのボタン：同じ幅・高さで縦に並べる（Apple は黒、Google は白い枠線） */
+.login-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.login-btn {
+  appearance: none;
+  width: 100%;
+  min-height: 50px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.login-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.login-btn.apple {
+  background: #000;
+  border-color: #000;
+  color: #fff;
+}
+
+.login-btn.google {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.login-btn-logo {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
 /* 主な操作は、同じ幅で1行に並べる */
 .actions {
   display: grid;
