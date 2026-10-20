@@ -243,14 +243,24 @@ export async function loginWithApple(): Promise<{ firstDevice: boolean } | null>
   } catch (e) {
     // 途中で閉じたときは、エラーにしない（Apple の画面の取り消し。エラーの番号は 1001）
     if (e instanceof Error && e.message.includes('1001')) return null
-    throw new SyncError('Apple でログインできませんでした')
+    // どこで失敗したかが分かるよう、Apple の認証の段階の理由をそのまま出す
+    throw new SyncError(`Apple の認証でエラーになりました（${e instanceof Error ? e.message : String(e)}）`)
   }
-  const res = await fetch(`${SERVER_URL}/api/auth/apple`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ identityToken, nonce }),
-  })
-  if (!res.ok) throw new SyncError('Apple でログインできませんでした', res.status)
+  let res: Response
+  try {
+    res = await fetch(`${SERVER_URL}/api/auth/apple`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identityToken, nonce }),
+    })
+  } catch {
+    throw new SyncError('サーバーにつながりません。電波を確認してください')
+  }
+  if (!res.ok) {
+    // サーバーが確かめられなかった理由（トークンの不正・Apple の鍵の取得失敗など）を出す
+    const body = (await res.json().catch(() => ({}))) as { message?: string }
+    throw new SyncError(`サーバーで確かめられませんでした（${res.status}${body.message ? `：${body.message}` : ''}）`, res.status)
+  }
   const { session, email } = (await res.json()) as { session: string; email?: string }
   return completeLogin({ kind: 'login', session, email: email ?? appleEmail ?? undefined })
 }
