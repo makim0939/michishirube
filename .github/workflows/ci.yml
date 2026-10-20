@@ -33,3 +33,27 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm app:build
+      # Google Play に上げる形式（AAB）が作れるかも確かめる。鍵は CI に置かないので、署名なしで作る
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+      - run: ./gradlew bundleRelease
+        working-directory: android
+      # 署名つきの経路も、使い捨ての鍵（このジョブの中で作って捨てる。リポジトリには置かない）で確かめる。
+      # 設定の名前を間違えても、署名するリリースの当日まで気づかない、を防ぐ
+      - name: 署名つきの AAB（使い捨ての鍵）
+        working-directory: android
+        run: |
+          export LATTECHO_STORE_FILE="$RUNNER_TEMP/ci.jks"
+          export LATTECHO_STORE_PASSWORD="$(openssl rand -hex 16)"
+          export LATTECHO_KEY_PASSWORD="$LATTECHO_STORE_PASSWORD"
+          export LATTECHO_KEY_ALIAS=ci
+          keytool -genkeypair -keystore "$LATTECHO_STORE_FILE" -storepass "$LATTECHO_STORE_PASSWORD" \
+            -keypass "$LATTECHO_KEY_PASSWORD" -alias "$LATTECHO_KEY_ALIAS" -keyalg RSA -keysize 2048 -validity 1 -dname "CN=ci"
+          ./gradlew bundleRelease -PrequireSigning
+          # grep -q の早期終了で SIGPIPE になるのを避けるため、出力を変数に取ってから検査する
+          verify_output=$(jarsigner -verify app/build/outputs/bundle/release/app-release.aab)
+          echo "$verify_output"
+          grep -q "jar verified" <<< "$verify_output"
