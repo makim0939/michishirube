@@ -33,6 +33,20 @@ export async function upsertUser(db: D1Database, googleSub: string, now = Date.n
   return row!.id
 }
 
+/** Apple の利用者の番号（sub）から利用者を探し、いなければ作る（Google と同じく、番号だけを持つ） */
+export async function upsertAppleUser(db: D1Database, appleSub: string, now = Date.now()): Promise<string> {
+  const found = await db.prepare('SELECT id FROM users WHERE apple_sub = ?1').bind(appleSub).first<{ id: string }>()
+  if (found) return found.id
+  const id = crypto.randomUUID()
+  await db
+    .prepare('INSERT INTO users (id, apple_sub, created_at) VALUES (?1, ?2, ?3) ON CONFLICT (apple_sub) DO NOTHING')
+    .bind(id, appleSub, now)
+    .run()
+  // 同時に2つの端末で初めてログインしたときは、先に作られたほうを使う
+  const row = await db.prepare('SELECT id FROM users WHERE apple_sub = ?1').bind(appleSub).first<{ id: string }>()
+  return row!.id
+}
+
 /** ログインした端末に渡すトークンを作る。サーバーにはハッシュだけを置く */
 export async function createSession(db: D1Database, userId: string, now = Date.now()): Promise<string> {
   const token = randomToken()
