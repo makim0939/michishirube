@@ -36,6 +36,10 @@ describe('アプリのトップページ（サーバーと同じドメインで�
     expect(html).toContain('href="/privacy-en"')
   })
 
+  it('トップページのフッターの「お問い合わせ」は、makimura.me のお問い合わせページへ', () => {
+    expect(read('../worker/site/index.html')).toContain('<a href="https://www.makimura.me/contact">お問い合わせ</a>')
+  })
+
   it('トップページから、英語版のページ（/en）が見つかる', () => {
     expect(read('../worker/site/index.html')).toContain('hreflang="en" href="https://latte.makimura.me/en"')
   })
