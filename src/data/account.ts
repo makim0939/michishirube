@@ -1,7 +1,7 @@
+import { registerPlugin } from '@capacitor/core'
 import { App } from '@capacitor/app'
 import { Browser } from '@capacitor/browser'
-import { SignInWithApple } from '@capacitor-community/apple-sign-in'
-import { isNativeApp, SITE_URL } from '../platform'
+import { isNativeApp } from '../platform'
 import { sha256Hex } from '../../shared/hash'
 import { db } from './db'
 import { connectWithConfig, disconnectSync, getSyncConfig, SyncError, type SyncConfig } from './sync'
@@ -213,8 +213,16 @@ export async function loginWithGoogle(): Promise<{ firstDevice: boolean } | null
   return result?.kind === 'login' ? completeLogin(result) : null
 }
 
-/** Apple のアプリの Bundle ID（Sign in with Apple の宛先。サーバーの確認と同じ値） */
-const APPLE_CLIENT_ID = 'me.makimura.lattecho.app'
+/** Sign in with Apple の画面を出すプラグイン（iOS の SignInWithApplePlugin.swift。外部のプラグインは Capacitor 8 に対応していないため、アプリの中に作っている） */
+interface SignInWithApplePlugin {
+  authorize(options: { nonce: string }): Promise<{ response: { identityToken: string; email: string | null } }>
+}
+const SignInWithApple = registerPlugin<SignInWithApplePlugin>('SignInWithApple')
+
+/** Apple の画面を閉じたときの取り消しか（エラーの番号は 1001。ほかの失敗とは分けて、エラーにしない） */
+export function isAppleCancelled(e: unknown): boolean {
+  return typeof e === 'object' && e !== null && (e as { code?: unknown }).code === '1001'
+}
 
 /** nonce（使い捨ての値）。Apple には、その SHA-256 を渡し、サーバーには元の値を送って、照らし合わせてもらう */
 function randomNonce(): string {
@@ -231,18 +239,12 @@ export async function loginWithApple(): Promise<{ firstDevice: boolean } | null>
   let identityToken: string
   let appleEmail: string | null
   try {
-    const { response } = await SignInWithApple.authorize({
-      clientId: APPLE_CLIENT_ID,
-      // iOS のアプリでは使わない（Web 版のための値）
-      redirectURI: SITE_URL,
-      scopes: 'email name',
-      nonce: await sha256Hex(nonce),
-    })
+    const { response } = await SignInWithApple.authorize({ nonce: await sha256Hex(nonce) })
     identityToken = response.identityToken
     appleEmail = response.email
   } catch (e) {
     // 途中で閉じたときは、エラーにしない（Apple の画面の取り消し。エラーの番号は 1001）
-    if (e instanceof Error && e.message.includes('1001')) return null
+    if (isAppleCancelled(e)) return null
     // どこで失敗したかが分かるよう、Apple の認証の段階の理由をそのまま出す
     throw new SyncError(`Apple の認証でエラーになりました（${e instanceof Error ? e.message : String(e)}）`)
   }
