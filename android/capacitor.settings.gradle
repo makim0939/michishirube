@@ -2,9 +2,6 @@
 include ':capacitor-android'
 project(':capacitor-android').projectDir = new File('../node_modules/.pnpm/@capacitor+android@8.5.2_@capacitor+core@8.5.2/node_modules/@capacitor/android/capacitor')
 
-include ':capacitor-community-apple-sign-in'
-project(':capacitor-community-apple-sign-in').projectDir = new File('../node_modules/.pnpm/@capacitor-community+apple-sign-in@7.1.0_@capacitor+core@8.5.2/node_modules/@capacitor-community/apple-sign-in/android')
-
 include ':capacitor-app'
 project(':capacitor-app').projectDir = new File('../node_modules/.pnpm/@capacitor+app@8.1.1_@capacitor+core@8.5.2/node_modules/@capacitor/app/android')
 
