@@ -1,6 +1,8 @@
+import { registerPlugin } from '@capacitor/core'
 import { App } from '@capacitor/app'
 import { Browser } from '@capacitor/browser'
 import { isNativeApp } from '../platform'
+import { sha256Hex } from '../../shared/hash'
 import { db } from './db'
 import { connectWithConfig, disconnectSync, getSyncConfig, SyncError, type SyncConfig } from './sync'
 
@@ -209,6 +211,60 @@ export async function completeLogin(result: Extract<AuthResult, { kind: 'login' 
 export async function loginWithGoogle(): Promise<{ firstDevice: boolean } | null> {
   const result = await authorizeWithGoogle('login')
   return result?.kind === 'login' ? completeLogin(result) : null
+}
+
+/** Sign in with Apple の画面を出すプラグイン（iOS の SignInWithApplePlugin.swift。外部のプラグインは Capacitor 8 に対応していないため、アプリの中に作っている） */
+interface SignInWithApplePlugin {
+  authorize(options: { nonce: string }): Promise<{ response: { identityToken: string; email: string | null } }>
+}
+const SignInWithApple = registerPlugin<SignInWithApplePlugin>('SignInWithApple')
+
+/** Apple の画面を閉じたときの取り消しか（エラーの番号は 1001。ほかの失敗とは分けて、エラーにしない） */
+export function isAppleCancelled(e: unknown): boolean {
+  return typeof e === 'object' && e !== null && (e as { code?: unknown }).code === '1001'
+}
+
+/** nonce（使い捨ての値）。Apple には、その SHA-256 を渡し、サーバーには元の値を送って、照らし合わせてもらう */
+function randomNonce(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(24))
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+/**
+ * Sign in with Apple でログインする（iOS アプリだけ。Google と同じ働きで、同じ記録を使える）。
+ * Apple の画面で認可してもらい、受け取った ID トークンをサーバーで確かめてもらう。取り消したときは null
+ */
+export async function loginWithApple(): Promise<{ firstDevice: boolean } | null> {
+  const nonce = randomNonce()
+  let identityToken: string
+  let appleEmail: string | null
+  try {
+    const { response } = await SignInWithApple.authorize({ nonce: await sha256Hex(nonce) })
+    identityToken = response.identityToken
+    appleEmail = response.email
+  } catch (e) {
+    // 途中で閉じたときは、エラーにしない（Apple の画面の取り消し。エラーの番号は 1001）
+    if (isAppleCancelled(e)) return null
+    // どこで失敗したかが分かるよう、Apple の認証の段階の理由をそのまま出す
+    throw new SyncError(`Apple の認証でエラーになりました（${e instanceof Error ? e.message : String(e)}）`)
+  }
+  let res: Response
+  try {
+    res = await fetch(`${SERVER_URL}/api/auth/apple`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identityToken, nonce }),
+    })
+  } catch {
+    throw new SyncError('サーバーにつながりません。電波を確認してください')
+  }
+  if (!res.ok) {
+    // サーバーが確かめられなかった理由（トークンの不正・Apple の鍵の取得失敗など）を出す
+    const body = (await res.json().catch(() => ({}))) as { message?: string }
+    throw new SyncError(`サーバーで確かめられませんでした（${res.status}${body.message ? `：${body.message}` : ''}）`, res.status)
+  }
+  const { session, email } = (await res.json()) as { session: string; email?: string }
+  return completeLogin({ kind: 'login', session, email: email ?? appleEmail ?? undefined })
 }
 
 /** つながりを切り、この端末の YouTube の鍵を消す（写真をサーバーに置いた印は、次にログインしたときに見直す） */

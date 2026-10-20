@@ -1,5 +1,61 @@
 apply plugin: 'com.android.application'
 
+// リリース署名の情報。鍵とパスワードは公開リポジトリに入れない。
+// android/keystore.properties（git に入れない。storeFile・storePassword・keyAlias・keyPassword）か、
+// 環境変数（LATTECHO_STORE_FILE・LATTECHO_STORE_PASSWORD・LATTECHO_KEY_ALIAS・LATTECHO_KEY_PASSWORD）から読む。
+// どちらも無いときは、署名しないリリースを作る（CI で、ビルドが通るかだけ確かめるため）
+def keystoreProps = new Properties()
+def keystorePropsFile = rootProject.file('keystore.properties')
+if (keystorePropsFile.exists()) {
+    keystorePropsFile.withInputStream { keystoreProps.load(it) }
+}
+def signingValue = { String key, String envName -> keystoreProps.getProperty(key) ?: System.getenv(envName) }
+def releaseStoreFile = signingValue('storeFile', 'LATTECHO_STORE_FILE')
+// 空文字（LATTECHO_STORE_FILE= など）は「鍵なし」として扱う。null だけを見ると、空のパスを署名ありと誤判定して分かりにくいエラーになる
+def hasReleaseSigning = releaseStoreFile ? true : false
+
+// 署名の設定の検査は、リリースのタスクを実行するときだけ行う。
+// 構成時に止めると、assembleDebug や Android Studio の同期まで、リリースと無関係に止まってしまうため
+gradle.taskGraph.whenReady { graph ->
+    if (!graph.allTasks.any { it.project == project && it.name.contains('Release') }) return
+    if (hasReleaseSigning) {
+        // 設定が一部だけのとき（パスワードの書き忘れなど）は、どれが足りないか分かるように止める
+        [storePassword: 'LATTECHO_STORE_PASSWORD', keyAlias: 'LATTECHO_KEY_ALIAS', keyPassword: 'LATTECHO_KEY_PASSWORD'].each { key, envName ->
+            if (!signingValue(key, envName)) {
+                throw new GradleException("リリース署名の設定が足りません：${key}（keystore.properties か、環境変数 ${envName}）")
+            }
+        }
+    } else if (project.hasProperty('requireSigning')) {
+        // Google Play に上げるリリースは、-PrequireSigning を付けて作る。鍵を置き忘れても、署名なしの AAB が黙ってできないように
+        throw new GradleException('リリース署名の鍵がありません：android/keystore.properties か、環境変数 LATTECHO_STORE_FILE を設定してください')
+    }
+}
+
+// Play は、versionCode が前より大きい整数でないと受け付けない。-PversionName と取り違えた値（1.1 など）は、ここで止める。
+// defaultConfig で使う値なので、検査は構成時のまま
+def versionCodeValue = (findProperty('versionCode') ?: '1').toString()
+if (!(versionCodeValue ==~ /[1-9][0-9]*/)) {
+    throw new GradleException("versionCode は 1 以上の整数にしてください（指定：${versionCodeValue}）")
+}
+// Google Play の上限（2100000000）。Int を超えると toInteger が分かりにくい例外になるので、先に止める
+if (versionCodeValue.length() > 10 || versionCodeValue.toLong() > 2100000000L) {
+    throw new GradleException("versionCode は Google Play の上限 2100000000 以下にしてください（指定：${versionCodeValue}）")
+}
+
+// versionName は、-PversionName が無ければ package.json の version を使う（アプリの版とずれないように）
+def versionNameValue = findProperty('versionName')?.toString()
+if (!versionNameValue) {
+    def packageJson = rootProject.file('../package.json')
+    try {
+        versionNameValue = new groovy.json.JsonSlurper().parse(packageJson).version
+    } catch (Exception e) {
+        throw new GradleException("versionName を決められません：-PversionName を渡すか、${packageJson} の version を確認してください（${e.message}）")
+    }
+    if (!versionNameValue) {
+        throw new GradleException("versionName を決められません：${packageJson} に version がありません。-PversionName を渡してください")
+    }
+}
+
 android {
     namespace = "me.makimura.lattecho"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,8 +63,10 @@ android {
         applicationId "me.makimura.lattecho.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // Google Play に上げるたびに、versionCode を前より大きくする必要がある。
+        // ビルドのときに -PversionCode=2 -PversionName=1.1 で渡す（無ければ versionCode は 1、versionName は package.json の version）
+        versionCode(versionCodeValue.toInteger())
+        versionName(versionNameValue.toString())
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,10 +74,23 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            if (hasReleaseSigning) {
+                storeFile rootProject.file(releaseStoreFile)
+                storePassword signingValue('storePassword', 'LATTECHO_STORE_PASSWORD')
+                keyAlias signingValue('keyAlias', 'LATTECHO_KEY_ALIAS')
+                keyPassword signingValue('keyPassword', 'LATTECHO_KEY_PASSWORD')
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 }

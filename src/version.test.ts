@@ -18,9 +18,9 @@ describe('アプリの版（docs/versioning.md）', () => {
     for (const v of versions) expect(normalize(v)).toBe(normalize(version))
   })
 
-  it('Android の versionName が、package.json の版とそろっている', () => {
-    const m = read('../android/app/build.gradle').match(/versionName "([\d.]+)"/)
-    expect(m).not.toBeNull()
-    expect(normalize(m![1])).toBe(normalize(version))
+  it('Android の versionName は、package.json の版を読む（数字を直接書かない。書くと、版を上げたときにずれる）', () => {
+    const gradle = read('../android/app/build.gradle')
+    expect(gradle).toMatch(/rootProject\.file\('\.\.\/package\.json'\)/)
+    expect(gradle).not.toMatch(/versionName\s+"[\d.]+"/)
   })
 })

@@ -1,7 +1,8 @@
 # バージョンの決め方
 
 アプリの版は、**`package.json` の `version`（x.y.z）を1つの正**にする。設定の画面の「ラテ帳 v◯」、ご意見・ご要望に付く版は、これを読む（`vite.config.ts`）。
-iOS の `MARKETING_VERSION`（`ios/App/App.xcodeproj/project.pbxproj`。Debug・Release の2か所）と、Android の `versionName`（`android/app/build.gradle`）は、同じ数字にそろえる（`1.0.0` と `1.0` は同じ版として数える）。ずれると、テスト（`src/version.test.ts`）が落ちる。
+iOS の `MARKETING_VERSION`（`ios/App/App.xcodeproj/project.pbxproj`。Debug・Release の2か所）は、同じ数字にそろえる（`1.0.0` と `1.0` は同じ版として数える）。ずれると、テスト（`src/version.test.ts`）が落ちる。
+Android の `versionName` は、`-PversionName` を渡さなければ `package.json` の `version` を読む（`android/app/build.gradle`）ので、そろえる作業はない。
 
 ## 数字の上げ方
 
@@ -13,7 +14,7 @@ iOS の `MARKETING_VERSION`（`ios/App/App.xcodeproj/project.pbxproj`。Debug・
 
 - **ストアに出さない変更（紹介サイト・サーバーだけ、など）では、版を上げない。**
 - 版を上げるのは、リリースの準備のとき（ストアに出す前）。ふだんの PR では触らない。
-- 上げたら、3つ（`package.json`・iOS・Android）を同じ PR で変える。
+- 上げたら、`package.json` と iOS を同じ PR で変える（Android は自動）。
 
 ## ビルド番号（iOS の `CURRENT_PROJECT_VERSION`・Android の `versionCode`）
 
@@ -24,7 +25,7 @@ iOS の `MARKETING_VERSION`（`ios/App/App.xcodeproj/project.pbxproj`。Debug・
 ## リリースの流れ
 
 1. 上の表で、次の版を決める。
-2. `package.json`・iOS・Android の版と、ビルド番号を上げる PR を出して、マージする。
+2. `package.json`・iOS の版と、ビルド番号を上げる PR を出して、マージする。
 3. 提出手順（`docs/app-store-submission.md`）に進む。
 4. ストアに出したら、`git tag v<版>`（例 `v1.1.0`）を、審査に出したコミットに付けて push する。
 

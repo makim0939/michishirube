@@ -25,12 +25,37 @@ export function isIosDevice(): boolean {
 }
 
 /**
+ * 画面ごとの「戻る」の受け皿。重なった画面（編集・カメラ・保存前の確認）は、履歴を戻る前に、まず自分で閉じたい。
+ * 後から登録したものを先に呼び、true を返したら、そこで処理済み（履歴は戻らない）
+ */
+const backHandlers: Array<() => boolean> = []
+
+/** 「戻る」の受け皿を登録する。戻り値で登録を外す */
+export function pushBackHandler(handler: () => boolean): () => void {
+  backHandlers.push(handler)
+  return () => {
+    const i = backHandlers.lastIndexOf(handler)
+    if (i >= 0) backHandlers.splice(i, 1)
+  }
+}
+
+/** 登録された受け皿に、新しいほうから順に任せる。誰かが処理したら true */
+export function runBackHandlers(): boolean {
+  for (let i = backHandlers.length - 1; i >= 0; i--) {
+    if (backHandlers[i]()) return true
+  }
+  return false
+}
+
+/**
  * Android の「戻る」（ボタン・端からのスワイプ）。何もしないとアプリが閉じるので、画面の履歴があれば1つ前の画面に戻る。
- * 最初の画面では、アプリを裏に回す（Android のほかのアプリと同じ）
+ * 最初の画面では、アプリを裏に回す（Android のほかのアプリと同じ）。
+ * 画面の「<」と同じく、保存前の内容を黙って捨てないよう、先に各画面の受け皿に任せる
  */
 export function watchBackButton() {
   if (Capacitor.getPlatform() !== 'android') return
   void App.addListener('backButton', ({ canGoBack }) => {
+    if (runBackHandlers()) return
     if (canGoBack) window.history.back()
     else void App.minimizeApp()
   })

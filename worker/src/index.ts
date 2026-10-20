@@ -13,10 +13,12 @@ import {
   readIdToken,
   sha256,
   tooManyAuthStarts,
+  upsertAppleUser,
   upsertUser,
   userForSession,
   type AuthKind,
 } from './accounts'
+import { AppleTokenInvalid, AppleUnavailable, verifyAppleIdToken } from './apple'
 import { bearerToken, isAllowedAppScheme, isAllowedReturn, LEGACY_APP_SCHEME, parseOrigins, safeEqual, signState, verifyState } from './auth'
 import { notifyFeedback, parseFeedback, saveFeedback, tooManyFeedbacks, type FeedbackMailEnv } from './feedback'
 import { resultPage } from './resultPage'
@@ -47,7 +49,7 @@ app.use(
 )
 
 /** ログインしなくても使える窓口 */
-const PUBLIC_PATHS = new Set(['/api/health', '/api/auth/start', '/api/auth/finish', '/api/youtube/callback', '/api/youtube/status', '/api/feedback'])
+const PUBLIC_PATHS = new Set(['/api/health', '/api/auth/start', '/api/auth/finish', '/api/auth/apple', '/api/youtube/callback', '/api/youtube/status', '/api/feedback'])
 
 // ログインした人だけが使える。だれのデータかは、ログインしたときに渡したトークンで決める
 app.use('/api/*', async (c, next) => {
@@ -192,6 +194,28 @@ app.post('/api/auth/start', async (c) => {
     c.env.APP_TOKEN,
   )
   return c.json({ url: authUrl(config, callbackUrl(c.req.url), state, kind) })
+})
+
+/**
+ * Sign in with Apple でログインする（iOS アプリだけが使う。Apple の画面で得た ID トークンを確かめて、利用者を決める）。
+ * nonce は、アプリが生成した元の値（Apple には、その SHA-256 を渡している）
+ */
+app.post('/api/auth/apple', async (c) => {
+  const { identityToken, nonce } = await jsonBody(c)
+  if (typeof identityToken !== 'string' || !identityToken) throw new BadRequest('identityToken is required')
+  if (typeof nonce !== 'string' || nonce.length < 16 || nonce.length > 128) throw new BadRequest('nonce is invalid')
+  let identity
+  try {
+    identity = await verifyAppleIdToken(identityToken, nonce)
+  } catch (e) {
+    if (e instanceof AppleTokenInvalid) return c.json({ error: 'invalid_token', message: e.message }, 401)
+    // Apple の公開鍵が取れないのは、こちら（サーバー）側の一時的な問題。トークンのせいではない
+    if (e instanceof AppleUnavailable) return c.json({ error: 'apple_unavailable', message: e.message }, 503)
+    throw e
+  }
+  const userId = await upsertAppleUser(c.env.DB, identity.sub)
+  // メールアドレスは、アプリに渡すだけで、サーバーには残さない（Google と同じ）
+  return c.json({ session: await createSession(c.env.DB, userId), ...(identity.email ? { email: identity.email } : {}) })
 })
 
 app.get('/api/youtube/callback', async (c) => {

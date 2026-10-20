@@ -4,6 +4,7 @@ import type { Media } from '../domain/types'
 import { isVideo, type PlayerControl } from './common'
 import { useCupImageUrl } from './cupImage'
 import { MediaItem } from './MediaItem'
+import { useBackHandler } from './useBackHandler'
 import { CheckIcon, ChevronDownIcon, PlayIcon } from './icons'
 
 type Kind = 'video' | 'image'
@@ -153,6 +154,11 @@ function CupPickerSheet({
 }) {
   const latestClose = useRef(onClose)
   latestClose.current = onClose
+  // Android の「戻る」は、シートを閉じるだけ（画面ごと戻らない）。シートは保存前のデータを持たないので、確認は出さない
+  useBackHandler(() => {
+    onClose()
+    return true
+  })
   // Esc でも閉じる（PC のキーボード）。閉じたら、押した「最新 ▾」にキーボードの位置を戻す
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null

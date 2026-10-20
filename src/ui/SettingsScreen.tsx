@@ -27,7 +27,7 @@ import { RoadmapSettings } from './RoadmapSettings'
 import { backHandler, go, href, type SettingsSection } from './router'
 import { SyncSettings } from './SyncSettings'
 import { forgetToday } from './TodayScreen'
-import { APP_STORE_REVIEW_URL, isIosApp, isNativeApp, PRIVACY_URL, YOUTUBE_TERMS_URL } from '../platform'
+import { APP_STORE_REVIEW_URL, isAndroidApp, isIosApp, isNativeApp, PRIVACY_URL, YOUTUBE_TERMS_URL } from '../platform'
 import { AlertIcon, BackIcon, CheckIcon, ForwardIcon } from './icons'
 
 function StorageStatus() {
@@ -464,7 +464,10 @@ function BackupPage() {
           <p>
             バックアップを作りました
             {exported.length > 1 && `。大きいので ${exported.length} つの ZIP に分けています。復元するときは全部を選んでください`}
-            。「ファイルに保存」や AirDrop で、この端末の外にも置いてください。
+            {/* AirDrop は iPhone・iPad の言葉。Android は共有シートに、ドライブなどの保存先が出る */}
+            {isAndroidApp
+              ? '。Google ドライブなどに保存して、この端末の外にも置いてください。'
+              : '。「ファイルに保存」や AirDrop で、この端末の外にも置いてください。'}
           </p>
           <div className="stack">
             {exported.map((part) => (

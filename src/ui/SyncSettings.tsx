@@ -5,6 +5,7 @@ import {
   deleteAccount,
   isLoggedIn,
   isOurServer,
+  loginWithApple,
   loginWithGoogle,
   logout,
   resumeWebAuth,
@@ -18,7 +19,7 @@ import { ConfirmButton, formatAgo, formatBytes } from './common'
 import { PHOTO_QUOTA_BYTES } from '../../shared/protocol'
 import { useAction, useToast } from './feedback'
 import { replace } from './router'
-import { PRIVACY_URL, YOUTUBE_TERMS_URL } from '../platform'
+import { isIosApp, PRIVACY_URL, YOUTUBE_TERMS_URL } from '../platform'
 import { AlertIcon, CheckIcon } from './icons'
 
 /** ログインしたあとのトースト。アプリの中で終えたときと、Web 版で Google の画面から戻ったときで、同じ文言にする */
@@ -52,10 +53,17 @@ function LoginSection({ legacy }: { legacy: boolean }) {
   const run = useAction()
   const toast = useToast()
   const [busy, setBusy] = useState(false)
+  // ログインの方法は、同じ働きで並べる（iOS では Apple も出す。Apple は、ほかのログインと同じ扱いの方法を用意することが条件）
+  const login = async (method: () => Promise<{ firstDevice: boolean } | null>) => {
+    setBusy(true)
+    const result = await run(method)
+    setBusy(false)
+    if (result) toast.show(loginMessage(result.firstDevice))
+  }
   return (
     <section className="section">
       <div className="stack">
-        <p>Google でログインすると、記録と写真をほかの端末でも使えます。機種を変えても、ログインすれば戻ります。</p>
+        <p>ログインすると、記録と写真をほかの端末でも使えます。機種を変えても、ログインすれば戻ります。</p>
         <p className="muted small">
           サーバーに置くのは、記録・型・写真（縮小したもの）だけです。動画は、この端末か YouTube に置きます。
           <a href={PRIVACY_URL} target="_blank" rel="noopener noreferrer">
@@ -63,22 +71,28 @@ function LoginSection({ legacy }: { legacy: boolean }) {
           </a>
         </p>
         {legacy && <p className="muted small">前の同期で置いた記録は、ログインすると引き継ぎます。</p>}
-        <button
-          className="btn primary"
-          disabled={busy}
-          onClick={async () => {
-            setBusy(true)
-            const result = await run(() => loginWithGoogle())
-            setBusy(false)
-            if (result) {
-              toast.show(loginMessage(result.firstDevice))
-            }
-          }}
-        >
-          {busy ? 'ログインしています…' : 'Google でログイン'}
-        </button>
+        <div className="login-buttons">
+          {isIosApp && (
+            <button className="login-btn apple" disabled={busy} onClick={() => login(loginWithApple)}>
+              {!busy && <AppleLogo />}
+              {busy ? 'ログインしています…' : 'Apple でサインイン'}
+            </button>
+          )}
+          <button className="login-btn google" disabled={busy} onClick={() => login(loginWithGoogle)}>
+            {busy ? 'ログインしています…' : 'Google でログイン'}
+          </button>
+        </div>
       </div>
     </section>
+  )
+}
+
+/** Apple の標準のロゴ（Sign in with Apple のボタンに付ける） */
+function AppleLogo() {
+  return (
+    <svg className="login-btn-logo" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701" fill="currentColor" />
+    </svg>
   )
 }
 
