@@ -53,4 +53,7 @@ jobs:
           keytool -genkeypair -keystore "$LATTECHO_STORE_FILE" -storepass "$LATTECHO_STORE_PASSWORD" \
             -keypass "$LATTECHO_KEY_PASSWORD" -alias "$LATTECHO_KEY_ALIAS" -keyalg RSA -keysize 2048 -validity 1 -dname "CN=ci"
           ./gradlew bundleRelease -PrequireSigning
-          jarsigner -verify app/build/outputs/bundle/release/app-release.aab | tee /dev/stderr | grep -q "jar verified"
+          # grep -q の早期終了で SIGPIPE になるのを避けるため、出力を変数に取ってから検査する
+          verify_output=$(jarsigner -verify app/build/outputs/bundle/release/app-release.aab)
+          echo "$verify_output"
+          grep -q "jar verified" <<< "$verify_output"
