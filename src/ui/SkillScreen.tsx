@@ -108,17 +108,19 @@ export function SkillScreen({ id }: { id: string }) {
             できた
           </button>
         )}
-        {state === 'done' && (
-          <ConfirmButton
-            className="btn"
-            confirmLabel="取り消す"
-            message="「できた」を取り消します。撮った記録や、ほかの型の練習はそのままです。"
-            onConfirm={() => run(() => revertAchievement(skill.id))}
-          >
-            「できた」を取り消す
-          </ConfirmButton>
-        )}
       </div>
+
+      {/* 取り消しの確認は、2つ並べたボタンの中ではなく、その下に広げる（横に押し込むと、「記録する」が縦に伸びて崩れる） */}
+      {state === 'done' && (
+        <ConfirmButton
+          className="btn small ghost"
+          confirmLabel="取り消す"
+          message="「できた」を取り消します。撮った記録や、ほかの型の練習はそのままです。"
+          onConfirm={() => run(() => revertAchievement(skill.id))}
+        >
+          「できた」を取り消す
+        </ConfirmButton>
+      )}
 
       {askingAchieve && (
         <div className="confirm achieve-confirm">
