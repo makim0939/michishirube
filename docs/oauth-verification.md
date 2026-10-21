@@ -29,6 +29,8 @@
 
 ## 2. 提出用の文面（英語）
 
+> 2026-10-21：YouTube とつなぐ操作は、「設定 → アカウント」から「設定 → 動画」に移した（保存先を YouTube にすると、同じ画面に出る。つないでいれば、保存先が端末でも出る）。下の英文は、提出済みの記録なので、そのまま残している。画面は、`Settings → Account` を `Settings → Video` に読み替える。撮り直し・再提出のときは、英文の場所も直す。
+
 ### 2-1. Scope justification — `https://www.googleapis.com/auth/youtube.upload`
 
 ```text
@@ -80,7 +82,7 @@ https://github.com/makim0939/michishirube
 - 録画ソフトは、Mac の「画面収録」（Shift+Command+5）などでよい。マイクで英語の説明を入れるか、英語の字幕を後から入れる。
 - **同意画面を英語にする**（Google の指定）：<https://myaccount.google.com/language> で、Google アカウントの言語を「English」にする。撮り終えたら、日本語に戻す。
 - 画面は、パソコンの Chrome で **Web 版**（`https://makim0939.github.io/michishirube/`）を使う。アプリの中のログイン画面は、アドレスバーが見えず、クライアント ID を見せられないため。
-- 練習用に、記録のある状態にしておく。YouTube と連携していない状態から始める（すでに連携しているなら、設定 → アカウント → YouTube → 連携を解除）。
+- 練習用に、記録のある状態にしておく。YouTube と連携していない状態から始める（すでにつないでいるなら、設定 → 動画 → YouTube → つなぐのをやめる）。
 - 動画は、YouTube Studio に「限定公開」で上げる。審査の申請の欄に、その URL を貼る。
 
 ### 台本（3〜4分）
@@ -91,13 +93,13 @@ https://github.com/makim0939/michishirube
 | 0:20 | Web 版を開き、記録の画面を見せる | "Records stay on the device by default. Signing in with Google lets users use the same records on other devices." |
 | 0:40 | 設定 → アカウント → Google でログイン。同意画面を見せ、アドレスバーを見せる | "This is the sign-in consent screen. It shows the app name, Latte-chō. Here in the address bar you can see our OAuth client ID." （アドレスバーを拡大して、`client_id=…` を見せる） |
 | 1:10 | ログインを許可して戻る | "The app only asks for the basic profile information for signing in." |
-| 1:30 | 設定 → アカウント。「YouTube と連携」を押す前に、ボタンの下の説明（YouTube 利用規約・子ども向けではない）を見せてから、ボタンを押す | "Now the user links YouTube. Before linking, the app tells the user that uploaded videos must comply with the YouTube Terms of Service and are uploaded as not made for kids. This is the only place where the app asks for the YouTube upload permission." |
+| 1:30 | 設定 → 動画。保存先を「YouTube」にして、「YouTube とつなぐ」を押す前に、ボタンの下の説明（YouTube 利用規約・子ども向けではない）を見せてから、ボタンを押す | "Now the user links YouTube. Before linking, the app tells the user that uploaded videos must comply with the YouTube Terms of Service and are uploaded as not made for kids. This is the only place where the app asks for the YouTube upload permission." |
 | 1:45 | 同意画面（YouTube）。権限の文言とアドレスバー（`client_id`・`scope=…youtube.upload`）を見せる | "The consent screen shows the app name and the permission, 'Manage your YouTube videos'. In the address bar, the scope is youtube.upload and our client ID is visible." （拡大して見せる） |
-| 2:10 | 許可して戻る。「連携しました」の表示を見せる | "After granting, the app shows that YouTube is linked." |
-| 2:30 | 設定 → 動画 → 保存先の下の説明（YouTube 利用規約）を見せてから、保存先を「YouTube」にする | "The user chooses YouTube as the storage destination for videos. The screen tells the user that uploaded videos must comply with the YouTube Terms of Service. Nothing is uploaded unless the user does this." |
+| 2:10 | 許可して戻る。「YouTube とつなぎました」の表示を見せる | "After granting, the app shows that YouTube is linked." |
+| 2:30 | 設定 → 動画。保存先が「YouTube」になっていることを見せる（YouTube 利用規約の説明は、1:30 で見せたもの） | "The user chooses YouTube as the storage destination for videos. The screen tells the user that uploaded videos must comply with the YouTube Terms of Service. Nothing is uploaded unless the user does this." |
 | 2:45 | 記録する → 短い動画を撮る（または選ぶ）→ 保存 | "The user records a short practice video and saves the record." |
-| 3:05 | 設定 → アカウントで、アップが進むのを見せる。続けて、YouTube Studio を開き、動画が「限定公開」で入っているのを見せる | "The app uploads the video to the user's own YouTube channel. In YouTube Studio the video appears with visibility 'Unlisted'. This is the only thing the permission is used for." |
-| 3:30 | 設定 → アカウント → YouTube → 連携を解除。続けて、Google の「アプリのアクセス許可」ページを見せる | "The user can unlink at any time. This also revokes the permission on Google's side, and it can also be revoked here in the Google account permissions page." |
+| 3:05 | 設定 → 動画で、アップが進むのを見せる。続けて、YouTube Studio を開き、動画が「限定公開」で入っているのを見せる | "The app uploads the video to the user's own YouTube channel. In YouTube Studio the video appears with visibility 'Unlisted'. This is the only thing the permission is used for." |
+| 3:30 | 設定 → 動画 → YouTube → つなぐのをやめる。続けて、Google の「アプリのアクセス許可」ページを見せる | "The user can unlink at any time. This also revokes the permission on Google's side, and it can also be revoked here in the Google account permissions page." |
 | 3:50 | プライバシーポリシー（英語）を見せる | "The privacy policy explains what data is handled and how it can be deleted." |
 
 撮影のコツ：

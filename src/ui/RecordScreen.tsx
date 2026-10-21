@@ -295,7 +295,7 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
     const next: YoutubePrivacy = (item.privacy ?? videoSettings?.youtubePrivacy) === 'public' ? 'unlisted' : 'public'
     setItems((prev) => prev.map((i) => (i.key === item.key && i.kind === 'new' ? { ...i, privacy: next } : i)))
     change()
-    toast.show(next === 'public' ? 'この動画は、公開で YouTube に上げます' : 'この動画は、限定公開で YouTube に上げます')
+    toast.show(next === 'public' ? 'この動画は、だれでも見られるように YouTube に上げます' : 'この動画は、リンクを知っている人だけが見られるように YouTube に上げます')
   }
 
   const onTrimmed = (key: string, file: File) => {
@@ -488,7 +488,7 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
               const blob = itemBlob(item)
               const type = itemType(item)
               const poster = item.kind === 'new' ? item.poster?.blob : (item.replaced?.poster?.blob ?? item.media.poster)
-              const privacyLabel = (item.kind === 'new' ? (item.privacy ?? videoSettings?.youtubePrivacy) : undefined) === 'public' ? '公開' : '限定公開'
+              const privacyLabel = (item.kind === 'new' ? (item.privacy ?? videoSettings?.youtubePrivacy) : undefined) === 'public' ? 'だれでも' : 'リンクのみ'
               return (
                 <li key={item.key}>
                   {blob ? (

@@ -11,7 +11,7 @@ import { PlusIcon } from './icons'
 import { go } from './router'
 
 /**
- * 設定の「ロードマップ」。用意されているロードマップを入れる・JSON で読み書きする・分野を足す・名前を変える・消す。
+ * 設定の「ロードマップ」。用意されているロードマップを入れる・ファイルで読み書きする・分野を足す・名前を変える・消す。
  * ふだんの型の画面には出さず、ここにまとめる（使うことは少ないので）
  */
 export function RoadmapSettings() {
@@ -32,7 +32,7 @@ export function RoadmapSettings() {
       try {
         json = JSON.parse(await file.text())
       } catch {
-        throw new Error('JSON として読み込めませんでした')
+        throw new Error('ファイルを読み込めませんでした')
       }
       return importTemplate(json)
     })
@@ -92,9 +92,9 @@ export function RoadmapSettings() {
       </section>
 
       <section className="section">
-        <h2>JSON から読み込む</h2>
+        <h2>ファイルから読み込む</h2>
         <button className="btn" onClick={() => importInput.current?.click()}>
-          ロードマップの JSON を読み込む
+          ロードマップのファイルを読み込む
         </button>
         <input
           ref={importInput}
@@ -106,13 +106,12 @@ export function RoadmapSettings() {
             e.target.value = ''
           }}
         />
-        <p className="muted small">新しい分野として追加されます。形式は README を参照してください。</p>
       </section>
     </>
   )
 }
 
-/** 分野1つ。押すと、名前を変える・JSON で書き出す・消す */
+/** 分野1つ。押すと、名前を変える・ファイルに書き出す・消す */
 function DomainRow({ domain, count }: { domain: Domain; count: number }) {
   const run = useAction()
   const [open, setOpen] = useState(false)
@@ -158,7 +157,7 @@ function DomainRow({ domain, count }: { domain: Domain; count: number }) {
               })
             }
           >
-            JSON で書き出す
+            ファイルに書き出す
           </button>
           <ConfirmButton
             className="btn small ghost"

@@ -79,12 +79,12 @@ export async function api(config: SyncConfig, path: string, init: RequestInit = 
       headers: { Authorization: `Bearer ${config.token}`, ...(init.headers ?? {}) },
     })
   } catch {
-    throw new SyncError('サーバーにつながりません。電波か URL を確認してください')
+    throw new SyncError('つながりません。電波を確認してください')
   }
   if (res.status === 401) throw new SyncError('ログインし直してください', 401)
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { message?: string; error?: string }
-    throw new SyncError(body.message ?? body.error ?? `サーバーでエラーが起きました（${res.status}）`, res.status)
+    throw new SyncError(body.message ?? body.error ?? `エラーが起きました（${res.status}）`, res.status)
   }
   return res
 }

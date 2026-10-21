@@ -59,12 +59,12 @@ async function post(path: string, body: unknown, session?: string): Promise<Reco
       body: JSON.stringify(body),
     })
   } catch {
-    throw new SyncError('サーバーにつながりません。電波を確認してください')
+    throw new SyncError('つながりません。電波を確認してください')
   }
   const json = (await res.json().catch(() => ({}))) as Record<string, unknown>
   if (!res.ok) {
     if (res.status === 401) throw new SyncError('ログインし直してください', 401)
-    throw new SyncError(typeof json.message === 'string' ? json.message : `サーバーでエラーが起きました（${res.status}）`, res.status)
+    throw new SyncError(typeof json.message === 'string' ? json.message : `エラーが起きました（${res.status}）`, res.status)
   }
   return json
 }
@@ -256,12 +256,12 @@ export async function loginWithApple(): Promise<{ firstDevice: boolean } | null>
       body: JSON.stringify({ identityToken, nonce }),
     })
   } catch {
-    throw new SyncError('サーバーにつながりません。電波を確認してください')
+    throw new SyncError('つながりません。電波を確認してください')
   }
   if (!res.ok) {
     // サーバーが確かめられなかった理由（トークンの不正・Apple の鍵の取得失敗など）を出す
     const body = (await res.json().catch(() => ({}))) as { message?: string }
-    throw new SyncError(`サーバーで確かめられませんでした（${res.status}${body.message ? `：${body.message}` : ''}）`, res.status)
+    throw new SyncError(`確かめられませんでした（${res.status}${body.message ? `：${body.message}` : ''}）`, res.status)
   }
   const { session, email } = (await res.json()) as { session: string; email?: string }
   return completeLogin({ kind: 'login', session, email: email ?? appleEmail ?? undefined })
@@ -303,7 +303,7 @@ export async function deleteAccount(): Promise<boolean> {
   try {
     res = await fetch(`${serverOf(config)}/api/account`, { method: 'DELETE', headers: { Authorization: `Bearer ${config.token}` } })
   } catch {
-    throw new SyncError('サーバーにつながりません。電波を確認してください')
+    throw new SyncError('つながりません。電波を確認してください')
   }
   if (!res.ok && res.status !== 401) throw new SyncError(`削除できませんでした（${res.status}）`, res.status)
   await forgetConnection()

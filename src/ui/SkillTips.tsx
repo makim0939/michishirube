@@ -25,10 +25,9 @@ export function SkillTips({
 
   return (
     <section className="section">
-      <h2>自分のコツ</h2>
-      {empty ? (
-        <p className="muted small">記録で書いた次の一手や、選んだ原因が、ここにたまります。</p>
-      ) : (
+      {/* 中身が無いあいだは、見出しも説明も出さない（記録するとここに現れる。空の枠と説明文を先に見せない） */}
+      {!empty && <h2>自分のコツ</h2>}
+      {!empty && (
         <div className="tips-card">
           {tips.focus && (
             <div className="tip-block">
