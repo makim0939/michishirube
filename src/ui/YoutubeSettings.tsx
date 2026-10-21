@@ -85,7 +85,7 @@ function YoutubeConnection() {
           )}
           <ConfirmButton
             className="btn small ghost"
-            confirmLabel="やめる"
+            confirmLabel="つながりを切る"
             message="この端末と YouTube のつながりをやめます。上げた動画は YouTube に残ります。"
             onConfirm={() =>
               run(async () => {
