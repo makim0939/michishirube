@@ -91,6 +91,19 @@
         color: var(--ink);
       }
 
+      /* リリースまでの限定のお知らせ。リリースしたら、この CSS と、本文の .notice を消す */
+      .notice {
+        margin-top: 24px;
+        padding: 12px 16px;
+        border-radius: 12px;
+        border: 1px solid var(--accent);
+        background: color-mix(in srgb, var(--accent) 10%, var(--bg));
+        font-size: 0.875rem;
+        line-height: 1.7;
+        letter-spacing: 0.03em;
+        color: var(--ink);
+      }
+
       .hero {
         padding-top: 49px;
         margin-bottom: 60px;
@@ -307,6 +320,8 @@
       </header>
 
       <main>
+        <p class="notice"><span class="section-note">2026/10/21</span> <br/> スマホアプリは現在準備中です。1週間をめどにリリース予定です。</p>
+
         <div class="hero">
           <h2 class="catch">動画<span class="s2">と</span>写真<span class="s2">で、</span><br />毎日の<span class="accent">ラテアート</span>を記録しよう。</h2>
           <p class="sub">成功／失敗と、次の一手をメモ。<br />かんたんな<wbr />ステップで<wbr />記録でき、<wbr />次の<wbr />一杯で<wbr />改善できます。</p>
