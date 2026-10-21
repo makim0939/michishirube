@@ -20,6 +20,7 @@
         --ink: #252528;
         --body: #252528;
         --line: #e3d9cc;
+        --accent: #a8622f;
         --link: #1a1a1a;
         font-family: system-ui, -apple-system, 'Hiragino Sans', 'Noto Sans JP', sans-serif;
       }
@@ -29,6 +30,7 @@
           --ink: #f1e9df;
           --body: #e3d9cc;
           --line: #3a3029;
+          --accent: #d9a373;
           --link: #f1e9df;
         }
       }
@@ -48,6 +50,18 @@
       h1,
       p {
         margin: 0;
+      }
+      /* リリースまでの限定のお知らせ。リリースしたら、この CSS と、本文の .notice を消す */
+      .notice {
+        margin-top: 24px;
+        padding: 12px 16px;
+        border-radius: 12px;
+        border: 1px solid var(--accent);
+        background: color-mix(in srgb, var(--accent) 10%, var(--bg));
+        font-size: 0.875rem;
+        line-height: 1.7;
+        letter-spacing: 0.03em;
+        color: var(--ink);
       }
       header {
         display: flex;
@@ -110,15 +124,14 @@
       </header>
 
       <main>
+        <p class="notice">The iPhone app is coming soon. We plan to release it around October 25, 2026.</p>
+
         <section class="section">
           <p class="section-text">
             Latte-chō (ラテ帳) is a practice journal for latte art. You record each cup with a photo and a short video, mark how it went, and look back to improve your next cup.
           </p>
           <p class="section-text">
             Records stay on your device by default. If you sign in with Google, you can use the same records on other devices. If you link YouTube, your practice videos can be uploaded to your own YouTube channel (unlisted by default) using the YouTube upload permission, which the app requests only when you link YouTube.
-          </p>
-          <p class="section-text">
-            iOS and Android apps: coming soon.
           </p>
         </section>
       </main>
