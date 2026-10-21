@@ -63,11 +63,11 @@ function YoutubeConnection() {
     const rest = left.waiting + left.failed
     if (rest === 0) toast.show('YouTube に上げました')
     else if (left.preparing > 0) toast.show(`画質をそろえています（${left.preparing} 本）。終わると自動で上げます`)
-    else toast.show(left.error ? `まだ ${rest} 本残っています：${left.error}` : `まだ ${rest} 本残っています。電波を確かめて、もう一度試してください`, 'error')
+    else toast.show(left.error ? `まだ ${rest} 本残っています：${left.error}` : `まだ ${rest} 本残っています。しばらくしてからもう一度試してください`, 'error')
   }
 
   if (status === undefined) return <p className="muted small">確認しています…</p>
-  if (status === null) return <p className="muted small">つながりません。電波を確認してください。</p>
+  if (status === null) return <p className="muted small">YouTube の状態を確かめられませんでした。</p>
   if (!status.configured) return <p className="muted small">いまは YouTube とつなげません。</p>
   return (
     <div className="stack">
