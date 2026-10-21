@@ -140,6 +140,38 @@ export async function videoMeta(media: Media): Promise<VideoMeta> {
 
 export class QuotaExceeded extends Error {}
 
+/** YouTube が断った・エラーを返した。message は、そのまま画面に出せる日本語（YouTube の英語の文は出さない） */
+export class YoutubeApiError extends Error {
+  constructor(
+    readonly status: number,
+    readonly reason?: string,
+  ) {
+    super(youtubeErrorMessage(status))
+  }
+}
+
+/** YouTube のエラーの番号から、利用者に分かる文を作る（原因を決めつけず、分かっている事実と、次にすることだけ言う） */
+export function youtubeErrorMessage(status: number): string {
+  if (status === 401) return 'YouTube とのつながりが切れました。設定の「動画」で、つなぎ直してください'
+  if (status === 403) return 'YouTube に断られました。YouTube で、チャンネルの状態（動画を上げられるか）を確かめてください'
+  if (status >= 500) return 'YouTube 側でエラーが起きています。しばらくしてからもう一度試してください'
+  return `YouTube が動画を受け付けませんでした（${status}）`
+}
+
+/**
+ * アップが止まった理由を、画面に出せる文にする（記録して、「今すぐアップ」の結果に出す）。
+ * 通信の失敗は、端末がオフラインと分かるときだけ「通信」と言う（YouTube 側のエラーを「電波」のせいにしない）
+ */
+export function uploadStopReason(e: unknown, online: boolean): string {
+  const retry = 'しばらくしてからもう一度試してください'
+  if (e instanceof QuotaExceeded || e instanceof YoutubeApiError) return e.message
+  if (e instanceof SyncError && e.status !== undefined) return `YouTube とのつながりを確かめられませんでした（${e.status}）。${retry}`
+  if (e instanceof SyncError || e instanceof TypeError) {
+    return online ? `YouTube に送れませんでした。${retry}` : '通信できません。電波や Wi-Fi を確かめてください'
+  }
+  return e instanceof Error ? e.message : `YouTube に上げられませんでした。${retry}`
+}
+
 /**
  * 1本を上げて、YouTube の動画 ID を返す。
  * 再開可能アップロードを使い、アップロード先（Location ヘッダー）を読めない環境では、1回で送る方式にする
@@ -201,7 +233,8 @@ async function throwIfFailed(res: Response) {
     throw new QuotaExceeded('今日アップロードできる上限に達しました')
   }
   if (res.status === 401) token = undefined
-  throw new Error(body.error?.message ?? `YouTube でエラーが起きました（${res.status}）`)
+  // YouTube の英語の文（body.error.message）は、画面に出さない。番号と理由から、日本語の文を作る
+  throw new YoutubeApiError(res.status, reason)
 }
 
 /**
@@ -263,10 +296,17 @@ async function doUploads() {
         const youtubeId = await uploadVideo(content, await videoMeta(m), tokenValue)
         await setUpload(m.id, { upload: 'done', youtubeId, uploadError: undefined, uploadAttempts: undefined }, m.contentAt ?? 0)
       } catch (e) {
+        const online = typeof navigator === 'undefined' || navigator.onLine !== false
         if (e instanceof SyncError && (e.status === 409 || e.status === 400)) {
           // 連携していない・切れた・サーバーに Google の設定が無い：上げずに待つ（設定画面で連携すると再開する）
           blockedUntil = Date.now() + 10 * 60 * 1000
-          if (m.upload === 'uploading') await db.media.update(m.id, { upload: 'pending' })
+          await db.media.update(m.id, {
+            ...(m.upload === 'uploading' ? { upload: 'pending' as const } : {}),
+            uploadError:
+              e.status === 409
+                ? 'YouTube とつながっていません。設定の「動画」で、つないでください'
+                : 'いまは YouTube に上げられません。しばらくしてからもう一度試してください',
+          })
           return
         }
         if (e instanceof QuotaExceeded) {
@@ -276,8 +316,9 @@ async function doUploads() {
           return
         }
         if (e instanceof SyncError || e instanceof TypeError) {
-          // 電波が無い・アプリが裏に回って通信が切れたなど。失敗にはせず、次の機会に上げる
-          await db.media.update(m.id, { upload: 'pending' })
+          // 通信が切れた・アプリが裏に回った・つながりを確かめられなかったなど。失敗にはせず、次の機会に上げる。
+          // 止まった理由は残す（「今すぐアップ」で、何も言わずに「電波を確かめて」と言わないように）
+          await db.media.update(m.id, { upload: 'pending', uploadError: uploadStopReason(e, online) })
           return
         }
         await setUpload(
