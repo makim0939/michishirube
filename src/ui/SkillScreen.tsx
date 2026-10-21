@@ -143,7 +143,7 @@ export function SkillScreen({ id }: { id: string }) {
             >
               はい、できた
             </button>
-            <button className="btn" onClick={() => setAskingAchieve(false)}>
+            <button className="btn ghost" onClick={() => setAskingAchieve(false)}>
               まだ
             </button>
           </div>
