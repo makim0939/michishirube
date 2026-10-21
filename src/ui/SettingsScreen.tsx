@@ -28,6 +28,7 @@ import { RoadmapSettings } from './RoadmapSettings'
 import { backHandler, go, href, type SettingsSection } from './router'
 import { SyncSettings } from './SyncSettings'
 import { YoutubeSettings } from './YoutubeSettings'
+import { showYoutubeSection } from './youtubeSection'
 import { forgetToday } from './TodayScreen'
 import { APP_STORE_REVIEW_URL, isIosApp, isNativeApp, PRIVACY_URL } from '../platform'
 import { AlertIcon, BackIcon, CheckIcon, ForwardIcon } from './icons'
@@ -232,6 +233,7 @@ function StoragePage() {
   const run = useAction()
   const toast = useToast()
   const settings = useLiveQuery(getVideoSettings)
+  const connected = useLiveQuery(isYoutubeConnected)
   if (!settings) return null
   const { storage, quality, keepHigh, youtubePrivacy } = settings
 
@@ -297,7 +299,7 @@ function StoragePage() {
           />
         </ul>
         {/* YouTube に上げるときの、ログイン・つなぐ・利用規約の確認は、ここにまとめる */}
-        {storage === 'youtube' && <YoutubeSettings />}
+        {showYoutubeSection(storage, !!connected) && <YoutubeSettings />}
       </section>
 
       <section className="section">

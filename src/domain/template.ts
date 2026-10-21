@@ -46,7 +46,7 @@ function str(v: unknown, field: string): string {
 }
 
 export function parseTemplate(input: unknown): RoadmapTemplate {
-  if (!isRecord(input)) throw new TemplateError('ロードマップの JSON ではありません')
+  if (!isRecord(input)) throw new TemplateError('ロードマップのファイルではありません')
   if (input.version !== 1) throw new TemplateError('version は 1 にしてください')
   const domain = str(input.domain, 'domain')
   if (!Array.isArray(input.skills) || input.skills.length === 0) {
