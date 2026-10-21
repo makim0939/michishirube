@@ -3524,3 +3524,26 @@ h1.wordmark {
 .feedback-kinds {
   align-self: stretch;
 }
+
+/* ---- 設定：YouTube のタイトルと説明のプレビュー ---- */
+.yt-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  overflow-wrap: anywhere;
+}
+
+.yt-preview p {
+  white-space: pre-wrap;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+.yt-fields {
+  align-items: stretch;
+  width: 100%;
+}

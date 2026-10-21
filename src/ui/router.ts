@@ -12,8 +12,8 @@ export type Route =
   | { name: 'settings'; section?: SettingsSection; notice?: string }
 
 /** 設定の中の画面 */
-export type SettingsSection = 'storage' | 'sync' | 'backup' | 'roadmaps' | 'data' | 'feedback'
-const SETTINGS_SECTIONS: readonly string[] = ['storage', 'sync', 'backup', 'roadmaps', 'data', 'feedback']
+export type SettingsSection = 'storage' | 'sync' | 'backup' | 'roadmaps' | 'data' | 'feedback' | 'video-text'
+const SETTINGS_SECTIONS: readonly string[] = ['storage', 'sync', 'backup', 'roadmaps', 'data', 'feedback', 'video-text']
 
 function safeDecode(part: string): string {
   try {
