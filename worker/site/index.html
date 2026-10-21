@@ -93,21 +93,14 @@
 
       /* App Store へのボタン（Android 版が出たら、Google Play のボタンも並べる） */
       .store {
-        display: inline-flex;
-        flex-direction: column;
-        gap: 2px;
+        display: inline-block;
         margin-top: 20px;
-        padding: 10px 24px 11px;
+        padding: 13px 24px;
         border-radius: 14px;
         background: var(--ink);
         color: var(--bg);
         text-decoration: none;
         line-height: 1.2;
-      }
-      .store small {
-        font-size: 0.6875rem;
-        letter-spacing: 0.08em;
-        opacity: 0.75;
       }
       .store strong {
         font-size: 1.0625rem;
@@ -333,7 +326,7 @@
         <div class="hero">
           <h2 class="catch">動画<span class="s2">と</span>写真<span class="s2">で、</span><br />毎日の<span class="accent">ラテアート</span>を記録しよう。</h2>
           <p class="sub">成功／失敗と、次の一手をメモ。<br />かんたんな<wbr />ステップで<wbr />記録でき、<wbr />次の<wbr />一杯で<wbr />改善できます。</p>
-          <a class="store" href="https://apps.apple.com/jp/app/%E3%83%A9%E3%83%86%E5%B8%B3-%E3%83%A9%E3%83%86%E3%82%A2%E3%83%BC%E3%83%88%E3%81%AE%E7%B7%B4%E7%BF%92%E8%A8%98%E9%8C%B2/id6823908010"><small>iPhone アプリ（無料）</small><strong>App Store でダウンロード</strong></a>
+          <a class="store" href="https://apps.apple.com/jp/app/%E3%83%A9%E3%83%86%E5%B8%B3-%E3%83%A9%E3%83%86%E3%82%A2%E3%83%BC%E3%83%88%E3%81%AE%E7%B7%B4%E7%BF%92%E8%A8%98%E9%8C%B2/id6823908010"><strong>App Store でダウンロード</strong></a>
 
           <!-- 記録のデモ動画／上達が見えるデモ動画。動画ができたら、<img> を <video muted playsinline loop autoplay> に替える -->
           <div class="scroller" role="region" aria-label="ラテ帳の画面" tabindex="0">
