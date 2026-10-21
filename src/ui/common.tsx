@@ -276,7 +276,7 @@ export function ConfirmButton({
         >
           {confirmLabel}
         </button>
-        <button type="button" className="btn" onClick={() => setAsking(false)}>
+        <button type="button" className="btn ghost" onClick={() => setAsking(false)}>
           やめる
         </button>
       </div>
