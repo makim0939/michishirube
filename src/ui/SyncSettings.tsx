@@ -1,5 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   completeLogin,
   deleteAccount,
@@ -12,19 +12,19 @@ import {
 } from '../data/account'
 import { db } from '../data/db'
 import { getSyncConfig, getSyncStatus, runSync } from '../data/sync'
-import { getVideoStorage } from '../data/videoStorage'
-import { connectYoutube, disconnectYoutube, saveYoutubeKey, uploadNow, youtubeStatus, type YoutubeStatus } from '../data/youtube'
+import { saveYoutubeKey } from '../data/youtube'
 import { formatDateTime } from '../domain/format'
+import { accountLabel } from '../data/accountLabel'
 import { ConfirmButton, formatAgo, formatBytes } from './common'
 import { PHOTO_QUOTA_BYTES } from '../../shared/protocol'
 import { useAction, useToast } from './feedback'
 import { replace } from './router'
-import { isIosApp, PRIVACY_URL, YOUTUBE_TERMS_URL } from '../platform'
+import { isIosApp, PRIVACY_URL } from '../platform'
 import { AlertIcon, CheckIcon } from './icons'
 
 /** ログインしたあとのトースト。アプリの中で終えたときと、Web 版で Google の画面から戻ったときで、同じ文言にする */
 const loginMessage = (firstDevice: boolean) =>
-  firstDevice ? 'ログインしました。この端末の記録をサーバーに置きました' : 'ログインしました。記録を受け取りました'
+  firstDevice ? 'ログインしました。この端末の記録を保存しました' : 'ログインしました。記録を受け取りました'
 
 /** Web 版で、Google の画面から戻ってきたら結果を受け取る（戻り先の URL に一度きりのコードが付いてくる） */
 function useWebAuthResult() {
@@ -42,13 +42,15 @@ function useWebAuthResult() {
         toast.show(loginMessage(firstDevice))
       } else {
         await saveYoutubeKey(result.refreshToken)
-        toast.show('YouTube と連携しました')
+        toast.show('YouTube とつなぎました')
+        // つなぐ操作は「動画」の画面にあるので、戻ってきたらそこへ（Web 版は、サーバーが同期の画面へ戻す）
+        replace('/settings/storage')
       }
     })
   }, [run, toast])
 }
 
-/** ログインしていないとき。何をサーバーに置くかを短く伝え、Google でログインしてもらう */
+/** ログインしていないとき。ログインの方法を並べる（何を保存するかは、プライバシーポリシーのリンクで） */
 function LoginSection({ legacy }: { legacy: boolean }) {
   const run = useAction()
   const toast = useToast()
@@ -63,25 +65,25 @@ function LoginSection({ legacy }: { legacy: boolean }) {
   return (
     <section className="section">
       <div className="stack">
-        <p>ログインすると、記録と写真をほかの端末でも使えます。機種を変えても、ログインすれば戻ります。</p>
-        <p className="muted small">
-          サーバーに置くのは、記録・型・写真（縮小したもの）だけです。動画は、この端末か YouTube に置きます。
-          <a href={PRIVACY_URL} target="_blank" rel="noopener noreferrer">
-            くわしく
-          </a>
-        </p>
+        <p>ログインすると、記録と写真をほかの端末でも使えます。</p>
         {legacy && <p className="muted small">前の同期で置いた記録は、ログインすると引き継ぎます。</p>}
         <div className="login-buttons">
           {isIosApp && (
             <button className="login-btn apple" disabled={busy} onClick={() => login(loginWithApple)}>
               {!busy && <AppleLogo />}
-              {busy ? 'ログインしています…' : 'Apple でサインイン'}
+              {busy ? 'ログインしています…' : 'Apple でログイン'}
             </button>
           )}
           <button className="login-btn google" disabled={busy} onClick={() => login(loginWithGoogle)}>
+            {!busy && <GoogleLogo />}
             {busy ? 'ログインしています…' : 'Google でログイン'}
           </button>
         </div>
+        <p className="muted small">
+          <a href={PRIVACY_URL} target="_blank" rel="noopener noreferrer">
+            プライバシーポリシー
+          </a>
+        </p>
       </div>
     </section>
   )
@@ -96,96 +98,19 @@ function AppleLogo() {
   )
 }
 
-function YoutubeSection() {
-  const run = useAction()
-  const toast = useToast()
-  const [status, setStatus] = useState<YoutubeStatus | null>()
-  const [busy, setBusy] = useState(false)
-  // 保存先が端末なら上げないので、アップ待ちも数えない
-  const pending = useLiveQuery(async () =>
-    (await getVideoStorage()) === 'youtube' ? db.media.where('upload').anyOf('pending', 'uploading', 'failed').count() : 0,
-  )
-  // Web 版で連携して戻ってきたとき・連携が切れたときに、表示を取り直す
-  const key = useLiveQuery(async () => !!(await db.meta.get('youtube:refresh')))
-
-  const refresh = useCallback(() => {
-    youtubeStatus()
-      .then((s) => setStatus(s ?? null))
-      .catch(() => setStatus(null))
-  }, [])
-  useEffect(refresh, [refresh, key])
-
-  /** 押したら、上げた結果（まだ残っている本数と、止まっている理由）をトーストで知らせる */
-  const uploadNowAndReport = async () => {
-    setBusy(true)
-    const left = await run(() => uploadNow())
-    setBusy(false)
-    if (!left) return
-    const rest = left.waiting + left.failed
-    if (rest === 0) toast.show('YouTube に上げました')
-    else if (left.preparing > 0) toast.show(`画質をそろえています（${left.preparing} 本）。終わると自動で上げます`)
-    else toast.show(left.error ? `まだ ${rest} 本残っています：${left.error}` : `まだ ${rest} 本残っています。電波を確かめて、もう一度試してください`, 'error')
-  }
-
-  if (status === undefined) return <p className="muted small">確認しています…</p>
-  if (status === null) return <p className="muted small">サーバーにつながりません。</p>
-  if (!status.configured) return <p className="muted small">サーバーに Google の設定がまだありません。</p>
+/** Google 公式の「G」マーク（標準の4色。ブランドガイドラインで、色・形を変えないことが条件。白い背景の上に置く） */
+function GoogleLogo() {
   return (
-    <div className="stack">
-      <p className="status-line">
-        {status.connected ? <CheckIcon size={16} /> : <AlertIcon size={16} />}
-        {status.connected ? 'この端末は連携しています。' : 'この端末は、まだ連携していません。'}
-        {status.connected && !!pending && `アップ待ちの動画が ${pending} 本あります。`}
-      </p>
-      {status.connected ? (
-        <div className="row wrap">
-          {!!pending && (
-            <button className="btn small" disabled={busy} onClick={uploadNowAndReport}>
-              {busy ? 'アップしています…' : '今すぐアップ'}
-            </button>
-          )}
-          <ConfirmButton
-            className="btn small ghost"
-            confirmLabel="解除する"
-            message="この端末の YouTube との連携を解除します。上げた動画は YouTube に残ります。"
-            onConfirm={() =>
-              run(async () => {
-                await disconnectYoutube()
-                refresh()
-              })
-            }
-          >
-            連携を解除
-          </ConfirmButton>
-        </div>
-      ) : (
-        <button
-          className="btn primary"
-          disabled={busy}
-          onClick={async () => {
-            setBusy(true)
-            const ok = await run(() => connectYoutube())
-            setBusy(false)
-            if (ok) toast.show('YouTube と連携しました')
-            refresh()
-          }}
-        >
-          {busy ? '連携しています…' : 'YouTube と連携'}
-        </button>
-      )}
-      <p className="muted small">
-        設定の「動画」で保存先を YouTube にすると、動画をあなたの YouTube チャンネルに上げます（はじめは限定公開）。YouTube
-        の鍵はこの端末にだけ置くので、ほかの端末ではその端末で連携してください。YouTube に上げる動画は、
-        <a href={YOUTUBE_TERMS_URL} target="_blank" rel="noopener noreferrer">
-          YouTube 利用規約
-        </a>
-        に沿った内容であることを、あなたが確認したものとみなされます。動画は「子ども向けではない」として上げます（変えるときは、YouTube で設定してください）。
-      </p>
-    </div>
+    <svg className="login-btn-logo" viewBox="0 0 48 48" aria-hidden="true">
+      <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+      <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+      <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+      <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+    </svg>
   )
 }
 
-/** 設定の「アカウント」：Google でログインして、記録と写真をほかの端末でも使う。YouTube との連携もここで */
+/** 設定の「アカウント」：ログインして、記録と写真をほかの端末でも使う（YouTube とつなぐのは、設定の「動画」） */
 export function SyncSettings({ notice }: { notice?: string }) {
   const run = useAction()
   const toast = useToast()
@@ -198,7 +123,7 @@ export function SyncSettings({ notice }: { notice?: string }) {
 
   // 前の版の「YouTube と連携しました」の戻り先（#/settings/youtube-…）は、ここで受け止めて消す
   useEffect(() => {
-    if (notice?.startsWith('youtube-')) replace('/settings/sync')
+    if (notice?.startsWith('youtube-')) replace('/settings/storage')
   }, [notice])
 
   if (!data) return null
@@ -216,7 +141,7 @@ export function SyncSettings({ notice }: { notice?: string }) {
         <div className="stack">
           <p className="status-line">
             {status.error ? <AlertIcon size={16} /> : <CheckIcon size={16} />}
-            {config.email ?? 'Google アカウント'}
+            {accountLabel(config.email)}
           </p>
           <p className="muted small">
             {status.error
@@ -233,7 +158,7 @@ export function SyncSettings({ notice }: { notice?: string }) {
           )}
           {status.photosFull && (
             <p className="muted small">
-              サーバーに置ける写真の量（{formatBytes(PHOTO_QUOTA_BYTES)}）を超えたため、写真の一部をほかの端末に送れていません。いらない写真・記録を消すと、あとでまた送ります。
+              保存できる写真の量（{formatBytes(PHOTO_QUOTA_BYTES)}）を超えたため、写真の一部をほかの端末に送れていません。いらない写真・記録を消すと、あとでまた送ります。
             </p>
           )}
           <div className="row wrap">
@@ -251,7 +176,7 @@ export function SyncSettings({ notice }: { notice?: string }) {
             <ConfirmButton
               className="btn small ghost"
               confirmLabel="ログアウトする"
-              message="この端末のログインを終えます。端末の記録はそのまま残り、サーバーの記録も消えません。"
+              message="この端末のログインを終えます。端末の記録はそのまま残り、保存した記録も消えません。"
               onConfirm={() =>
                 run(async () => {
                   await logout()
@@ -265,16 +190,11 @@ export function SyncSettings({ notice }: { notice?: string }) {
         </div>
       </section>
 
-      <section className="section">
-        <h2>YouTube</h2>
-        <YoutubeSection />
-      </section>
-
       <section className="section danger-zone">
         <ConfirmButton
           className="btn ghost"
           confirmLabel="削除する"
-          message="アカウントと、サーバーに置いた記録・写真をすべて削除します。元に戻せません。この端末の記録と、YouTube に上げた動画は残ります。"
+          message="アカウントと、保存した記録・写真をすべて削除します。元に戻せません。この端末の記録と、YouTube に上げた動画は残ります。"
           onConfirm={() =>
             run(async () => {
               toast.show(

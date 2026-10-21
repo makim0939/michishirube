@@ -3,6 +3,7 @@ import type { Skill } from '../domain/types'
 import { splitName } from './common'
 import { CheckIcon } from './icons'
 import { PatternImage } from './PatternImage'
+import { useBackHandler } from './useBackHandler'
 
 /**
  * 記録の型を選び直すシート（画面の下から出す）。
@@ -21,6 +22,11 @@ export function SkillPicker({
 }) {
   const latestClose = useRef(onClose)
   latestClose.current = onClose
+  // Android の「戻る」でも閉じる（画面ごと戻らない）
+  useBackHandler(() => {
+    onClose()
+    return true
+  })
   // Esc でも閉じる（PC のキーボード）。閉じたら、押した見出しにキーボードの位置を戻す
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null

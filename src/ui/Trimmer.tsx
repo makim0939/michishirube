@@ -3,6 +3,7 @@ import { inMemory, probeDuration } from '../data/mediaPrep'
 import { clampRange, startTrim, waitUntilSeekable, type TrimJob, type TrimRange } from '../data/trim'
 import { traceVideo } from '../debug'
 import { PauseIcon, PlayIcon, SpeakerIcon } from './icons'
+import { useBackHandler } from './useBackHandler'
 
 /** フィルムの1コマあたりの数（写真アプリのように、横いっぱいに並べる） */
 const FRAMES = 9
@@ -82,6 +83,13 @@ export function Trimmer({
   const [muted, setMuted] = useState(false)
   const [processing, setProcessing] = useState(false)
   const [error, setError] = useState<string>()
+
+  // Android の「戻る」は、「キャンセル」と同じ（記録の入力画面まで戻らない）。作り直している間は、その中止（画面の「キャンセル」と同じ）
+  useBackHandler(() => {
+    if (processing) job.current?.cancel()
+    else onClose()
+    return true
+  })
 
   // メモリに写してから再生する（iPhone で IndexedDB の動画を直接再生できないことがあるため）
   useEffect(() => {

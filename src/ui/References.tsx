@@ -73,9 +73,8 @@ export function References({ skill }: { skill: Skill }) {
         )}
       </div>
       {adding && <AddReferenceForm skillId={skill.id} onDone={() => setAdding(false)} />}
-      {skill.references.length === 0 && !adding ? (
-        <p className="muted small">何度も見返す動画や記事を保存すると、撮るときにカメラの「手本」からすぐ開けます。</p>
-      ) : (
+      {/* 空のときは見出しと「＋ 追加」だけ（使い道は、追加したあとカメラの「手本」で分かる） */}
+      {skill.references.length === 0 ? null : (
         <ul className="references editable">
           {skill.references.map((r) => (
             <li key={r.id}>

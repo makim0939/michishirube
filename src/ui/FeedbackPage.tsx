@@ -86,7 +86,6 @@ export function FeedbackPage() {
         <button className="btn primary" disabled={sending || !message.trim()} onClick={submit}>
           {sending ? '送っています…' : '送る'}
         </button>
-        <p className="muted small">端末の種類とアプリのバージョンが、一緒に届きます。</p>
       </div>
     </section>
   )

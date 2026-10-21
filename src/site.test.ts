@@ -36,8 +36,22 @@ describe('アプリのトップページ（サーバーと同じドメインで�
     expect(html).toContain('href="/privacy-en"')
   })
 
+  it('プライバシーポリシーの末尾は、Web 版ではなく、ラテ帳のホームページに戻る', () => {
+    const html = read('../worker/site/privacy.html')
+    expect(html).toContain('<a href="https://latte.makimura.me/">ラテ帳のホームページ</a>')
+    expect(html).not.toContain('ラテ帳を開く')
+  })
+
   it('トップページのフッターの「お問い合わせ」は、makimura.me のお問い合わせページへ', () => {
     expect(read('../worker/site/index.html')).toContain('<a href="https://www.makimura.me/contact">お問い合わせ</a>')
+  })
+
+  it('プライバシーポリシー（日本語・英語）の問い合わせ先は、makimura.me のお問い合わせページ', () => {
+    for (const path of ['../worker/site/privacy.html', '../worker/site/privacy-en.html']) {
+      const html = read(path)
+      expect(html).toContain('href="https://www.makimura.me/contact"')
+      expect(html).not.toContain('michishirube/issues')
+    }
   })
 
   it('トップページから、英語版のページ（/en）が見つかる', () => {

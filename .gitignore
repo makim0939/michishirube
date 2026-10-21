@@ -11,5 +11,10 @@ dev-dist
 # 署名のチーム ID（各自の端末のファイル。ios/debug.xcconfig から読む）
 ios/signing.xcconfig
 
+# Android の署名の鍵とパスワード（どこで keytool を実行しても、うっかり公開しないように、ルートでも除外する。android/.gitignore と同じ）
+*.jks
+*.keystore
+keystore.properties
+
 # 形の参考にしている画像（出典が様々なので公開しない）
 references/

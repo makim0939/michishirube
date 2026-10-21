@@ -46,7 +46,9 @@ Guideline 4.8（Login Services）：第三者のログイン（Google など）�
 
 ### 2-2. iPad
 
-**最初のリリースは iPhone のみ**（2026-10-18 に決定。`TARGETED_DEVICE_FAMILY = 1`）。iPad の画面写真は不要。以前は、iPhone と iPad の両対応（`"1,2"`）だった。iPad に対応すると、iPad の画面写真が必須で、iPad での見た目も確認される。iPad 対応は、あとで足せる。
+**1.0 は iPhone のみ**（2026-10-18 に決定。1.0 の提出物は `TARGETED_DEVICE_FAMILY = 1`）。iPad の画面写真は不要。以前は、iPhone と iPad の両対応（`"1,2"`）だった。iPad に対応すると、iPad の画面写真が必須で、iPad での見た目も確認される。iPad 対応は、あとで足せる。
+
+**1.0 のあとの iPad 対応**（PR の作業ブランチ。1.0 の結果が出るまでマージしない）：`TARGETED_DEVICE_FAMILY` を `"1,2"` に戻した（画面は、中央の最大幅 680px の列のまま。iPad Air 13 インチのシミュレーターで、今日・カップ帳・型・設定を確認済み）。出す前に、iPad の実機で、撮る → 編集 → 保存 → 共有 を確認し、iPad の画面写真（下の「画面写真」）を撮る。
 
 ### 2-3. YouTube の鍵（トークン）の扱い（5.1.1(v)）
 
@@ -168,7 +170,7 @@ Contact: makim0939@gmail.com
 
 - 形式：JPEG か PNG（**透明なし**）。1〜10枚。
 - iPhone（必須）：Dynamic Island のある機種の縦：**1179×2556 か 1206×2622**（提出前に、App Store Connect の表記で確認）。1つの大きさだけ出せば、小さい端末用は、自動で縮小される。
-- iPad：iPad に対応する場合だけ必須（13インチ：2064×2752 か 2048×2732）。→ 2-2 のとおり、最初は iPhone のみ。
+- iPad：iPad に対応する場合だけ必須（13インチ：2064×2752 か 2048×2732）。→ 2-2 のとおり、1.0 は iPhone のみ。iPad 対応の版を出すときに撮る。
 
 案（5枚。紹介サイトの流れに合わせる）：
 
@@ -189,7 +191,9 @@ Contact: makim0939@gmail.com
 1. `pnpm app:build` で、アプリ用に作って `ios/` に入れる（**`VITE_API_URL` を、ローカルの値にしたまま作らない**）。
 2. Xcode で `ios/App/App.xcworkspace` を開く（または `pnpm app:ios`）。
 3. Signing & Capabilities：Team を有料のチームにする。Bundle Identifier を確認する。
-4. バージョン（`MARKETING_VERSION` = 1.0）とビルド番号（`CURRENT_PROJECT_VERSION`）。**アップロードのたびに、ビルド番号を上げる**。
+4. バージョン（`MARKETING_VERSION`。版の決め方は `docs/versioning.md`）とビルド番号（`CURRENT_PROJECT_VERSION`）。**アップロードのたびに、ビルド番号を上げる**。
+   - 上げる前に、App Store Connect の TestFlight で、**最後に送ったビルド番号を確かめる**。リポジトリの値（ふだんは 1）は、手元で上げた番号とずれていることがある（1.0 の提出で送った 2 は、コミットしていない手元の変更だった）。
+   - 確かめた番号より 1 つ大きい値にしてから、Archive する。送ったあとの番号は、リリースの PR で、リポジトリにも反映する。
 5. 書き出しの暗号化：`Info.plist` に `ITSAppUsesNonExemptEncryption = NO`（HTTPS だけなら、免除）を入れると、アップロードのたびの質問が、出なくなる。
 6. 実機かシミュレーターで、最後の動作確認：撮る → 編集 → 保存 → 共有 → アップ。
 7. Product > Destination を「Any iOS Device (arm64)」にして、Product > Archive。Organizer で「Distribute App」→「App Store Connect」→ アップロード。

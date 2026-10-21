@@ -14,12 +14,15 @@ function SkillForm({
   candidates,
   onSubmit,
   cancelPath,
+  noCandidatesText = 'この分野にほかの型はありません。',
   extra,
 }: {
   initial: SkillInput
   candidates: Skill[]
   onSubmit: (input: SkillInput) => Promise<void>
   cancelPath: string
+  /** 前提にできる型が1つも無いときの一言（理由が、ほかの型が無いのか、すべてあとの型なのかで違う） */
+  noCandidatesText?: string
   extra?: React.ReactNode
 }) {
   const [form, setForm] = useState<SkillInput>(initial)
@@ -49,9 +52,9 @@ function SkillForm({
       </label>
 
       <fieldset className="field">
-        <legend>前提（おすすめの順で、先にする型。前提がまだでも始められます）</legend>
+        <legend>前提（この型の前に身につけておくとよい型）</legend>
         {candidates.length === 0 ? (
-          <p className="muted">この分野にほかの型はありません。</p>
+          <p className="muted">{noCandidatesText}</p>
         ) : (
           <ul className="checks">
             {candidates.map((c) => (
@@ -121,6 +124,8 @@ export function EditSkillScreen({ id }: { id: string }) {
           prereqIds: skill.prereqIds,
         }}
         candidates={candidates}
+        // ほかの型があるのに候補が空なのは、ほかの型がすべて、この型のあとに続くものだから（前提にすると循環する）
+        noCandidatesText={skills.length > 1 ? 'ほかの型は、すべてこの型のあとにやる型です。' : undefined}
         cancelPath={`/skill/${id}`}
         onSubmit={async (input) => {
           const ok = await run(async () => {
