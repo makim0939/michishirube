@@ -90,7 +90,7 @@ let token: { value: string; expiresAt: number; refresh: string } | undefined
 /** アップロード用の access token。この端末の鍵をサーバーに渡し、1時間だけ使えるものに替えてもらう */
 async function accessToken(config: SyncConfig): Promise<string> {
   const refresh = await refreshToken()
-  if (!refresh) throw new SyncError('YouTube と連携していません', 409)
+  if (!refresh) throw new SyncError('YouTube とつながっていません', 409)
   if (token && token.refresh === refresh && token.expiresAt - Date.now() > 60_000) return token.value
   let res: { accessToken: string; expiresAt: number }
   try {

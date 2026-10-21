@@ -258,15 +258,15 @@ export async function importBackup(zips: Blob[]): Promise<ImportSummary> {
     try {
       entries = await readZip(zip)
     } catch {
-      throw new BackupError('ZIP ファイルとして読み込めませんでした')
+      throw new BackupError('バックアップのファイルとして読み込めませんでした')
     }
     for (const [name, blob] of entries) {
       if (name !== 'data.json') files.set(name, blob)
-      else if (dataFile) throw new BackupError('別々のバックアップが混ざっています。1回分の ZIP だけを選んでください')
+      else if (dataFile) throw new BackupError('別々のバックアップが混ざっています。1回分のファイルだけを選んでください')
       else dataFile = blob
     }
   }
-  if (!dataFile) throw new BackupError('バックアップに data.json がありません（分割されている場合は、1つ目の ZIP も選んでください）')
+  if (!dataFile) throw new BackupError('バックアップの本体が見つかりません（分けて保存したときは、1つ目のファイルも選んでください）')
   const data = parseBackupData(strFromU8(new Uint8Array(await dataFile.arrayBuffer())))
 
   // 古い形式（同期・参考資料の前）のバックアップも読めるよう、足りない項目を補う

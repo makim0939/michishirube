@@ -122,11 +122,11 @@ function Notice() {
     // 連携していないと、待っていても上がらない。「開いている間に上げます」と言わず、何をすればよいかを伝える
     if (!data.connected) {
       return (
-        <a className="notice" href={href('/settings/sync')}>
+        <a className="notice" href={href('/settings/storage')}>
           <AlertIcon size={18} />
           <span>
-            動画 {data.backlog.waiting} 本が YouTube に上がっていません。「アカウント」で
-            {isLoggedIn(data.config) ? '' : 'ログインして、'}連携してください
+            動画 {data.backlog.waiting} 本が YouTube に上がっていません。「動画」の設定で
+            {isLoggedIn(data.config) ? '' : 'ログインして、'}YouTube とつないでください
           </span>
         </a>
       )

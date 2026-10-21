@@ -27,8 +27,9 @@ import { FeedbackPage } from './FeedbackPage'
 import { RoadmapSettings } from './RoadmapSettings'
 import { backHandler, go, href, type SettingsSection } from './router'
 import { SyncSettings } from './SyncSettings'
+import { YoutubeSettings } from './YoutubeSettings'
 import { forgetToday } from './TodayScreen'
-import { APP_STORE_REVIEW_URL, isAndroidApp, isIosApp, isNativeApp, PRIVACY_URL, YOUTUBE_TERMS_URL } from '../platform'
+import { APP_STORE_REVIEW_URL, isIosApp, isNativeApp, PRIVACY_URL } from '../platform'
 import { AlertIcon, BackIcon, CheckIcon, ForwardIcon } from './icons'
 
 function StorageStatus() {
@@ -151,7 +152,7 @@ function SettingsHome() {
           <Row
             to="storage"
             label="動画"
-            value={`${data.video.storage === 'device' ? 'この端末' : 'YouTube'}・${data.video.quality === 'high' ? '高画質' : '標準'}`}
+            value={`${data.video.storage === 'device' ? 'この端末' : 'YouTube'}・${data.video.quality === 'high' ? '高画質' : '標準画質'}`}
           />
           <Row to="sync" label="アカウント" value={sync} warn={loggedIn && !!data.status.error} />
           <Row to="backup" label="バックアップ" />
@@ -224,38 +225,6 @@ function Choice({
 }
 
 /**
- * 保存先を YouTube にしたときの、連携の状態。連携するまでは上がらず、動画は端末に残る。
- * 連携はログインのあとの画面（アカウント）にあるので、どちらが足りないかと、そこへの行き方を出しておく
- */
-function YoutubeLinkState() {
-  const state = useLiveQuery(async () => ({
-    loggedIn: isLoggedIn(await getSyncConfig()),
-    connected: await isYoutubeConnected(),
-  }))
-  if (!state) return null
-  if (state.connected) {
-    return (
-      <p className="status-line small">
-        <CheckIcon size={16} />
-        YouTube と連携しています。
-      </p>
-    )
-  }
-  return (
-    <div className="stack">
-      <p className="status-line small">
-        <AlertIcon size={16} />
-        {state.loggedIn ? 'YouTube との連携がまだです。' : 'ログインと YouTube との連携がまだです。'}
-        連携するまで、動画は端末に置かれます。
-      </p>
-      <a className="btn small" href={href('/settings/sync')}>
-        {state.loggedIn ? 'YouTube と連携する' : 'ログインして連携する'}
-      </a>
-    </div>
-  )
-}
-
-/**
  * 動画の設定：保存先（この端末・YouTube）と画質（標準・高画質）。YouTube のときは公開範囲も。
  * 説明は各行の短い一言だけにし、選んだときの結果はトーストで知らせる
  */
@@ -275,10 +244,10 @@ function StoragePage() {
         toast.show('動画を YouTube に上げ始めます')
         void resumeUploads().catch(() => {})
       } else if (isLoggedIn(await getSyncConfig())) {
-        toast.show('「アカウント」で YouTube と連携すると、動画を上げ始めます')
+        toast.show('YouTube とつなぐと、動画を上げ始めます')
       } else {
-        // YouTube の連携は、Google でログインしたあとの画面にある
-        toast.show('YouTube に上げるには、「アカウント」でログインして、YouTube と連携してください')
+        // YouTube とつなぐには、先にログインが要る（下に、ログインへのボタンを出す）
+        toast.show('YouTube に上げるには、ログインして YouTube とつないでください')
       }
     } else {
       toast.show('これから撮る動画は、この端末にだけ置きます')
@@ -300,7 +269,7 @@ function StoragePage() {
 
   const changePrivacy = async (value: YoutubePrivacy) => {
     await setYoutubePrivacy(value)
-    toast.show(value === 'public' ? 'これから上げる動画は、だれでも見られます' : 'これから上げる動画は、限定公開になります')
+    toast.show(value === 'public' ? 'これから上げる動画は、だれでも見られます' : 'これから上げる動画は、リンクを知っている人だけが見られます')
   }
 
   // いま選んでいる項目をもう一度押したときに、トーストや動画の作り直し（optimizeVideos）が走らないようにする
@@ -322,19 +291,13 @@ function StoragePage() {
           />
           <Choice
             label="YouTube"
-            sub={`上げて${TIDY_AFTER_DAYS}日たったら端末から消します。端末の容量をほとんど使いません`}
+            sub={`上げて${TIDY_AFTER_DAYS}日たつと、端末から消します`}
             selected={storage === 'youtube'}
             onSelect={select(storage, 'youtube', changeStorage)}
           />
         </ul>
-        <p className="muted small">
-          YouTube に上げる動画は、
-          <a href={YOUTUBE_TERMS_URL} target="_blank" rel="noopener noreferrer">
-            YouTube 利用規約
-          </a>
-          に沿った内容であることを、あなたが確認したものとみなされます。
-        </p>
-        {storage === 'youtube' && <YoutubeLinkState />}
+        {/* YouTube に上げるときの、ログイン・つなぐ・利用規約の確認は、ここにまとめる */}
+        {storage === 'youtube' && <YoutubeSettings />}
       </section>
 
       <section className="section">
@@ -342,18 +305,17 @@ function StoragePage() {
         <ul className="settings-list" role="radiogroup" aria-label="画質">
           <Choice
             label="標準"
-            sub={`720p・30秒で約${megabytesPer30s('standard')}MB（100杯で約${megabytesPer30s('standard') / 10}GB）`}
+            sub={`30秒で約${megabytesPer30s('standard')}MB`}
             selected={quality === 'standard'}
             onSelect={select(quality, 'standard', changeQuality)}
           />
           <Choice
             label="高画質"
-            sub={`1080p・30秒で約${megabytesPer30s('high')}MB。SNS に出す人向け`}
+            sub={`30秒で約${megabytesPer30s('high')}MB。SNS 向け`}
             selected={quality === 'high'}
             onSelect={select(quality, 'high', changeQuality)}
           />
         </ul>
-        <p className="muted small">撮るときの画面で、その動画だけ変えることもできます</p>
         {/* 端末に置く高画質の動画は、撮ってすぐ（SNS に出すとき）だけ高画質にして、あとは軽くできる。軽くするのはアプリだけ */}
         {quality === 'high' && storage === 'device' && isNativeApp && (
           <ul className="settings-list">
@@ -362,7 +324,7 @@ function StoragePage() {
                 <span className="settings-label">
                   高画質のまま残す
                   <span className="settings-sub">
-                    {keepHigh ? 'ずっと高画質で置きます' : `${KEEP_HIGH_DAYS}日たったら標準に軽くします（SNS には撮ってすぐ出せます）`}
+                    {keepHigh ? 'ずっと高画質で置きます' : `${KEEP_HIGH_DAYS}日たつと標準画質にします`}
                   </span>
                 </span>
                 <input
@@ -382,14 +344,14 @@ function StoragePage() {
           <h2>YouTube の公開範囲</h2>
           <ul className="settings-list" role="radiogroup" aria-label="YouTube の公開範囲">
             <Choice
-              label="限定公開"
-              sub="URL を知っている人だけ見られます"
+              label="リンクを知っている人だけ"
+              sub="検索や一覧には出ません"
               selected={youtubePrivacy === 'unlisted'}
               onSelect={select(youtubePrivacy, 'unlisted', changePrivacy)}
             />
             <Choice
-              label="公開"
-              sub="だれでも見られ、検索にも出ます。練習を発信したい人向け"
+              label="だれでも"
+              sub="検索にも出ます"
               selected={youtubePrivacy === 'public'}
               onSelect={select(youtubePrivacy, 'public', changePrivacy)}
             />
@@ -463,12 +425,9 @@ function BackupPage() {
       {exported.length > 0 && (
         <div className="confirm">
           <p>
-            バックアップを作りました
-            {exported.length > 1 && `。大きいので ${exported.length} つの ZIP に分けています。復元するときは全部を選んでください`}
-            {/* AirDrop は iPhone・iPad の言葉。Android は共有シートに、ドライブなどの保存先が出る */}
-            {isAndroidApp
-              ? '。Google ドライブなどに保存して、この端末の外にも置いてください。'
-              : '。「ファイルに保存」や AirDrop で、この端末の外にも置いてください。'}
+            バックアップができました。
+            {/* 保存先は、共有シートの選択肢（ファイル・ドライブなど）で選べるので、ここでは案内しない */}
+            {exported.length > 1 && `大きいので ${exported.length} つに分けました。復元するときは、全部を選んでください。`}
           </p>
           <div className="stack">
             {exported.map((part) => (
@@ -496,7 +455,7 @@ function BackupPage() {
       {pendingRestore.length > 0 && (
         <div className="confirm">
           <p>
-            {pendingRestore.length === 1 ? `「${pendingRestore[0].name}」` : `${pendingRestore.length} つの ZIP`}（
+            {pendingRestore.length === 1 ? `「${pendingRestore[0].name}」` : `${pendingRestore.length} つのファイル`}（
             {formatBytes(pendingRestore.reduce((sum, f) => sum + f.size, 0))}）で、
             <strong>いまのデータをすべて置き換えます。</strong>元に戻せません。
           </p>
@@ -542,7 +501,7 @@ function DataPage() {
       <ConfirmButton
         className="btn ghost"
         confirmLabel="すべて削除する"
-        message="この端末のロードマップ・記録・動画・写真・設定をすべて削除し、ログインも解除します。サーバーの記録・写真と YouTube の動画は消えないので、ログインし直せば戻ります。この端末にだけある動画（YouTube に上げていないもの）と、まだ送れていない変更は戻りません。"
+        message="この端末のロードマップ・記録・動画・写真・設定をすべて削除し、ログインも解除します。保存した記録・写真と YouTube の動画は消えないので、ログインし直せば戻ります。この端末にだけある動画（YouTube に上げていないもの）と、まだ送れていない変更は戻りません。"
         onConfirm={() =>
           run(async () => {
             // 送っていない変更があれば、先に送っておく（電波が悪ければ、長くは待たない）
