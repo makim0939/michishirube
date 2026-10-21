@@ -103,15 +103,16 @@ export function SkillScreen({ id }: { id: string }) {
         <a className="btn primary" href={href(`/record/${skill.id}`)}>
           記録する
         </a>
+        {/* 「できた」は、このアプリでいちばんうれしい瞬間のボタンなので、金色で並べて見せる */}
+        {state !== 'done' && !askingAchieve && (
+          <button className="btn achieve" onClick={() => setAskingAchieve(true)}>
+            できた
+          </button>
+        )}
       </div>
 
-      {/* 「できた」も「取り消す」も、目立つ「記録する」の下の、静かなボタン（目立つボタンは1つ）。
+      {/* 「取り消す」は、まれで、戻す操作なので、静かなボタンにする。
           確認は、2つ並べたボタンの中ではなく、その下に広げる（横に押し込むと、「記録する」が縦に伸びて崩れる） */}
-      {state !== 'done' && !askingAchieve && (
-        <button className="btn small ghost" onClick={() => setAskingAchieve(true)}>
-          できた
-        </button>
-      )}
       {state === 'done' && (
         <ConfirmButton
           className="btn small ghost"
