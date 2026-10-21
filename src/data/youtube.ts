@@ -146,13 +146,14 @@ export class YoutubeApiError extends Error {
     readonly status: number,
     readonly reason?: string,
   ) {
-    super(youtubeErrorMessage(status))
+    super(youtubeErrorMessage(status, reason))
   }
 }
 
 /** YouTube のエラーの番号から、利用者に分かる文を作る（原因を決めつけず、分かっている事実と、次にすることだけ言う） */
-export function youtubeErrorMessage(status: number): string {
-  if (status === 401) return 'YouTube とのつながりが切れました。設定の「動画」で、つなぎ直してください'
+export function youtubeErrorMessage(status: number, reason?: string): string {
+  // 権限が足りないときは、チャンネルではなく、つなぎ直しで直る
+  if (status === 401 || reason === 'insufficientPermissions') return 'YouTube とのつながりが切れました。設定の「動画」で、つなぎ直してください'
   if (status === 403) return 'YouTube に断られました。YouTube で、チャンネルの状態（動画を上げられるか）を確かめてください'
   if (status >= 500) return 'YouTube 側でエラーが起きています。しばらくしてからもう一度試してください'
   return `YouTube が動画を受け付けませんでした（${status}）`
@@ -165,7 +166,10 @@ export function youtubeErrorMessage(status: number): string {
 export function uploadStopReason(e: unknown, online: boolean): string {
   const retry = 'しばらくしてからもう一度試してください'
   if (e instanceof QuotaExceeded || e instanceof YoutubeApiError) return e.message
+  // ログイン切れ・つなぎ直しは、サーバーが言う次にすることをそのまま出す
+  if (e instanceof SyncError && (e.status === 401 || e.status === 409)) return e.message
   if (e instanceof SyncError && e.status !== undefined) return `YouTube とのつながりを確かめられませんでした（${e.status}）。${retry}`
+  // 番号の無い SyncError は、このアップの経路では、通信そのものの失敗（fetch が返らなかった）だけ
   if (e instanceof SyncError || e instanceof TypeError) {
     return online ? `YouTube に送れませんでした。${retry}` : '通信できません。電波や Wi-Fi を確かめてください'
   }
@@ -360,6 +364,9 @@ export async function uploadNow(): Promise<{ waiting: number; failed: number; pr
   // 前の処理が終わっていなければ、その後ろに並ぶだけ（待たずに、進んでいることを知らせる）
   void moveContentsToFiles(unprepared)
   void optimizeVideos(unprepared)
+  // 前の試行の理由は消す（今回の試行で、止まった理由をつけ直す。古い理由を「今の理由」として出さない）
+  const waiting = (await db.media.where('upload').anyOf('pending', 'uploading').primaryKeys()) as string[]
+  await Promise.all(waiting.map((id) => db.media.update(id, { uploadError: undefined })))
   await resumeUploads()
   const backlog = await uploadBacklog()
   // 理由は、blob を持たせずに読む（索引から読んだ Blob は使わないので、エラーの文だけ見る）

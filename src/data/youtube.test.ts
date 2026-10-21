@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { SITE_URL } from '../platform'
 import type { Media } from '../domain/types'
 import { SyncError } from './sync'
-import { QuotaExceeded, uploadStopReason, uploadVideo, videoMeta, YoutubeApiError } from './youtube'
+import { QuotaExceeded, uploadStopReason, uploadVideo, videoMeta, YoutubeApiError, youtubeErrorMessage } from './youtube'
 
 describe('YouTube に付ける説明', () => {
   it('説明の最後に、アプリの紹介ページのリンクを付ける（説明欄から来てもらう）', async () => {
@@ -21,8 +21,17 @@ describe('アップが止まった理由（画面に出す文）', () => {
       })) as typeof fetch
     const error = await uploadVideo(new Blob(['x'], { type: 'video/mp4' }), { title: 't', description: 'd' }, 'token', fetchImpl).catch((e) => e)
     expect(error).toBeInstanceOf(YoutubeApiError)
+    expect(error.message).toBe(youtubeErrorMessage(403))
     expect(error.message).toContain('YouTube に断られました')
-    expect(error.message).not.toMatch(/[A-Za-z]{4,} [A-Za-z]{4,}/)
+    expect(error.message).not.toContain('quota')
+  })
+
+  it('権限が足りないときは、チャンネルの確認ではなく、つなぎ直しを案内する', () => {
+    expect(youtubeErrorMessage(403, 'insufficientPermissions')).toContain('つなぎ直してください')
+  })
+
+  it('ログイン切れ（401）のときは、サーバーが言う次にすることをそのまま出す', () => {
+    expect(uploadStopReason(new SyncError('ログインし直してください', 401), true)).toBe('ログインし直してください')
   })
 
   it('YouTube 側のエラー（5xx）は、電波のせいにせず、YouTube 側と言う', () => {
