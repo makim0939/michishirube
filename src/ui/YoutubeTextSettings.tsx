@@ -5,6 +5,7 @@ import {
   DEFAULT_DESCRIPTION,
   DEFAULT_TITLE,
   getVideoTemplates,
+  isCustomTemplates,
   previewVars,
   resetVideoTemplates,
   setVideoTemplate,
@@ -27,6 +28,8 @@ export function YoutubeTextSettings() {
   const preview = useLiveQuery(previewVars)
   const [draft, setDraft] = useState<VideoTemplates>()
   const last = useRef<Kind>('title')
+  // 保存は1つずつ順番に流す（続けて打っても、最後に打った内容が残るように）
+  const saving = useRef<Promise<unknown>>(Promise.resolve())
   const fields = useRef<Record<Kind, HTMLInputElement | HTMLTextAreaElement | null>>({ title: null, description: null })
   // 入力中の文字は、保存の反映を待たずに画面で持つ（保存の読み直しで、カーソルが飛ばないように）
   useEffect(() => {
@@ -36,7 +39,7 @@ export function YoutubeTextSettings() {
 
   const edit = (kind: Kind, value: string) => {
     setDraft({ ...draft, [kind]: value })
-    void setVideoTemplate(kind, value)
+    saving.current = saving.current.then(() => setVideoTemplate(kind, value)).catch(() => {})
   }
 
   const insert = (name: string) => {
@@ -55,7 +58,7 @@ export function YoutubeTextSettings() {
   }
 
   const shown = buildVideoText(draft, preview.vars)
-  const changed = draft.title !== DEFAULT_TITLE || draft.description !== DEFAULT_DESCRIPTION
+  const changed = isCustomTemplates(draft)
 
   return (
     <>
@@ -85,7 +88,7 @@ export function YoutubeTextSettings() {
               onChange={(e) => edit('description', e.target.value)}
             />
           </label>
-          <div className="suggest-chips" aria-label="入れられる項目（押すと、カーソルの位置に入ります）">
+          <div className="suggest-chips" role="group" aria-label="入れられる項目（押すと、カーソルの位置に入ります）">
             {TEMPLATE_FIELDS.map((name) => (
               <button key={name} type="button" onClick={() => insert(name)}>
                 {name}

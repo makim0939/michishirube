@@ -20,7 +20,20 @@ const DESCRIPTION_KEY = 'youtubeDescriptionTemplate'
 
 /** YouTube の上限（タイトル100文字・説明5000バイト）に収める。「<」「>」は YouTube が受け付けない */
 const TITLE_MAX = 100
-const DESCRIPTION_MAX = 4900
+const DESCRIPTION_MAX_BYTES = 4900
+
+/** UTF-8 で max バイトまでに切る（日本語は1文字3バイトなので、文字数では足りない）。文字の途中では切らない */
+function cutBytes(text: string, max: number): string {
+  const enc = new TextEncoder()
+  let bytes = 0
+  let out = ''
+  for (const ch of text) {
+    bytes += enc.encode(ch).length
+    if (bytes > max) break
+    out += ch
+  }
+  return out
+}
 
 /**
  * テンプレートに記録の中身を入れる。
@@ -64,7 +77,7 @@ export function buildVideoText(templates: VideoTemplates, vars: TemplateVars): {
       .replace(/(\s*｜\s*){2,}/g, '｜')
       .replace(/^\s*｜\s*|\s*｜\s*$/g, '')
   const title = oneLine(templates.title) || oneLine(DEFAULT_TITLE) || 'ラテ帳'
-  return { title: title.slice(0, TITLE_MAX), description: clean(renderTemplate(templates.description, vars)).slice(0, DESCRIPTION_MAX) }
+  return { title: title.slice(0, TITLE_MAX), description: cutBytes(clean(renderTemplate(templates.description, vars)), DESCRIPTION_MAX_BYTES) }
 }
 
 /** 記録・型・分野から、テンプレートに入れる中身を作る。ts は動画を撮った時刻 */
@@ -79,6 +92,11 @@ export function templateVars(ts: number, record?: PracticeRecord, skill?: Skill,
     メモ: record?.reason || undefined,
     次の一手: record?.nextAction || undefined,
   }
+}
+
+/** 標準の書き方から変えているか */
+export function isCustomTemplates(t: VideoTemplates): boolean {
+  return t.title !== DEFAULT_TITLE || t.description !== DEFAULT_DESCRIPTION
 }
 
 /** 読むだけなので、liveQuery の中でも使える。まだ変えていなければ標準 */
@@ -108,7 +126,9 @@ export async function previewVars(): Promise<{ vars: TemplateVars; sample: boole
   if (record) {
     const skill = await db.skills.get(record.skillId)
     const domain = skill ? await db.domains.get(skill.domainId) : undefined
-    return { vars: templateVars(record.createdAt, record, skill, domain), sample: false }
+    // 実際のタイトルは動画を撮った時刻を使うので、プレビューも、その記録の最後の動画の時刻にそろえる
+    const media = record.mediaIds.length ? await db.media.get(record.mediaIds[record.mediaIds.length - 1]) : undefined
+    return { vars: templateVars(media?.createdAt ?? record.createdAt, record, skill, domain), sample: false }
   }
   const now = Date.now()
   return {

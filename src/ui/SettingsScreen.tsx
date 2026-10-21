@@ -20,7 +20,7 @@ import {
 } from '../data/videoStorage'
 import { megabytesPer30s } from '../data/mediaPrep'
 import { isYoutubeConnected, resumeUploads } from '../data/youtube'
-import { DEFAULT_DESCRIPTION, DEFAULT_TITLE, getVideoTemplates } from '../data/videoText'
+import { getVideoTemplates, isCustomTemplates } from '../data/videoText'
 import { ConfirmButton, formatBytes, requestPersist, saveFile } from './common'
 import { clearImageCaches } from './imageCache'
 import { useAction, useToast } from './feedback'
@@ -242,7 +242,7 @@ function StoragePage() {
   const connected = useLiveQuery(isYoutubeConnected)
   const templates = useLiveQuery(getVideoTemplates)
   if (!settings) return null
-  const titleChanged = !!templates && (templates.title !== DEFAULT_TITLE || templates.description !== DEFAULT_DESCRIPTION)
+  const customTemplates = !!templates && isCustomTemplates(templates)
   const { storage, quality, keepHigh, youtubePrivacy } = settings
 
   const changeStorage = async (value: VideoStorage) => {
@@ -367,7 +367,7 @@ function StoragePage() {
             />
           </ul>
           <ul className="settings-list">
-            <Row to="video-text" label="タイトルと説明" value={titleChanged ? '自分で設定' : '標準'} />
+            <Row to="video-text" label="タイトルと説明" value={customTemplates ? '自分で設定' : '標準'} />
           </ul>
         </section>
       )}

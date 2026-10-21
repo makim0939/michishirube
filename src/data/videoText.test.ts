@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { buildVideoText, DEFAULT_DESCRIPTION, DEFAULT_TITLE, renderTemplate, templateVars } from './videoText'
+import { db } from './db'
+import { videoMeta } from './youtube'
+import type { Media } from '../domain/types'
+import {
+  buildVideoText,
+  DEFAULT_DESCRIPTION,
+  DEFAULT_TITLE,
+  getVideoTemplates,
+  isCustomTemplates,
+  renderTemplate,
+  resetVideoTemplates,
+  setVideoTemplate,
+  templateVars,
+} from './videoText'
 
 const full = { 分野: 'ラテアート', 型: 'ハート', 日時: '2026/10/10 9:05', 結果: '◎ 成功', 原因: '注ぎ方', メモ: '良かった', 次の一手: '高く注ぐ' }
 
@@ -42,5 +55,42 @@ describe('YouTube のタイトルと説明の書き方', () => {
     expect(v.結果).toContain('惜しい')
     expect(v.原因).toBe('a・b')
     expect(v.メモ).toBeUndefined()
+  })
+})
+
+describe('説明の長さ', () => {
+  it('YouTube の上限はバイトなので、日本語でも 5000 バイトに収める', () => {
+    const { description } = buildVideoText({ title: '{型}', description: 'あ'.repeat(3000) }, full)
+    expect(new TextEncoder().encode(description).length).toBeLessThanOrEqual(4900)
+    expect(description).toMatch(/^あ+$/)
+  })
+})
+
+describe('書き方の保存', () => {
+  const media = { id: 'm1', recordId: 'none', skillId: 'none', type: 'video/mp4', createdAt: 1 } as Media
+
+  it('変えていなければ標準。変えたものは、動画に付くタイトルに反映される', async () => {
+    await resetVideoTemplates()
+    expect(isCustomTemplates(await getVideoTemplates())).toBe(false)
+    await setVideoTemplate('title', '練習 {日付}')
+    expect(isCustomTemplates(await getVideoTemplates())).toBe(true)
+    expect((await videoMeta(media)).title).toMatch(/^練習 \d{4}\/\d+\/\d+$/)
+    await resetVideoTemplates()
+  })
+
+  it('標準と同じ内容を保存したときと、タイトルを空にしたときは、保存を消して標準にもどる', async () => {
+    await setVideoTemplate('title', 'x')
+    await setVideoTemplate('title', DEFAULT_TITLE)
+    expect(await db.meta.get('youtubeTitleTemplate')).toBeUndefined()
+    await setVideoTemplate('title', 'x')
+    await setVideoTemplate('title', '')
+    expect((await getVideoTemplates()).title).toBe(DEFAULT_TITLE)
+  })
+
+  it('説明は、空にして保存できる（説明なしで上がる）', async () => {
+    await setVideoTemplate('description', '')
+    expect((await getVideoTemplates()).description).toBe('')
+    expect((await videoMeta(media)).description).toBe('')
+    await resetVideoTemplates()
   })
 })
