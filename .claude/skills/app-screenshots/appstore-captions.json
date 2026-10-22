@@ -1,6 +1,6 @@
 [
   {"file": "home", "name": "home", "title": "撮るだけで、\n{今日の1杯}を記録"},
-  {"file": "record", "name": "record", "title": "{ワンタップ}で結果を記録\n次の一手もメモ"},
+  {"file": "record", "name": "record", "title": "{ワンタップ}で、\n結果と次の一手を記録"},
   {"file": "compare-photo", "name": "compare", "title": "最初と最新を{見くらべて}\n上達を実感"},
   {"file": "note", "name": "tips", "title": "うまくいった理由が\n{自分のコツ}になる"},
   {"file": "pattern", "name": "types", "title": "{型ごと}に、練習の\n積み重ねが見える"},

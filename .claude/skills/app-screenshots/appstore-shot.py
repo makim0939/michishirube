@@ -16,9 +16,10 @@ here = Path(__file__).parent
 captions = json.loads((here / 'appstore-captions.json').read_text())
 
 W, H = 1179, 2556  # iPhone 6.3 インチ（Dynamic Island の機種）の大きさ
-ACCENT = (168, 98, 47)
-INK, LINE = (37, 37, 40), (222, 208, 190)
-BG_TOP, BG_BOTTOM = (252, 249, 244), (240, 228, 212)
+# 背景は、濃いコーヒー色。アプリの画面は明るい色なので、小さく見えても、画面のふちがはっきりする
+ACCENT = (242, 184, 120)
+INK, LINE = (252, 246, 238), (110, 80, 60)
+BG_TOP, BG_BOTTOM = (84, 58, 42), (46, 31, 23)
 
 HEAD = '/System/Library/Fonts/ヒラギノ角ゴシック W7.ttc'
 
@@ -105,8 +106,8 @@ def background():
     # 窓辺の光のような、ぼやけた丸（飾りは、これだけ）
     glow = Image.new('RGBA', (W, H), (0, 0, 0, 0))
     gd = ImageDraw.Draw(glow)
-    gd.ellipse((W - 560, -300, W + 260, 520), fill=(255, 230, 190, 90))
-    gd.ellipse((-340, 1500, 420, 2260), fill=(214, 160, 110, 40))
+    gd.ellipse((W - 560, -300, W + 260, 520), fill=(200, 140, 85, 85))
+    gd.ellipse((-340, 1500, 420, 2260), fill=(170, 110, 70, 60))
     glow = glow.filter(ImageFilter.GaussianBlur(120))
     im.paste(glow, (0, 0), glow)
     return im
@@ -140,7 +141,7 @@ def compose(clean, title):
     shot = clean.resize((sw, sh), Image.LANCZOS)
     # 影 → 画面（下は、はみ出させる。画面の続きがあることを見せる）→ 細い線
     shadow = Image.new('RGBA', (W, H), (0, 0, 0, 0))
-    ImageDraw.Draw(shadow).rounded_rectangle((x0, y0 + 20, x0 + sw, y0 + sh + 20), radius=rad, fill=(90, 60, 30, 90))
+    ImageDraw.Draw(shadow).rounded_rectangle((x0, y0 + 20, x0 + sw, y0 + sh + 20), radius=rad, fill=(10, 5, 0, 150))
     shadow = shadow.filter(ImageFilter.GaussianBlur(34))
     im.paste(shadow, (0, 0), shadow)
     mask = Image.new('L', (sw, sh), 0)
