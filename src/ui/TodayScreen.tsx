@@ -499,9 +499,8 @@ export function TodayScreen() {
           ) : (
             <div className="sheet-empty">
               <h2>練習中の型</h2>
-              <p>型の画面から、やってみたい型を選んで記録すると、ここに出ます。</p>
               <a className="btn" href={href('/map')}>
-                型の画面を開く
+                型を選ぶ
               </a>
             </div>
           )
