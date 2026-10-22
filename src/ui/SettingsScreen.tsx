@@ -20,6 +20,7 @@ import {
 } from '../data/videoStorage'
 import { megabytesPer30s } from '../data/mediaPrep'
 import { isYoutubeConnected, resumeUploads } from '../data/youtube'
+import { getVideoTemplates, isCustomTemplates } from '../data/videoText'
 import { ConfirmButton, formatBytes, requestPersist, saveFile } from './common'
 import { clearImageCaches } from './imageCache'
 import { useAction, useToast } from './feedback'
@@ -28,6 +29,7 @@ import { RoadmapSettings } from './RoadmapSettings'
 import { backHandler, go, href, type SettingsSection } from './router'
 import { SyncSettings } from './SyncSettings'
 import { YoutubeSettings } from './YoutubeSettings'
+import { YoutubeTextSettings } from './YoutubeTextSettings'
 import { showYoutubeSection } from './youtubeSection'
 import { forgetToday } from './TodayScreen'
 import { APP_STORE_REVIEW_URL, isIosApp, isNativeApp, PRIVACY_URL } from '../platform'
@@ -91,6 +93,7 @@ const TITLES: Record<SettingsSection, string> = {
   roadmaps: 'ロードマップ',
   data: 'データの削除',
   feedback: 'ご意見・ご要望',
+  'video-text': 'タイトルと説明',
 }
 
 /**
@@ -98,10 +101,12 @@ const TITLES: Record<SettingsSection, string> = {
  */
 export function SettingsScreen({ section, notice }: { section?: SettingsSection; notice?: string }) {
   if (!section) return <SettingsHome />
+  // 「タイトルと説明」は、動画の設定の中の画面なので、動画に戻る
+  const back = section === 'video-text' ? '/settings/storage' : '/settings'
   return (
     <div className="screen">
       <header className="screen-header">
-        <a className="back" href={href('/settings')} onClick={backHandler('/settings')} aria-label="設定に戻る">
+        <a className="back" href={href(back)} onClick={backHandler(back)} aria-label={section === 'video-text' ? '動画に戻る' : '設定に戻る'}>
           <BackIcon size={26} />
         </a>
         <h1>{TITLES[section]}</h1>
@@ -110,6 +115,7 @@ export function SettingsScreen({ section, notice }: { section?: SettingsSection;
       {section === 'sync' && <SyncSettings notice={notice} />}
       {section === 'backup' && <BackupPage />}
       {section === 'roadmaps' && <RoadmapSettings />}
+      {section === 'video-text' && <YoutubeTextSettings />}
       {section === 'data' && <DataPage />}
       {section === 'feedback' && <FeedbackPage />}
     </div>
@@ -234,7 +240,9 @@ function StoragePage() {
   const toast = useToast()
   const settings = useLiveQuery(getVideoSettings)
   const connected = useLiveQuery(isYoutubeConnected)
+  const templates = useLiveQuery(getVideoTemplates)
   if (!settings) return null
+  const customTemplates = !!templates && isCustomTemplates(templates)
   const { storage, quality, keepHigh, youtubePrivacy } = settings
 
   const changeStorage = async (value: VideoStorage) => {
@@ -343,7 +351,7 @@ function StoragePage() {
 
       {storage === 'youtube' && (
         <section className="section">
-          <h2>YouTube の公開範囲</h2>
+          <h2>YouTube</h2>
           <ul className="settings-list" role="radiogroup" aria-label="YouTube の公開範囲">
             <Choice
               label="リンクを知っている人だけ"
@@ -357,6 +365,9 @@ function StoragePage() {
               selected={youtubePrivacy === 'public'}
               onSelect={select(youtubePrivacy, 'public', changePrivacy)}
             />
+          </ul>
+          <ul className="settings-list">
+            <Row to="video-text" label="タイトルと説明" value={customTemplates ? '自分で設定' : '標準'} />
           </ul>
         </section>
       )}

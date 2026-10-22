@@ -1,12 +1,11 @@
 import { liveQuery } from 'dexie'
-import { formatDateTime, OUTCOME_LABEL } from '../domain/format'
 import type { Media } from '../domain/types'
 import { ContentUnavailableError, contentBlob, hasContent, moveContentsToFiles, optimizeVideos } from './content'
 import { usesFiles } from './files'
 import { db, markDirty, mediaByIndex } from './db'
 import { authorizeWithGoogle } from './account'
 import { api, getSyncConfig, postJson, SyncError, type SyncConfig } from './sync'
-import { SITE_URL } from '../platform'
+import { buildVideoText, getVideoTemplates, templateVars } from './videoText'
 import { getVideoSettings, getVideoStorage, uploadBacklog, type YoutubePrivacy } from './videoStorage'
 
 /**
@@ -121,21 +120,8 @@ export async function videoMeta(media: Media): Promise<VideoMeta> {
     db.skills.get(media.skillId),
     getVideoSettings(),
   ])
-  const domain = skill ? await db.domains.get(skill.domainId) : undefined
-  const title = [domain?.name, skill?.name, formatDateTime(media.createdAt)].filter(Boolean).join('｜')
-  const lines: string[] = []
-  if (record?.outcome) lines.push(OUTCOME_LABEL[record.outcome])
-  if (record?.causes?.length) lines.push(`原因：${record.causes.join('・')}`)
-  if (record?.reason) lines.push(`メモ：${record.reason}`)
-  if (record?.nextAction) lines.push(`次の一手：${record.nextAction}`)
-  // 説明欄のリンクから、アプリの紹介ページに来てもらう
-  lines.push('', 'ラテ帳で記録', SITE_URL)
-  // YouTube のタイトルは100文字まで
-  return {
-    title: title.slice(0, 100),
-    description: lines.join('\n').slice(0, 4900),
-    privacy: media.youtubePrivacy ?? settings.youtubePrivacy,
-  }
+  const text = buildVideoText(await getVideoTemplates(), templateVars(media.createdAt, record, skill))
+  return { ...text, privacy: media.youtubePrivacy ?? settings.youtubePrivacy }
 }
 
 export class QuotaExceeded extends Error {}
