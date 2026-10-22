@@ -17,11 +17,10 @@ captions = json.loads((here / 'appstore-captions.json').read_text())
 
 W, H = 1179, 2556  # iPhone 6.3 インチ（Dynamic Island の機種）の大きさ
 ACCENT = (168, 98, 47)
-INK, SUB = (37, 37, 40), (117, 117, 120)
+INK, LINE = (37, 37, 40), (222, 208, 190)
 BG_TOP, BG_BOTTOM = (252, 249, 244), (240, 228, 212)
 
 HEAD = '/System/Library/Fonts/ヒラギノ角ゴシック W7.ttc'
-BODY = '/System/Library/Fonts/ヒラギノ角ゴシック W4.ttc'
 
 
 def find(stem):
@@ -34,7 +33,7 @@ def find(stem):
 def sf(size, weight):
     f = ImageFont.truetype('/System/Library/Fonts/SFNS.ttf', size)
     try:
-        f.set_variation_by_axes([weight])
+        f.set_variation_by_axes([100, 28, 400, weight])  # 幅・光学サイズ・GRAD・太さ
     except Exception:
         pass
     return f
@@ -43,7 +42,7 @@ def sf(size, weight):
 def fix_status_bar(im):
     """状態バー（時刻・電波・電池）を、9:41・電波4・電池満タンに差し替える。
 
-    もとの文字は、まわりの色で塗りつぶす。背景が一色なら行ごとの色、写真なら、すぐ下の帯を鏡のように写して隠す。
+    もとの文字は、まわりの色で塗りつぶす。背景が一色なら行ごとの色、写真なら、すぐ隣の同じ高さの木目などを重ねて隠す。
     大きさは、幅 1170 の画面（iPhone 12 など）を基準にして、幅に合わせて拡大する。
     """
     im = im.convert('RGB')
@@ -53,13 +52,17 @@ def fix_status_bar(im):
     edge = a[:bar, 3].astype(float)
     if edge.std(axis=0).max() < 6:  # 背景が一色
         a[:bar] = a[:bar, 3:4]
-    else:  # 写真：文字のある左右だけ、下の帯を鏡写しにして埋める
-        for x0, x1 in ((70, 260), (880, 1135)):
-            x0, x1 = round(x0 * k), round(x1 * k)
-            y0, y1 = round(35 * k), round(115 * k)
-            a[y0:y1, x0:x1] = a[y1 + 5:y1 + 5 + (y1 - y0), x0:x1][::-1]
-        patch = Image.fromarray(a).crop((0, 0, im.width, bar)).filter(ImageFilter.GaussianBlur(2 * k))
-        a[:bar] = np.asarray(patch)
+    else:  # 写真：文字のある左右だけ、すぐ隣（同じ高さ）の木目をずらして重ね、ふちをぼかす
+        im = Image.fromarray(a)
+        for x0, x1 in ((40, 300), (860, 1150)):
+            x0, x1, y0, y1 = round(x0 * k), round(x1 * k), round(15 * k), round(125 * k)
+            w = x1 - x0
+            src_x = x1 + round(20 * k) if x0 < im.width / 2 else x0 - w - round(20 * k)  # 左は右隣から、右は左隣から
+            patch = im.crop((src_x, y0, src_x + w, y1))
+            mask = Image.new('L', (w, y1 - y0), 0)
+            ImageDraw.Draw(mask).rectangle((round(12 * k), round(12 * k), w - round(12 * k), y1 - y0 - round(12 * k)), fill=255)
+            im.paste(patch, (x0, y0), mask.filter(ImageFilter.GaussianBlur(7 * k)))
+        a = np.asarray(im).copy()
     im = Image.fromarray(a)
 
     lum = np.asarray(im.crop((60, round(40 * k), 260, round(110 * k)))).mean()
@@ -109,11 +112,10 @@ def background():
     return im
 
 
-def draw_caption(im, title, sub):
+def draw_caption(im, title):
     """見出し（{} でかこんだ字は茶色）を、中央ぞろえで 2 行まで。"""
     d = ImageDraw.Draw(im)
     big = ImageFont.truetype(HEAD, 92)
-    small = ImageFont.truetype(BODY, 40)
     y = 150
     for ln in title.split('\n'):
         parts, acc = [], False
@@ -127,27 +129,24 @@ def draw_caption(im, title, sub):
             d.text((x, y), t, font=big, fill=c, anchor='ls')
             x += d.textlength(t, font=big)
         y += 124
-    if sub:
-        d.text((W / 2, y + 22), sub, font=small, fill=SUB, anchor='ms')
 
 
-def compose(clean, title, sub):
+def compose(clean, title):
     im = background()
-    draw_caption(im, title, sub)
-    sw = 920
+    draw_caption(im, title)
+    sw = 1000
     sh = round(clean.height * sw / clean.width)
-    x0, y0, bez, rad = (W - sw) // 2, 560, 16, 120
+    x0, y0, rad = (W - sw) // 2, 440, 118
     shot = clean.resize((sw, sh), Image.LANCZOS)
-    # 影 → 黒い枠 → 画面（下は、はみ出させる。画面の続きがあることを見せる）
+    # 影 → 画面（下は、はみ出させる。画面の続きがあることを見せる）→ 細い線
     shadow = Image.new('RGBA', (W, H), (0, 0, 0, 0))
-    ImageDraw.Draw(shadow).rounded_rectangle((x0 - bez, y0 - bez + 24, x0 + sw + bez, y0 + sh + bez + 24), radius=rad + bez, fill=(60, 40, 20, 110))
-    shadow = shadow.filter(ImageFilter.GaussianBlur(36))
+    ImageDraw.Draw(shadow).rounded_rectangle((x0, y0 + 20, x0 + sw, y0 + sh + 20), radius=rad, fill=(90, 60, 30, 90))
+    shadow = shadow.filter(ImageFilter.GaussianBlur(34))
     im.paste(shadow, (0, 0), shadow)
-    d = ImageDraw.Draw(im)
-    d.rounded_rectangle((x0 - bez, y0 - bez, x0 + sw + bez, y0 + sh + bez), radius=rad + bez, fill=(28, 28, 30))
     mask = Image.new('L', (sw, sh), 0)
     ImageDraw.Draw(mask).rounded_rectangle((0, 0, sw - 1, sh - 1), radius=rad, fill=255)
     im.paste(shot, (x0, y0), mask)
+    ImageDraw.Draw(im).rounded_rectangle((x0, y0, x0 + sw - 1, y0 + sh - 1), radius=rad, outline=LINE, width=3)
     return im
 
 
@@ -157,7 +156,7 @@ for i, c in enumerate(captions, 1):
     raw = Image.open(find(c['file']))
     clean = fit(fix_status_bar(raw))
     clean.save(out / 'clean' / f'{i}-{c["name"]}.png')
-    store = compose(clean, c['title'], c.get('sub', ''))
+    store = compose(clean, c['title'])
     assert store.size == (W, H) and store.mode == 'RGB'
     store.save(out / 'store' / f'{i}-{c["name"]}.png', optimize=True)
     print(i, c['name'])
