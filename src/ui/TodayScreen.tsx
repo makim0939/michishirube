@@ -194,7 +194,7 @@ function HeroSlide({
       <img className="hero-image" src={url ?? lightUrl(light)} alt={url ? label : ''} />
       {url && (
         <div className="hero-caption">
-          {slide.first && <span className="hero-first">はじまりの1杯</span>}
+          {slide.first && <span className="hero-first">はじめの1杯</span>}
           <span className="hero-no">No.{slide.number}</span>
           <span>
             {formatAgo(slide.record.createdAt, now.getTime())}
@@ -208,7 +208,7 @@ function HeroSlide({
 }
 
 /**
- * 今日の画面のいちばん上。最近の杯の写真を左右にめくれて、最後の1枚は「はじまりの1杯」（いまと見比べる）。
+ * 今日の画面のいちばん上。最近の杯の写真を左右にめくれて、最後の1枚は「はじめの1杯」（いまと見比べる）。
  * 写真がまだ無いあいだは、いまの時刻の光の絵を出す
  */
 function Hero({ slides: all }: { slides: Slide[] }) {
@@ -365,7 +365,7 @@ async function loadToday() {
   const perSkill = await Promise.all(active.map(async (skill) => ({ skill, records: await recordsOf(skill.id) })))
   // サーバーから写真を取ってこられるか（印が無くても、サーバーにある写真は候補にする）
   const canFetch = !!(await getSyncConfig())
-  // 新しい記録から、大きな写真でめくる杯を選ぶ。最後に「はじまりの1杯」（いちばん古い、写真のある杯）を置く
+  // 新しい記録から、大きな写真でめくる杯を選ぶ。最後に「はじめの1杯」（いちばん古い、写真のある杯）を置く
   const [latest, firstMedia] = await Promise.all([
     db.records.orderBy('createdAt').reverse().limit(HERO_LOOKBACK).toArray(),
     // いちばん古い写真。古い順にたどって最初に見つかったもの
@@ -420,7 +420,7 @@ async function loadToday() {
         media: cupOf(record),
         number: numbers.get(record.id) ?? 0,
         skillName: byId.get(record.skillId)?.name,
-        // 最後の1枚が「はじまりの1杯」。最近の杯の中にすでに入っていても、2枚以上めくれるときはラベルを付ける
+        // 最後の1枚が「はじめの1杯」。最近の杯の中にすでに入っていても、2枚以上めくれるときはラベルを付ける
         first: !!firstRecord && record.id === firstRecord.id && heroAll.length > 1,
       }),
     ),

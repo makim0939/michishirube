@@ -17,8 +17,8 @@ type Slot = 0 | 1
 export function Compare({ media, numberOf }: { media: Media[]; numberOf: (m: Media) => number | undefined }) {
   const videos = media.filter(isVideo)
   const images = media.filter((m) => !isVideo(m))
-  // 2つ以上あって比べられる種類だけを選べるようにする
-  const kinds: Kind[] = [...(videos.length >= 2 ? (['video'] as const) : []), ...(images.length >= 2 ? (['image'] as const) : [])]
+  // 2つ以上あって比べられる種類だけを選べるようにする。はじめは写真（左）。動画は、軽く見たいときだけ読み込まれないよう、切り替えたときに出す
+  const kinds: Kind[] = [...(images.length >= 2 ? (['image'] as const) : []), ...(videos.length >= 2 ? (['video'] as const) : [])]
   const [picked, setPicked] = useState<Kind>()
   /** 選び直した2杯（左・右の順）。無ければ最新と最初 */
   const [chosen, setChosen] = useState<[string, string]>()
@@ -67,11 +67,11 @@ export function Compare({ media, numberOf }: { media: Media[]; numberOf: (m: Med
         </div>
         {kinds.length > 1 && (
           <div className="segmented small">
-            <button className={kind === 'video' ? 'selected' : ''} onClick={() => switchKind('video')}>
-              動画
-            </button>
             <button className={kind === 'image' ? 'selected' : ''} onClick={() => switchKind('image')}>
               写真
+            </button>
+            <button className={kind === 'video' ? 'selected' : ''} onClick={() => switchKind('video')}>
+              動画
             </button>
           </div>
         )}
