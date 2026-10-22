@@ -120,8 +120,7 @@ export async function videoMeta(media: Media): Promise<VideoMeta> {
     db.skills.get(media.skillId),
     getVideoSettings(),
   ])
-  const domain = skill ? await db.domains.get(skill.domainId) : undefined
-  const text = buildVideoText(await getVideoTemplates(), templateVars(media.createdAt, record, skill, domain))
+  const text = buildVideoText(await getVideoTemplates(), templateVars(media.createdAt, record, skill))
   return { ...text, privacy: media.youtubePrivacy ?? settings.youtubePrivacy }
 }
 

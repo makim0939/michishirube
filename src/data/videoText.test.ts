@@ -14,13 +14,13 @@ import {
   templateVars,
 } from './videoText'
 
-const full = { 分野: 'ラテアート', 型: 'ハート', 日時: '2026/10/10 9:05', 結果: '◎ 成功', 原因: '注ぎ方', メモ: '良かった', 次の一手: '高く注ぐ' }
+const full = { 型: 'ハート', 日時: '2026/10/10 9:05', 結果: '◎ 成功', メモ: '良かった', 次の一手: '高く注ぐ' }
 
 describe('YouTube のタイトルと説明の書き方', () => {
   it('標準の書き方は、これまでと同じタイトルと説明になる', () => {
     const { title, description } = buildVideoText({ title: DEFAULT_TITLE, description: DEFAULT_DESCRIPTION }, full)
     expect(title).toBe('ラテアート｜ハート｜2026/10/10 9:05')
-    expect(description.split('\n').slice(0, 4)).toEqual(['◎ 成功', '原因：注ぎ方', 'メモ：良かった', '次の一手：高く注ぐ'])
+    expect(description.split('\n').slice(0, 3)).toEqual(['◎ 成功', 'メモ：良かった', '次の一手：高く注ぐ'])
     expect(description).toContain('ラテ帳で記録')
   })
 
@@ -37,7 +37,7 @@ describe('YouTube のタイトルと説明の書き方', () => {
   })
 
   it('タイトルは、項目が空で「｜」が続いても1つにまとめ、100文字までにする', () => {
-    expect(buildVideoText({ title: '{分野}｜{型}｜{日時}', description: '' }, { 日時: 'x' }).title).toBe('x')
+    expect(buildVideoText({ title: '{型}｜{結果}｜{日時}', description: '' }, { 日時: 'x' }).title).toBe('x')
     expect(buildVideoText({ title: 'あ'.repeat(150), description: '' }, {}).title).toHaveLength(100)
   })
 
@@ -50,10 +50,10 @@ describe('YouTube のタイトルと説明の書き方', () => {
     expect(buildVideoText({ title: '{型}', description: '' }, full).description).toBe('')
   })
 
-  it('記録の中身を項目に入れる（原因は「・」でつなぐ）', () => {
-    const v = templateVars(0, { outcome: 'meh', causes: ['a', 'b'], reason: '', nextAction: 'n' } as never)
+  it('記録の中身を項目に入れる', () => {
+    const v = templateVars(0, { outcome: 'meh', reason: '', nextAction: 'n' } as never)
     expect(v.結果).toContain('惜しい')
-    expect(v.原因).toBe('a・b')
+    expect(v.次の一手).toBe('n')
     expect(v.メモ).toBeUndefined()
   })
 })

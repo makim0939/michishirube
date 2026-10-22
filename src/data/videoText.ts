@@ -1,5 +1,5 @@
 import { formatDate, formatDateTime, OUTCOME_LABEL } from '../domain/format'
-import type { Domain, PracticeRecord, Skill } from '../domain/types'
+import type { PracticeRecord, Skill } from '../domain/types'
 import { SITE_URL } from '../platform'
 import { db } from './db'
 
@@ -7,13 +7,13 @@ import { db } from './db'
  * YouTube に付けるタイトルと説明の「書き方」（テンプレート）。
  * `{型}` のように波かっこで囲んだ項目が、動画ごとの記録の中身に置き換わる。端末ごとの設定（動画の設定と同じ）
  */
-export const TEMPLATE_FIELDS = ['分野', '型', '日付', '日時', '結果', '原因', 'メモ', '次の一手'] as const
+export const TEMPLATE_FIELDS = ['型', '日付', '日時', '結果', 'メモ', '次の一手'] as const
 export type TemplateField = (typeof TEMPLATE_FIELDS)[number]
 export type TemplateVars = Partial<Record<TemplateField, string>>
 
-export const DEFAULT_TITLE = '{分野}｜{型}｜{日時}'
+export const DEFAULT_TITLE = 'ラテアート｜{型}｜{日時}'
 /** 最後の2行は、説明欄のリンクから、アプリの紹介ページに来てもらうため */
-export const DEFAULT_DESCRIPTION = ['{結果}', '原因：{原因}', 'メモ：{メモ}', '次の一手：{次の一手}', '', 'ラテ帳で記録', SITE_URL].join('\n')
+export const DEFAULT_DESCRIPTION = ['{結果}', 'メモ：{メモ}', '次の一手：{次の一手}', '', 'ラテ帳で記録', SITE_URL].join('\n')
 
 const TITLE_KEY = 'youtubeTitleTemplate'
 const DESCRIPTION_KEY = 'youtubeDescriptionTemplate'
@@ -80,15 +80,13 @@ export function buildVideoText(templates: VideoTemplates, vars: TemplateVars): {
   return { title: title.slice(0, TITLE_MAX), description: cutBytes(clean(renderTemplate(templates.description, vars)), DESCRIPTION_MAX_BYTES) }
 }
 
-/** 記録・型・分野から、テンプレートに入れる中身を作る。ts は動画を撮った時刻 */
-export function templateVars(ts: number, record?: PracticeRecord, skill?: Skill, domain?: Domain): TemplateVars {
+/** 記録・型から、テンプレートに入れる中身を作る。ts は動画を撮った時刻 */
+export function templateVars(ts: number, record?: PracticeRecord, skill?: Skill): TemplateVars {
   return {
-    分野: domain?.name,
     型: skill?.name,
     日付: formatDate(ts),
     日時: formatDateTime(ts),
     結果: record?.outcome ? OUTCOME_LABEL[record.outcome] : undefined,
-    原因: record?.causes?.length ? record.causes.join('・') : undefined,
     メモ: record?.reason || undefined,
     次の一手: record?.nextAction || undefined,
   }
@@ -125,14 +123,13 @@ export async function previewVars(): Promise<{ vars: TemplateVars; sample: boole
   const record = await db.records.orderBy('createdAt').last()
   if (record) {
     const skill = await db.skills.get(record.skillId)
-    const domain = skill ? await db.domains.get(skill.domainId) : undefined
     // 実際のタイトルは動画を撮った時刻を使うので、プレビューも、その記録の最後の動画の時刻にそろえる
     const media = record.mediaIds.length ? await db.media.get(record.mediaIds[record.mediaIds.length - 1]) : undefined
-    return { vars: templateVars(media?.createdAt ?? record.createdAt, record, skill, domain), sample: false }
+    return { vars: templateVars(media?.createdAt ?? record.createdAt, record, skill), sample: false }
   }
   const now = Date.now()
   return {
-    vars: { 分野: 'ラテアート', 型: 'ハート', 日付: formatDate(now), 日時: formatDateTime(now), 結果: OUTCOME_LABEL.meh, 次の一手: 'ミルクを高い位置から入れる' },
+    vars: { 型: 'ハート', 日付: formatDate(now), 日時: formatDateTime(now), 結果: OUTCOME_LABEL.meh, 次の一手: 'ミルクを高い位置から入れる' },
     sample: true,
   }
 }
