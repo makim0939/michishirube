@@ -172,6 +172,8 @@ Contact: makim0939@gmail.com
 - iPhone（必須）：Dynamic Island のある機種の縦：**1179×2556 か 1206×2622**（提出前に、App Store Connect の表記で確認）。1つの大きさだけ出せば、小さい端末用は、自動で縮小される。
 - iPad：iPad に対応する場合だけ必須（13インチ：2064×2752 か 2048×2732）。→ 2-2 のとおり、1.0 は iPhone のみ。iPad 対応の版を出すときに撮る。
 
+画面写真には、説明の見出しと背景を足す（他のアプリの並べ方に合わせた）。撮った画面を、`python3 -I .claude/skills/app-screenshots/appstore-shot.py` で仕上げる（状態バーの時刻・電池も、9:41・満タンに直る。スキル `app-screenshots` の D）。
+
 案（5枚。紹介サイトの流れに合わせる）：
 
 1. 今日の画面（最新の1杯と、記録するボタン）

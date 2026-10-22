@@ -1,0 +1,8 @@
+[
+  {"file": "home", "name": "home", "title": "撮るだけで、\n{今日の1杯}を記録", "sub": "最新の1杯が、ひと目でわかる"},
+  {"file": "record", "name": "record", "title": "{ワンタップ}で結果を記録\n次の一手もメモ", "sub": "成功・惜しい・失敗を選ぶだけ"},
+  {"file": "compare-photo", "name": "compare", "title": "最初と最新を{見くらべて}\n上達を実感", "sub": "動画でも、写真でも"},
+  {"file": "note", "name": "tips", "title": "うまくいった理由が\n{自分のコツ}になる", "sub": "手本の動画や記事も、ためておける"},
+  {"file": "pattern", "name": "types", "title": "{型ごと}に、練習の\n積み重ねが見える", "sub": "ロゼッタ・ハート・チューリップ…"},
+  {"file": "cup-gallery", "name": "cups", "title": "撮った{カップ}が\n日ごとに並ぶ", "sub": "1杯ずつ、あとから見返せる"}
+]
