@@ -82,6 +82,16 @@ export async function deleteSession(db: D1Database, token: string) {
   await db.prepare('DELETE FROM sessions WHERE token_hash = ?1').bind(await sha256(token)).run()
 }
 
+/** Apple のリフレッシュトークンを覚える（退会のときの取り消し用） */
+export async function setAppleRefreshToken(db: D1Database, userId: string, token: string) {
+  await db.prepare('UPDATE users SET apple_refresh_token = ?2 WHERE id = ?1').bind(userId, token).run()
+}
+
+export async function getAppleRefreshToken(db: D1Database, userId: string): Promise<string | undefined> {
+  const row = await db.prepare('SELECT apple_refresh_token AS t FROM users WHERE id = ?1').bind(userId).first<{ t: string | null }>()
+  return row?.t ?? undefined
+}
+
 /** 利用者と、その人のデータをすべて消す（アカウントの削除） */
 export async function deleteUser(db: D1Database, userId: string) {
   await db.batch([

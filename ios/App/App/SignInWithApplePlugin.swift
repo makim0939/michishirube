@@ -84,6 +84,8 @@ public class SignInWithApplePlugin: CAPPlugin, CAPBridgedPlugin, ASAuthorization
             "user": credential.user,
             "identityToken": identityToken,
         ]
+        // 認可コード（1 回だけ使える）。サーバーが、退会のときの取り消しに使うトークンに替える
+        response["authorizationCode"] = credential.authorizationCode.flatMap { String(data: $0, encoding: .utf8) } ?? NSNull()
         response["email"] = credential.email ?? NSNull()
         response["givenName"] = credential.fullName?.givenName ?? NSNull()
         response["familyName"] = credential.fullName?.familyName ?? NSNull()

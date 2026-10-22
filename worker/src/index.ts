@@ -18,7 +18,8 @@ import {
   userForSession,
   type AuthKind,
 } from './accounts'
-import { AppleTokenInvalid, AppleUnavailable, verifyAppleIdToken } from './apple'
+import { AppleTokenInvalid, AppleUnavailable, verifyAppleIdToken, type AppleKeyConfig } from './apple'
+import { revokeAppleForUser, rememberAppleToken } from './appleRevoke'
 import { bearerToken, isAllowedAppScheme, isAllowedReturn, LEGACY_APP_SCHEME, parseOrigins, safeEqual, signState, verifyState } from './auth'
 import { notifyFeedback, parseFeedback, saveFeedback, tooManyFeedbacks, type FeedbackMailEnv } from './feedback'
 import { resultPage } from './resultPage'
@@ -32,6 +33,16 @@ interface Env extends FeedbackMailEnv {
   APP_TOKEN?: string
   GOOGLE_CLIENT_ID?: string
   GOOGLE_CLIENT_SECRET?: string
+  /** Sign in with Apple の退会（取り消し）に使う鍵の情報。3つそろったときだけ動く。無ければ、取り消しは省く */
+  APPLE_TEAM_ID?: string
+  APPLE_KEY_ID?: string
+  APPLE_PRIVATE_KEY?: string
+}
+
+function appleKeyConfig(env: Env): AppleKeyConfig | null {
+  return env.APPLE_TEAM_ID && env.APPLE_KEY_ID && env.APPLE_PRIVATE_KEY
+    ? { teamId: env.APPLE_TEAM_ID, keyId: env.APPLE_KEY_ID, privateKey: env.APPLE_PRIVATE_KEY }
+    : null
 }
 
 type App = { Bindings: Env; Variables: { userId: string } }
@@ -139,6 +150,8 @@ app.delete('/api/session', async (c) => {
 
 /** アカウントと、サーバーに置いたデータをすべて消す */
 app.delete('/api/account', async (c) => {
+  // Apple でログインした人は、Apple にも、このアプリへのログインの取り消しを知らせる（Apple の求め。届かなくても、退会は止めない）
+  await revokeAppleForUser(c.env.DB, c.get('userId'), appleKeyConfig(c.env))
   await deleteUser(c.env.DB, c.get('userId'))
   return c.json({ ok: true })
 })
@@ -201,7 +214,7 @@ app.post('/api/auth/start', async (c) => {
  * nonce は、アプリが生成した元の値（Apple には、その SHA-256 を渡している）
  */
 app.post('/api/auth/apple', async (c) => {
-  const { identityToken, nonce } = await jsonBody(c)
+  const { identityToken, nonce, authorizationCode } = await jsonBody(c)
   if (typeof identityToken !== 'string' || !identityToken) throw new BadRequest('identityToken is required')
   if (typeof nonce !== 'string' || nonce.length < 16 || nonce.length > 128) throw new BadRequest('nonce is invalid')
   let identity
@@ -214,6 +227,8 @@ app.post('/api/auth/apple', async (c) => {
     throw e
   }
   const userId = await upsertAppleUser(c.env.DB, identity.sub)
+  // 退会のときの取り消しのために、認可コードをトークンに替えて覚える（失敗しても、ログインは止めない）
+  await rememberAppleToken(c.env.DB, userId, identity.sub, authorizationCode, appleKeyConfig(c.env))
   // メールアドレスは、アプリに渡すだけで、サーバーには残さない（Google と同じ）
   return c.json({ session: await createSession(c.env.DB, userId), ...(identity.email ? { email: identity.email } : {}) })
 })

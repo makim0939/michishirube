@@ -215,7 +215,7 @@ export async function loginWithGoogle(): Promise<{ firstDevice: boolean } | null
 
 /** Sign in with Apple の画面を出すプラグイン（iOS の SignInWithApplePlugin.swift。外部のプラグインは Capacitor 8 に対応していないため、アプリの中に作っている） */
 interface SignInWithApplePlugin {
-  authorize(options: { nonce: string }): Promise<{ response: { identityToken: string; email: string | null } }>
+  authorize(options: { nonce: string }): Promise<{ response: { identityToken: string; authorizationCode?: string | null; email: string | null } }>
 }
 const SignInWithApple = registerPlugin<SignInWithApplePlugin>('SignInWithApple')
 
@@ -237,10 +237,12 @@ function randomNonce(): string {
 export async function loginWithApple(): Promise<{ firstDevice: boolean } | null> {
   const nonce = randomNonce()
   let identityToken: string
+  let authorizationCode: string | null | undefined
   let appleEmail: string | null
   try {
     const { response } = await SignInWithApple.authorize({ nonce: await sha256Hex(nonce) })
     identityToken = response.identityToken
+    authorizationCode = response.authorizationCode
     appleEmail = response.email
   } catch (e) {
     // 途中で閉じたときは、エラーにしない（Apple の画面の取り消し。エラーの番号は 1001）
@@ -253,7 +255,7 @@ export async function loginWithApple(): Promise<{ firstDevice: boolean } | null>
     res = await fetch(`${SERVER_URL}/api/auth/apple`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ identityToken, nonce }),
+      body: JSON.stringify({ identityToken, nonce, ...(authorizationCode ? { authorizationCode } : {}) }),
     })
   } catch {
     throw new SyncError('つながりません。電波を確認してください')

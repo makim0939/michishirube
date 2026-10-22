@@ -106,6 +106,32 @@ npx wrangler secret put GOOGLE_CLIENT_ID --config worker/wrangler.jsonc
 npx wrangler secret put GOOGLE_CLIENT_SECRET --config worker/wrangler.jsonc
 ```
 
+## Sign in with Apple の退会（取り消し）
+
+Apple でログインした人が退会したとき、Apple にも「このアプリへのログインを取り消します」と知らせます（Apple の求め）。そのために、Apple Developer で鍵を 1 つ作り、サーバーに登録します。**鍵・チーム ID・Key ID は秘密の値です（リポジトリには入れない）。**
+
+1. [Apple Developer](https://developer.apple.com/account/resources/authkeys/list) → Certificates, Identifiers & Profiles → Keys → ＋ で、鍵を作ります。「Sign in with Apple」にチェックし、Configure で、Primary App ID にラテ帳（`me.makimura.lattecho.app`）を選びます。
+2. 作ったら、`.p8` ファイルをダウンロードします（**1 回しかダウンロードできません**）。画面の Key ID と、アカウントの Team ID（Membership details）を控えます。
+3. 3 つを登録します（`.p8` の中身は、そのまま貼れます）。
+
+```bash
+npx wrangler secret put APPLE_TEAM_ID --config worker/wrangler.jsonc
+```
+
+```bash
+npx wrangler secret put APPLE_KEY_ID --config worker/wrangler.jsonc
+```
+
+```bash
+npx wrangler secret put APPLE_PRIVATE_KEY --config worker/wrangler.jsonc
+```
+
+4. データベースの更新（`0007_apple_refresh_token.sql`）は、`main` へのマージで、Worker の公開と一緒に自動で反映されます（`deploy-worker.yml`）。
+
+- 3 つがそろっていないと、取り消しは省かれます（ログインと退会は、これまで通り動きます）。
+- 取り消しに使うトークンは、ログインのときに受け取って覚えます。この仕組みの入った版のアプリで、もう一度ログインした人から入ります（それより前にログインした人は、取り消しを知らせられません）。
+- Apple に届かなくても、退会は止めません（利用者を、削除できない状態にしないため）。
+
 ## 3. 利用者が増える前にすること
 
 - **Google の審査（YouTube の権限）**：審査を通るまでは、YouTube と連携できるのは 100 人まで、連携のときに「確認されていないアプリ」と出ます。ログインだけ（`openid`・`email`）なら審査は軽く済みます。審査には、プライバシーポリシー・ドメインの確認・使い方の動画が要り、数週間かかることがあります。

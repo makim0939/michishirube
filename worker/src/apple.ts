@@ -120,3 +120,85 @@ export async function verifyAppleIdToken(
 
   return { sub: payload.sub, ...(payload.email ? { email: payload.email } : {}) }
 }
+
+/** Apple のトークンの窓口（鍵の署名に使う値）。Apple Developer で作った鍵の情報で、すべて秘密の値（リポジトリには入れない） */
+export interface AppleKeyConfig {
+  /** Apple Developer のチーム ID */
+  teamId: string
+  /** 鍵（Sign in with Apple を有効にした .p8）の Key ID */
+  keyId: string
+  /** .p8 の中身（-----BEGIN PRIVATE KEY----- から）。改行が「\\n」の文字になっていてもよい */
+  privateKey: string
+}
+
+const TOKEN_URL = 'https://appleid.apple.com/auth/token'
+const REVOKE_URL = 'https://appleid.apple.com/auth/revoke'
+/** Apple が応答しないとき、ログイン・退会を待たせない */
+const APPLE_TIMEOUT_MS = 4000
+
+const b64url = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+const jsonB64url = (value: unknown) => b64url(new TextEncoder().encode(JSON.stringify(value)))
+
+/** Apple に自分（このアプリのサーバー）を示す client_secret。.p8 で署名した、短い期限の JWT（ES256） */
+export async function appleClientSecret(config: AppleKeyConfig, now = Date.now()): Promise<string> {
+  const pem = config.privateKey.replace(/\\n/g, '\n')
+  const der = Uint8Array.from(atob(pem.replace(/-----[A-Z ]+-----/g, '').replace(/\s+/g, '')), (c) => c.charCodeAt(0))
+  const key = await crypto.subtle.importKey('pkcs8', der, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign'])
+  const iat = Math.floor(now / 1000)
+  const header = jsonB64url({ alg: 'ES256', kid: config.keyId })
+  // 期限は 5 分。呼ぶたびに作るので、長くしない
+  const body = jsonB64url({ iss: config.teamId, iat, exp: iat + 300, aud: APPLE_ISSUER, sub: APPLE_AUDIENCE })
+  const signature = new Uint8Array(await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, key, new TextEncoder().encode(`${header}.${body}`)))
+  return `${header}.${body}.${b64url(signature)}`
+}
+
+/**
+ * ログインでアプリが受け取った認可コード（1 回しか使えない・5 分で切れる）を、リフレッシュトークンに替える。
+ * 退会のときの取り消しにだけ使う。取れなかったとき・コードの持ち主が expectedSub（ログインした人）と違うときは、undefined
+ * （ログインそのものは止めない。別の人のトークンを、この人の行に入れない）
+ */
+export async function exchangeAppleCode(
+  config: AppleKeyConfig,
+  code: string,
+  expectedSub: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<string | undefined> {
+  const res = await fetchImpl(TOKEN_URL, {
+    method: 'POST',
+    signal: AbortSignal.timeout(APPLE_TIMEOUT_MS),
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: APPLE_AUDIENCE,
+      client_secret: await appleClientSecret(config),
+      code,
+      grant_type: 'authorization_code',
+    }),
+  })
+  if (!res.ok) return undefined
+  const body = (await res.json().catch(() => ({}))) as { refresh_token?: string; id_token?: string }
+  if (typeof body.refresh_token !== 'string' || !body.refresh_token || typeof body.id_token !== 'string') return undefined
+  // id_token は、Apple から直接（TLS で）受け取ったものなので、署名は見ずに、持ち主（sub）だけを照らす
+  let sub: string | undefined
+  try {
+    sub = decodeJson<{ sub?: string }>(body.id_token.split('.')[1] ?? '').sub
+  } catch {
+    return undefined
+  }
+  return sub === expectedSub ? body.refresh_token : undefined
+}
+
+/** Apple に、このアプリへのログインの許可を取り消してもらう（退会のとき）。成功したら true */
+export async function revokeAppleToken(config: AppleKeyConfig, refreshToken: string, fetchImpl: typeof fetch = fetch): Promise<boolean> {
+  const res = await fetchImpl(REVOKE_URL, {
+    method: 'POST',
+    signal: AbortSignal.timeout(APPLE_TIMEOUT_MS),
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: APPLE_AUDIENCE,
+      client_secret: await appleClientSecret(config),
+      token: refreshToken,
+      token_type_hint: 'refresh_token',
+    }),
+  })
+  return res.ok
+}

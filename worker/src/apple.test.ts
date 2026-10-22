@@ -1,6 +1,16 @@
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { sha256Hex } from '../../shared/hash'
-import { APPLE_AUDIENCE, APPLE_ISSUER, AppleTokenInvalid, AppleUnavailable, resetAppleKeysCache, verifyAppleIdToken } from './apple'
+import {
+  APPLE_AUDIENCE,
+  APPLE_ISSUER,
+  AppleTokenInvalid,
+  AppleUnavailable,
+  appleClientSecret,
+  exchangeAppleCode,
+  resetAppleKeysCache,
+  revokeAppleToken,
+  verifyAppleIdToken,
+} from './apple'
 
 const enc = (value: unknown) => btoa(JSON.stringify(value)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 const NOW = 1_800_000_000_000
@@ -122,5 +132,62 @@ describe('Sign in with Apple の ID トークン', () => {
   it('Apple の公開鍵が取れないときは、トークンの不正ではなく AppleUnavailable にする', async () => {
     const down = (async () => new Response('error', { status: 500 })) as unknown as typeof fetch
     await expect(verifyAppleIdToken(await signToken({}), NONCE, { now: NOW, fetchImpl: down })).rejects.toBeInstanceOf(AppleUnavailable)
+  })
+})
+
+describe('Apple への取り消し（退会）', () => {
+  let publicKey: CryptoKey
+  let pem: string
+  const config = () => ({ teamId: 'TEAM123456', keyId: 'KEY1234567', privateKey: pem })
+
+  beforeAll(async () => {
+    const pair = (await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify'])) as CryptoKeyPair
+    publicKey = pair.publicKey
+    const der = new Uint8Array((await crypto.subtle.exportKey('pkcs8', pair.privateKey)) as ArrayBuffer)
+    pem = `-----BEGIN PRIVATE KEY-----\n${btoa(String.fromCharCode(...der))}\n-----END PRIVATE KEY-----`
+  })
+
+  it('client_secret は、.p8 で署名した ES256 の JWT（チーム・鍵・宛先・アプリが入る）', async () => {
+    const jwt = await appleClientSecret(config(), NOW)
+    const [h, p, sig] = jwt.split('.')
+    const decode = (t: string) => JSON.parse(atob(t.replace(/-/g, '+').replace(/_/g, '/')))
+    expect(decode(h)).toEqual({ alg: 'ES256', kid: 'KEY1234567' })
+    expect(decode(p)).toEqual({ iss: 'TEAM123456', iat: NOW / 1000, exp: NOW / 1000 + 300, aud: APPLE_ISSUER, sub: APPLE_AUDIENCE })
+    const bytes = Uint8Array.from(atob(sig.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0))
+    expect(await crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, publicKey, bytes, new TextEncoder().encode(`${h}.${p}`))).toBe(true)
+  })
+
+  it('改行が「\\n」の文字になった鍵（秘密の値の登録で起きやすい）も読める', async () => {
+    const flat = { ...config(), privateKey: pem.replace(/\n/g, '\\n') }
+    expect((await appleClientSecret(flat, NOW)).split('.')).toHaveLength(3)
+  })
+
+  it('認可コードをリフレッシュトークンに替える。Apple が断ったら undefined', async () => {
+    let sent: URLSearchParams | undefined
+    const idToken = `${enc({ alg: 'RS256' })}.${enc({ sub: 'user-1' })}.x`
+    const ok = (async (_u: unknown, init: RequestInit) => {
+      sent = init.body as URLSearchParams
+      return new Response(JSON.stringify({ refresh_token: 'r-token', id_token: idToken }))
+    }) as unknown as typeof fetch
+    expect(await exchangeAppleCode(config(), 'code-1', 'user-1', ok)).toBe('r-token')
+    // コードの持ち主が、ログインした人と違うときは、そのトークンを使わない
+    expect(await exchangeAppleCode(config(), 'code-1', 'someone-else', ok)).toBeUndefined()
+    expect(sent?.get('grant_type')).toBe('authorization_code')
+    expect(sent?.get('code')).toBe('code-1')
+    expect(sent?.get('client_id')).toBe(APPLE_AUDIENCE)
+    const ng = (async () => new Response('{"error":"invalid_grant"}', { status: 400 })) as unknown as typeof fetch
+    expect(await exchangeAppleCode(config(), 'used', 'user-1', ng)).toBeUndefined()
+  })
+
+  it('取り消しは、リフレッシュトークンを渡す。成功は true、失敗は false', async () => {
+    let sent: URLSearchParams | undefined
+    const ok = (async (_u: unknown, init: RequestInit) => {
+      sent = init.body as URLSearchParams
+      return new Response('')
+    }) as unknown as typeof fetch
+    expect(await revokeAppleToken(config(), 'r-token', ok)).toBe(true)
+    expect(sent?.get('token')).toBe('r-token')
+    expect(sent?.get('token_type_hint')).toBe('refresh_token')
+    expect(await revokeAppleToken(config(), 'r-token', (async () => new Response('', { status: 400 })) as unknown as typeof fetch)).toBe(false)
   })
 })
