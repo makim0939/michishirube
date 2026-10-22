@@ -86,6 +86,8 @@ function StorageStatus() {
   )
 }
 
+const SHOW_ROADMAP_SETTINGS = false
+
 const TITLES: Record<SettingsSection, string> = {
   storage: '動画',
   sync: 'アカウント',
@@ -166,12 +168,15 @@ function SettingsHome() {
         </ul>
       </section>
 
-      <section className="section">
-        <h2>型</h2>
-        <ul className="settings-list">
-          <Row to="roadmaps" label="ロードマップ" value={`${data.domains}つの分野`} />
-        </ul>
-      </section>
+      {/* ラテアート専用の間は隠す（実装は残し、別の練習も扱うようにするとき、この行を出す）。画面そのもの（/settings/roadmaps）は開ける */}
+      {SHOW_ROADMAP_SETTINGS && (
+        <section className="section">
+          <h2>型</h2>
+          <ul className="settings-list">
+            <Row to="roadmaps" label="ロードマップ" value={`${data.domains}つの分野`} />
+          </ul>
+        </section>
+      )}
 
       <section className="section">
         <h2>その他</h2>

@@ -136,7 +136,7 @@ export function MapScreen({ domainId }: { domainId?: string }) {
       )}
       {!current && (
         <div className="empty">
-          <p>ロードマップがありません。設定の「ロードマップ」から入れてください。</p>
+          <p>ロードマップがありません。</p>
           <a className="btn primary" href={href('/settings/roadmaps')}>
             ロードマップを入れる
           </a>
