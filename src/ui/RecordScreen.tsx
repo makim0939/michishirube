@@ -30,6 +30,9 @@ const OUTCOMES: { value: Outcome; label: string }[] = (['good', 'meh', 'bad'] as
 
 // 書きかけのメモは、カメラから戻ったときにページが再読み込みされても残るようにする
 // skillId は、記録の途中で選び直した型（route の型と違うとき）
+/** 記録の画面で「うまくいかなかった原因」のタグを選べるようにするか */
+const SHOW_CAUSE_INPUT = false
+
 type Draft = { skillId?: string; reason?: string; nextAction?: string; causes?: string[] }
 
 function useDraft(key: string, enabled: boolean) {
@@ -222,8 +225,9 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
   if (!skill) return <Empty>型が見つかりません。</Empty>
 
   const fallback = editing ? `/skill/${skillId}` : '/'
-  // ラテアートの型では、うまくいかなかった原因をワンタップで選べる
-  const causeOptions: readonly string[] = patternFor(skill.name) ? LATTE_CAUSES : []
+  // 原因のタグは、いまは出さない（記録の画面がごちゃつく・あまり使われないため）。
+  // あとで、利用者が自分で決められる形にして戻すときは、SHOW_CAUSE_INPUT を true にする（これまでの記録の原因は、残っていて、記録の詳細に出る）
+  const causeOptions: readonly string[] = SHOW_CAUSE_INPUT && patternFor(skill.name) ? LATTE_CAUSES : []
   const hasNewMedia = items.some((i) => i.kind === 'new' || (i.kind === 'existing' && i.replaced))
   // 新しい記録で、まだ何も無い（保存しても「何か入れてください」になるだけなので、押せないようにする）
   const nothingToSave = !editing && items.length === 0 && !hasInput
