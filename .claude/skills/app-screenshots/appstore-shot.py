@@ -132,6 +132,34 @@ def draw_caption(im, title):
         y += 124
 
 
+def hero(title):
+    """最初の1枚：画面は出さず、アプリ自身の背景の写真（窓辺のカップ）と、アイコン・名前を大きく見せる。
+
+    参考にしたアプリは、最初の1枚だけ、画面の枠から出た見せ方をしていた。
+    """
+    root = here.parents[2]
+    im = background()
+    draw_caption(im, title)
+    pw, x0, y0, rad = 1040, (W - 1040) // 2, 420, 90
+    photo = Image.open(root / 'public/world/light/morning.webp').convert('RGB')
+    photo = photo.resize((pw, round(photo.height * pw / photo.width)), Image.LANCZOS)
+    shadow = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+    ImageDraw.Draw(shadow).rounded_rectangle((x0, y0 + 20, x0 + pw, y0 + photo.height + 20), radius=rad, fill=(90, 60, 30, 120))
+    shadow = shadow.filter(ImageFilter.GaussianBlur(34))
+    im.paste(shadow, (0, 0), shadow)
+    mask = Image.new('L', photo.size, 0)
+    ImageDraw.Draw(mask).rounded_rectangle((0, 0, photo.width - 1, photo.height - 1), radius=rad, fill=255)
+    im.paste(photo, (x0, y0), mask)
+    # アイコンと名前（写真の下、中央）
+    icon = Image.open(root / 'ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png').convert('RGB').resize((280, 280), Image.LANCZOS)
+    m = Image.new('L', (280, 280), 0)
+    ImageDraw.Draw(m).rounded_rectangle((0, 0, 279, 279), radius=64, fill=255)
+    iy = y0 + photo.height + 190
+    im.paste(icon, ((W - 280) // 2, iy), m)
+    ImageDraw.Draw(im).text((W / 2, iy + 280 + 160), 'ラテ帳', font=ImageFont.truetype(HEAD, 110), fill=INK, anchor='mm')
+    return im
+
+
 def compose(clean, title):
     im = background()
     draw_caption(im, title)
@@ -154,6 +182,10 @@ def compose(clean, title):
 (out / 'clean').mkdir(parents=True, exist_ok=True)
 (out / 'store').mkdir(parents=True, exist_ok=True)
 for i, c in enumerate(captions, 1):
+    if c.get('layout') == 'hero':
+        hero(c['title']).save(out / 'store' / f'{i}-{c["name"]}.png', optimize=True)
+        print(i, c['name'])
+        continue
     raw = Image.open(find(c['file']))
     clean = fit(fix_status_bar(raw))
     clean.save(out / 'clean' / f'{i}-{c["name"]}.png')

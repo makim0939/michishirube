@@ -1,4 +1,5 @@
 [
+  {"layout": "hero", "name": "hero", "title": "毎日の{ラテアート}を\n記録しよう"},
   {"file": "home", "name": "home", "title": "撮るだけで、\n{今日の1杯}を記録"},
   {"file": "record", "name": "record", "title": "{ワンタップ}で、\n結果と次の一手を記録"},
   {"file": "compare-photo", "name": "compare", "title": "最初と最新を{見くらべて}\n上達を実感"},

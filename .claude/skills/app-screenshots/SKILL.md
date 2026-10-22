@@ -74,6 +74,7 @@ python3 -I .claude/skills/app-screenshots/appstore-shot.py <撮った画像の�
 - `<出力>/clean/`：状態バーを、9:41・電波4本・電池満タンに差し替えた、文字なしの画像（1179×2556）。
 - `<出力>/store/`：clean に、見出し・背景・枠を足した、App Store に出す画像。
 - 見出し・順番・使う画像は、`appstore-captions.json`（`file` が撮った画像の名前。見出しの `{ }` で囲んだ字は茶色）。見出しは2行まで。文言を変えるときは、紹介サイトの言い方に合わせる。
+- 最初の1枚（`"layout": "hero"`）だけは、撮った画面を使わず、アプリ自身の背景の写真（`public/world/light/morning.webp`）・アイコン・名前を見せる（参考にした他のアプリも、最初の1枚だけ別の見せ方だった）。2枚目以降は、上に見出し・下に画面の1パターン。
 - 状態バーの差し替えは、幅 1170 の画面（iPhone 12 など Dynamic Island のない機種）を前提にした位置。別の機種で撮ったら、`clean/` を見て、位置を確かめる。
 - シミュレーターで撮るなら、撮る前に `xcrun simctl status_bar booted override --time 9:41 --batteryState charged --batteryLevel 100 --cellularBars 4 --wifiBars 3`、終わったら `xcrun simctl status_bar booted clear`。
 - 出力は `references/`（git に入れない）に置く。
