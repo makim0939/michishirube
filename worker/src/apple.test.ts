@@ -164,16 +164,19 @@ describe('Apple への取り消し（退会）', () => {
 
   it('認可コードをリフレッシュトークンに替える。Apple が断ったら undefined', async () => {
     let sent: URLSearchParams | undefined
+    const idToken = `${enc({ alg: 'RS256' })}.${enc({ sub: 'user-1' })}.x`
     const ok = (async (_u: unknown, init: RequestInit) => {
       sent = init.body as URLSearchParams
-      return new Response(JSON.stringify({ refresh_token: 'r-token' }))
+      return new Response(JSON.stringify({ refresh_token: 'r-token', id_token: idToken }))
     }) as unknown as typeof fetch
-    expect(await exchangeAppleCode(config(), 'code-1', ok)).toBe('r-token')
+    expect(await exchangeAppleCode(config(), 'code-1', 'user-1', ok)).toBe('r-token')
+    // コードの持ち主が、ログインした人と違うときは、そのトークンを使わない
+    expect(await exchangeAppleCode(config(), 'code-1', 'someone-else', ok)).toBeUndefined()
     expect(sent?.get('grant_type')).toBe('authorization_code')
     expect(sent?.get('code')).toBe('code-1')
     expect(sent?.get('client_id')).toBe(APPLE_AUDIENCE)
     const ng = (async () => new Response('{"error":"invalid_grant"}', { status: 400 })) as unknown as typeof fetch
-    expect(await exchangeAppleCode(config(), 'used', ng)).toBeUndefined()
+    expect(await exchangeAppleCode(config(), 'used', 'user-1', ng)).toBeUndefined()
   })
 
   it('取り消しは、リフレッシュトークンを渡す。成功は true、失敗は false', async () => {

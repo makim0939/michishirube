@@ -14,13 +14,12 @@ import {
   sha256,
   tooManyAuthStarts,
   upsertAppleUser,
-  setAppleRefreshToken,
-  getAppleRefreshToken,
   upsertUser,
   userForSession,
   type AuthKind,
 } from './accounts'
-import { AppleTokenInvalid, AppleUnavailable, exchangeAppleCode, revokeAppleToken, verifyAppleIdToken, type AppleKeyConfig } from './apple'
+import { AppleTokenInvalid, AppleUnavailable, verifyAppleIdToken, type AppleKeyConfig } from './apple'
+import { revokeAppleForUser, rememberAppleToken } from './appleRevoke'
 import { bearerToken, isAllowedAppScheme, isAllowedReturn, LEGACY_APP_SCHEME, parseOrigins, safeEqual, signState, verifyState } from './auth'
 import { notifyFeedback, parseFeedback, saveFeedback, tooManyFeedbacks, type FeedbackMailEnv } from './feedback'
 import { resultPage } from './resultPage'
@@ -151,17 +150,8 @@ app.delete('/api/session', async (c) => {
 
 /** アカウントと、サーバーに置いたデータをすべて消す */
 app.delete('/api/account', async (c) => {
-  // Apple でログインした人は、Apple にも、このアプリへのログインの取り消しを知らせる（Apple の求め）。
-  // Apple に届かなくても、退会は止めない（利用者を、削除できない状態に閉じ込めないため）
-  const apple = appleKeyConfig(c.env)
-  if (apple) {
-    try {
-      const token = await getAppleRefreshToken(c.env.DB, c.get('userId'))
-      if (token) await revokeAppleToken(apple, token)
-    } catch (e) {
-      console.error('apple revoke failed', e)
-    }
-  }
+  // Apple でログインした人は、Apple にも、このアプリへのログインの取り消しを知らせる（Apple の求め。届かなくても、退会は止めない）
+  await revokeAppleForUser(c.env.DB, c.get('userId'), appleKeyConfig(c.env))
   await deleteUser(c.env.DB, c.get('userId'))
   return c.json({ ok: true })
 })
@@ -237,17 +227,8 @@ app.post('/api/auth/apple', async (c) => {
     throw e
   }
   const userId = await upsertAppleUser(c.env.DB, identity.sub)
-  // 退会のときに Apple へ取り消しを知らせるため、認可コードをリフレッシュトークンに替えて覚える。
-  // 失敗しても、ログインは止めない（取り消しができなくなるだけ。次のログインで、また試す）
-  const apple = appleKeyConfig(c.env)
-  if (apple && typeof authorizationCode === 'string' && authorizationCode) {
-    try {
-      const token = await exchangeAppleCode(apple, authorizationCode)
-      if (token) await setAppleRefreshToken(c.env.DB, userId, token)
-    } catch (e) {
-      console.error('apple code exchange failed', e)
-    }
-  }
+  // 退会のときの取り消しのために、認可コードをトークンに替えて覚える（失敗しても、ログインは止めない）
+  await rememberAppleToken(c.env.DB, userId, identity.sub, authorizationCode, appleKeyConfig(c.env))
   // メールアドレスは、アプリに渡すだけで、サーバーには残さない（Google と同じ）
   return c.json({ session: await createSession(c.env.DB, userId), ...(identity.email ? { email: identity.email } : {}) })
 })

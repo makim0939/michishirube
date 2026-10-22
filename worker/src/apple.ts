@@ -133,6 +133,8 @@ export interface AppleKeyConfig {
 
 const TOKEN_URL = 'https://appleid.apple.com/auth/token'
 const REVOKE_URL = 'https://appleid.apple.com/auth/revoke'
+/** Apple が応答しないとき、ログイン・退会を待たせない */
+const APPLE_TIMEOUT_MS = 4000
 
 const b64url = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 const jsonB64url = (value: unknown) => b64url(new TextEncoder().encode(JSON.stringify(value)))
@@ -152,11 +154,18 @@ export async function appleClientSecret(config: AppleKeyConfig, now = Date.now()
 
 /**
  * ログインでアプリが受け取った認可コード（1 回しか使えない・5 分で切れる）を、リフレッシュトークンに替える。
- * 退会のときの取り消しにだけ使う。取れなかったときは、undefined（ログインそのものは止めない）
+ * 退会のときの取り消しにだけ使う。取れなかったとき・コードの持ち主が expectedSub（ログインした人）と違うときは、undefined
+ * （ログインそのものは止めない。別の人のトークンを、この人の行に入れない）
  */
-export async function exchangeAppleCode(config: AppleKeyConfig, code: string, fetchImpl: typeof fetch = fetch): Promise<string | undefined> {
+export async function exchangeAppleCode(
+  config: AppleKeyConfig,
+  code: string,
+  expectedSub: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<string | undefined> {
   const res = await fetchImpl(TOKEN_URL, {
     method: 'POST',
+    signal: AbortSignal.timeout(APPLE_TIMEOUT_MS),
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       client_id: APPLE_AUDIENCE,
@@ -166,14 +175,23 @@ export async function exchangeAppleCode(config: AppleKeyConfig, code: string, fe
     }),
   })
   if (!res.ok) return undefined
-  const body = (await res.json().catch(() => ({}))) as { refresh_token?: string }
-  return typeof body.refresh_token === 'string' && body.refresh_token ? body.refresh_token : undefined
+  const body = (await res.json().catch(() => ({}))) as { refresh_token?: string; id_token?: string }
+  if (typeof body.refresh_token !== 'string' || !body.refresh_token || typeof body.id_token !== 'string') return undefined
+  // id_token は、Apple から直接（TLS で）受け取ったものなので、署名は見ずに、持ち主（sub）だけを照らす
+  let sub: string | undefined
+  try {
+    sub = decodeJson<{ sub?: string }>(body.id_token.split('.')[1] ?? '').sub
+  } catch {
+    return undefined
+  }
+  return sub === expectedSub ? body.refresh_token : undefined
 }
 
 /** Apple に、このアプリへのログインの許可を取り消してもらう（退会のとき）。成功したら true */
 export async function revokeAppleToken(config: AppleKeyConfig, refreshToken: string, fetchImpl: typeof fetch = fetch): Promise<boolean> {
   const res = await fetchImpl(REVOKE_URL, {
     method: 'POST',
+    signal: AbortSignal.timeout(APPLE_TIMEOUT_MS),
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       client_id: APPLE_AUDIENCE,
