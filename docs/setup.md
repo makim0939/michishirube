@@ -145,7 +145,7 @@ pnpm exec wrangler d1 execute michishirube --remote --config worker/wrangler.jso
   --command "SELECT datetime(created_at/1000,'unixepoch','localtime') AS at, kind, platform, app_version, env, message, contact FROM feedback ORDER BY created_at DESC LIMIT 20"
 ```
 
-届いたときは、メールでも知らせます（下の「要望の通知メール」）。対応が済んだものは `DELETE FROM feedback WHERE id = '…'` で消します（個人情報になりうる返信先を、長く置かない）。荒らし対策に、送れるのは全体で1分に30件までです。
+届いたときは、メールでも知らせます（下の「要望の通知メール」）。対応が済んだものは `DELETE FROM feedback WHERE id = '…'` で消します（個人情報になりうる返信先を、長く置かない）。荒らし対策に、送れるのは全体で1分に30件まで、同じ接続元（IP）からは1分に5件までです（接続元ごとの数は、Workers の Rate Limiting で数え、保存しません。`worker/wrangler.jsonc` の `ratelimits`）。
 
 ### 要望の通知メール
 

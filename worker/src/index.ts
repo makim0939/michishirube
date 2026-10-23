@@ -9,6 +9,7 @@ import {
   deleteSession,
   deleteUser,
   finishAuthRequest,
+  finishLogin,
   readAuthRequest,
   readIdToken,
   sha256,
@@ -20,11 +21,11 @@ import {
 } from './accounts'
 import { AppleTokenInvalid, AppleUnavailable, verifyAppleIdToken, type AppleKeyConfig } from './apple'
 import { revokeAppleForUser, rememberAppleToken } from './appleRevoke'
-import { bearerToken, isAllowedAppScheme, isAllowedReturn, LEGACY_APP_SCHEME, parseOrigins, safeEqual, signState, verifyState } from './auth'
+import { bearerToken, isAllowedAppScheme, isAllowedReturn, parseOrigins, safeEqual, signState, verifyState } from './auth'
 import { notifyFeedback, parseFeedback, saveFeedback, tooManyFeedbacks, type FeedbackMailEnv } from './feedback'
 import { resultPage } from './resultPage'
 import { BadRequest, parseSyncRequest, sync } from './sync'
-import { accessToken, authUrl, exchangeCode, ReauthRequired, revoke, type GoogleConfig } from './youtube'
+import { accessToken, authUrl, exchangeCode, GoogleUnavailable, ReauthRequired, revoke, type GoogleConfig } from './youtube'
 
 interface Env extends FeedbackMailEnv {
   DB: D1Database
@@ -37,6 +38,21 @@ interface Env extends FeedbackMailEnv {
   APPLE_TEAM_ID?: string
   APPLE_KEY_ID?: string
   APPLE_PRIVATE_KEY?: string
+  /**
+   * 接続元ごとの回数の制限（Workers の Rate Limiting。wrangler.jsonc の ratelimits）。
+   * ログインしなくても使える窓口を、ひとりの相手が使い尽くして、ほかの人が使えなくならないように。
+   * 無い環境（手元の開発など）では、制限を省く
+   */
+  AUTH_LIMITER?: RateLimit
+  FEEDBACK_LIMITER?: RateLimit
+}
+
+/** 接続元ごとの制限を超えたか。接続元が分からない（Cloudflare を通っていない）ときと、制限の仕組みが無いときは、通す */
+async function overClientLimit(limiter: RateLimit | undefined, c: Context<App>): Promise<boolean> {
+  const ip = c.req.header('CF-Connecting-IP')
+  if (!limiter || !ip) return false
+  const { success } = await limiter.limit({ key: ip })
+  return !success
 }
 
 function appleKeyConfig(env: Env): AppleKeyConfig | null {
@@ -75,8 +91,13 @@ app.use('/api/*', async (c, next) => {
 app.onError((err, c) => {
   if (err instanceof BadRequest) return c.json({ error: 'bad_request', message: err.message }, 400)
   if (err instanceof ReauthRequired) return c.json({ error: 'reauth', message: err.message }, 409)
+  if (err instanceof GoogleUnavailable) {
+    console.error(err)
+    return c.json({ error: 'google_unavailable', message: 'Google につながりませんでした。少しおいてから試してください' }, 502)
+  }
+  // 思わぬエラーの中身（D1 の内部の文など）は、ログにだけ残す。アプリは message をそのまま画面に出すので、決まった文を返す
   console.error(err)
-  return c.json({ error: 'internal', message: err.message }, 500)
+  return c.json({ error: 'internal', message: 'サーバーでエラーが起きました。少しおいてから試してください' }, 500)
 })
 
 async function jsonBody(c: Context<App>): Promise<Record<string, unknown>> {
@@ -94,7 +115,8 @@ app.post('/api/sync', async (c) => c.json(await sync(c.env.DB, c.get('userId'), 
 /** アプリの「ご意見・ご要望」から届く。ログインしていなくても送れる（使いにくさを伝えたい人が、ログインで離れないように） */
 app.post('/api/feedback', async (c) => {
   const input = parseFeedback(await jsonBody(c))
-  if (await tooManyFeedbacks(c.env.DB)) return c.json({ error: 'busy', message: '混み合っています。少しおいてから送ってください' }, 429)
+  // ひとりの相手が全体の上限（1分に30件）を使い切って、ほかの人が送れなくならないように、先に接続元ごとに絞る
+  if ((await overClientLimit(c.env.FEEDBACK_LIMITER, c)) || (await tooManyFeedbacks(c.env.DB))) return c.json({ error: 'busy', message: '混み合っています。少しおいてから送ってください' }, 429)
   const id = await saveFeedback(c.env.DB, input)
   // メールは待たずに送る（遅くても失敗しても、利用者の送信には影響させない）
   c.executionCtx.waitUntil(notifyFeedback(c.env, input, id))
@@ -115,17 +137,22 @@ app.put('/api/photos/:id', async (c) => {
   if (removed) throw new BadRequest('media is deleted')
   const data = await c.req.arrayBuffer()
   if (data.byteLength === 0 || data.byteLength > PHOTO_MAX_BYTES) throw new BadRequest('photo size is out of range')
-  const used = await c.env.DB.prepare('SELECT COALESCE(SUM(size), 0) AS bytes FROM user_photos WHERE user_id = ?1 AND id != ?2')
-    .bind(userId, id)
-    .first<{ bytes: number }>()
-  if ((used?.bytes ?? 0) + data.byteLength > PHOTO_QUOTA_BYTES) {
+  // 置ける量の確認と書き込みを1文にする（別々だと、同時に届いた写真が、どちらも確認を通って上限を超える）。
+  // 利用者がいるかも同じ文で確かめる（ログインを確かめたあとにアカウントが削除されていたら、だれのものでもない写真が残る）
+  const { meta } = await c.env.DB.prepare(
+    `INSERT INTO user_photos (user_id, id, type, data, size, created_at)
+     SELECT ?1, ?2, ?3, ?4, ?5, ?6
+     WHERE EXISTS (SELECT 1 FROM users WHERE id = ?1)
+       AND (SELECT COALESCE(SUM(size), 0) FROM user_photos WHERE user_id = ?1 AND id != ?2) + ?5 <= ?7
+     ON CONFLICT (user_id, id) DO UPDATE SET type = excluded.type, data = excluded.data, size = excluded.size`,
+  )
+    .bind(userId, id, type, data, data.byteLength, Date.now(), PHOTO_QUOTA_BYTES)
+    .run()
+  if (meta.changes === 0) {
+    const user = await c.env.DB.prepare('SELECT 1 AS x FROM users WHERE id = ?1').bind(userId).first()
+    if (!user) return c.json({ error: 'unauthorized' }, 401)
     return c.json({ error: 'quota', message: 'サーバーに置ける写真の量を超えました' }, 413)
   }
-  await c.env.DB.prepare(
-    'INSERT INTO user_photos (user_id, id, type, data, size, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6) ON CONFLICT (user_id, id) DO UPDATE SET type = excluded.type, data = excluded.data, size = excluded.size',
-  )
-    .bind(userId, id, type, data, data.byteLength, Date.now())
-    .run()
   return c.json({ ok: true })
 })
 
@@ -190,11 +217,14 @@ app.post('/api/auth/start', async (c) => {
   if (kind !== 'login' && kind !== 'youtube') throw new BadRequest('kind is invalid')
   if (typeof id !== 'string' || !/^[A-Za-z0-9_-]{16,64}$/.test(id)) throw new BadRequest('id is invalid')
   if (typeof challenge !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(challenge)) throw new BadRequest('challenge is invalid')
-  if (scheme !== undefined && !isAllowedAppScheme(scheme)) throw new BadRequest('scheme is not allowed')
+  // アプリは、戻ってきてほしい URL スキームを必ず伝える（配信したすべての版が伝えている）。
+  // 伝えてこないときに決まったスキームで戻すと、そのスキームを名乗るよそのアプリに、認可の結果が渡りうるので、断る
+  if (fromApp === true ? !isAllowedAppScheme(scheme) : scheme !== undefined) throw new BadRequest('scheme is not allowed')
   if (fromApp !== true && (typeof returnTo !== 'string' || !isAllowedReturn(returnTo, parseOrigins(c.env.ALLOWED_ORIGINS)))) {
     throw new BadRequest('returnTo is not allowed')
   }
-  if (await tooManyAuthStarts(c.env.DB)) return c.json({ error: 'busy', message: '混み合っています。少しおいてから試してください' }, 429)
+  // 先に接続元ごとに絞る（全体の上限だけだと、ひとりの相手が使い切って、全員がログインできなくなる）
+  if ((await overClientLimit(c.env.AUTH_LIMITER, c)) || (await tooManyAuthStarts(c.env.DB))) return c.json({ error: 'busy', message: '混み合っています。少しおいてから試してください' }, 429)
   let userId: string | null = null
   if (kind === 'youtube') {
     const token = bearerToken(c.req.header('Authorization'))
@@ -203,7 +233,7 @@ app.post('/api/auth/start', async (c) => {
   }
   await createAuthRequest(c.env.DB, { id, kind, challenge, userId })
   const state = await signState(
-    fromApp === true ? { id, app: true, ...(scheme ? { scheme } : {}), issuedAt: Date.now() } : { id, returnTo: returnTo as string, issuedAt: Date.now() },
+    fromApp === true ? { id, app: true, scheme: scheme as string, issuedAt: Date.now() } : { id, returnTo: returnTo as string, issuedAt: Date.now() },
     c.env.APP_TOKEN,
   )
   return c.json({ url: authUrl(config, callbackUrl(c.req.url), state, kind) })
@@ -243,7 +273,8 @@ app.get('/api/youtube/callback', async (c) => {
   /** 認可した画面を、始めたアプリ・Web 版へ戻す URL。成功したら一度きりのコードを付ける */
   const back = (status: string, oneTimeCode?: string) => {
     const params = new URLSearchParams({ auth_id: request.id, auth_status: status, ...(oneTimeCode ? { auth_code: oneTimeCode } : {}) })
-    if (state.app) return `${isAllowedAppScheme(state.scheme) ? state.scheme : LEGACY_APP_SCHEME}://auth?${params}`
+    // スキームを載せていない state（この変更の前に始めた、前の版のもの）は、アプリへ戻さない
+    if (state.app) return isAllowedAppScheme(state.scheme) ? `${state.scheme}://auth?${params}` : undefined
     return returnTo ? `${returnTo.split('#')[0].split('?')[0]}?${params}#/settings/sync` : undefined
   }
   const code = c.req.query('code')
@@ -258,13 +289,14 @@ app.get('/api/youtube/callback', async (c) => {
       if (!token.id_token) throw new Error('id_token を受け取れませんでした')
       const { sub, email } = readIdToken(token.id_token)
       const userId = await upsertUser(c.env.DB, sub)
-      // メールアドレスはアプリに渡すだけで、サーバーには残さない（結果は受け取られたらすぐ消す）
-      oneTimeCode = await finishAuthRequest(c.env.DB, request.id, 'done', { session: await createSession(c.env.DB, userId), email })
+      oneTimeCode = await finishLogin(c.env.DB, request.id, userId, email)
     } else {
       if (!token.refresh_token) throw new Error('refresh token を受け取れませんでした')
       // YouTube の鍵は、アプリが受け取ったらすぐ消す（サーバーには残さない）
       oneTimeCode = await finishAuthRequest(c.env.DB, request.id, 'done', { refreshToken: token.refresh_token })
     }
+    // 同じ認可が、ほかの戻り（画面を2つ開いたなど）で先に終わっていた。結果はそちらの画面に渡っている
+    if (!oneTimeCode) return c.html(resultPage('invalid'), 400)
     return c.html(resultPage('connected', kind, back('done', oneTimeCode)))
   } catch (e) {
     console.error(e)

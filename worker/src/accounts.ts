@@ -142,8 +142,12 @@ export interface AuthRequestRow {
   created_at: number
 }
 
-/** 認可を始められる数（全体で1分あたり）。いたずらで表を埋められないように */
-export const AUTH_STARTS_PER_MINUTE = 120
+/**
+ * 認可を始められる数（全体で1分あたり）。いたずらで表を埋められないように（10分で消えるので、表は最大でこの10倍の行）。
+ * ひとりの相手からの数は、index.ts で接続元ごとに先に絞る。これは、多くの接続元から来たときの最後の歯止めなので、
+ * ふつうの利用では届かない程度に大きくしておく（小さいと、いたずらで全員がログインできなくなる）
+ */
+export const AUTH_STARTS_PER_MINUTE = 600
 
 export async function tooManyAuthStarts(db: D1Database, now = Date.now()): Promise<boolean> {
   const row = await db
@@ -176,7 +180,8 @@ export async function readAuthRequest(db: D1Database, id: string, now = Date.now
 
 /**
  * 認可を終える。成功したら、一度きりのコードを作って返す（認可した画面にだけ渡す）。
- * 結果は、このコードと、始めた端末の合言葉の両方がそろったときだけ受け取れる
+ * 結果は、このコードと、始めた端末の合言葉の両方がそろったときだけ受け取れる。
+ * 待っている（pending）ものだけを終える。ほかの呼び出し（同じ認可の2回目の戻り）が先に終えていたら、undefined を返す
  */
 export async function finishAuthRequest(
   db: D1Database,
@@ -185,11 +190,41 @@ export async function finishAuthRequest(
   result?: unknown,
 ): Promise<string | undefined> {
   const code = status === 'done' ? randomToken() : undefined
-  await db
+  const { meta } = await claimStatement(db, id, status, result, code ? await sha256(code) : null).run()
+  return meta.changes === 1 ? code : undefined
+}
+
+function claimStatement(db: D1Database, id: string, status: AuthStatus, result: unknown, codeHash: string | null) {
+  return db
     .prepare("UPDATE auth_requests SET status = ?1, result = ?2, code_hash = ?3 WHERE id = ?4 AND status = 'pending'")
-    .bind(status, result === undefined ? null : JSON.stringify(result), code ? await sha256(code) : null, id)
-    .run()
-  return code
+    .bind(status, result === undefined ? null : JSON.stringify(result), codeHash, id)
+}
+
+/**
+ * ログインの認可を終え、その端末のセッションを作る。認可を終えられた（pending から自分が書き換えた）ときだけセッションを作る。
+ * 2回戻ってきたとき（同じ認可の画面を2つ開いたなど）に、だれにも渡らないセッションが1年残らないように、
+ * 終える文と、セッションを入れる文を1つのトランザクション（batch）にして、セッションは「自分のコードで終えた行があるとき」だけ入れる
+ */
+export async function finishLogin(
+  db: D1Database,
+  id: string,
+  userId: string,
+  email: string | undefined,
+  now = Date.now(),
+): Promise<string | undefined> {
+  const code = randomToken()
+  const codeHash = await sha256(code)
+  const session = randomToken()
+  const [claimed] = await db.batch([
+    // メールアドレスはアプリに渡すだけで、サーバーには残さない（結果は受け取られたらすぐ消す）
+    claimStatement(db, id, 'done', { session, email }, codeHash),
+    db
+      .prepare(
+        "INSERT INTO sessions (token_hash, user_id, created_at, last_used_at) SELECT ?1, ?2, ?3, ?3 WHERE EXISTS (SELECT 1 FROM auth_requests WHERE id = ?4 AND status = 'done' AND code_hash = ?5)",
+      )
+      .bind(await sha256(session), userId, now, id, codeHash),
+  ])
+  return claimed.meta.changes === 1 ? code : undefined
 }
 
 export async function deleteAuthRequest(db: D1Database, id: string) {

@@ -39,7 +39,7 @@ export interface OAuthState {
   returnTo?: string
   /** iPhone・Android のアプリから始めた（終わったら、アプリの URL スキームで戻る） */
   app?: boolean
-  /** アプリが戻ってきてほしい URL スキーム（許可したものだけ。無ければ、前の版のアプリ向けの LEGACY_APP_SCHEME） */
+  /** アプリが戻ってきてほしい URL スキーム（許可したものだけ。アプリから始めたときは必ず載せる） */
   scheme?: string
   issuedAt: number
 }
@@ -73,15 +73,14 @@ export async function verifyState(token: string, secret: string, now = Date.now(
 /** アプリの URL スキーム（Bundle ID と同じ）。認可が終わったら、これでアプリへ戻る */
 export const APP_SCHEME = 'me.makimura.lattecho.app'
 
-/** 一つ前の Bundle ID のスキーム。その版のアプリ（開発中の端末）が、スキームを伝えてくる */
-export const PREVIOUS_APP_SCHEME = 'me.makimura.lattecho'
-
-/** Bundle ID を変える前の版のアプリの URL スキーム。その版は、スキームを伝えてこないので、これで戻す */
-export const LEGACY_APP_SCHEME = 'io.github.makim0939.lattecho'
-
-/** アプリが戻り先に求めた URL スキームが許可したものか（よそのアプリへ、認可の結果を送らないように） */
+/**
+ * アプリが戻り先に求めた URL スキームが許可したものか（よそのアプリへ、認可の結果を送らないように）。
+ * 今の Bundle ID のものだけ。Bundle ID を変える前のスキーム（io.github.makim0939.lattecho・me.makimura.lattecho）は、
+ * 配信前の開発中の版だけが使っていた（配信した 1.0 は、今のスキームを伝えてくる）。URL スキームはどのアプリでも名乗れるので、
+ * 使われていないものは許さない
+ */
 export function isAllowedAppScheme(scheme: unknown): scheme is string {
-  return scheme === APP_SCHEME || scheme === PREVIOUS_APP_SCHEME || scheme === LEGACY_APP_SCHEME
+  return scheme === APP_SCHEME
 }
 
 export function parseOrigins(list: string): string[] {
