@@ -30,7 +30,8 @@ export function YoutubeSettings() {
         <button
           className="btn small"
           onClick={async () => {
-            await rememberLoginReturn('/settings/storage')
+            // 覚えられなくても、ログインには進める（戻り先が無いだけ）
+            await rememberLoginReturn('/settings/storage').catch(() => {})
             go('/settings/sync')
           }}
         >
