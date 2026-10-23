@@ -207,6 +207,28 @@ export async function completeLogin(result: Extract<AuthResult, { kind: 'login' 
   return connectWithConfig(config)
 }
 
+const LOGIN_RETURN_KEY = 'login:return'
+/** 戻り先を覚えておく時間。Web 版で Google の画面へ移っても、この間に戻れば続けられる。古い印で、あとのログインが飛ばないように */
+const LOGIN_RETURN_MS = 10 * 60 * 1000
+
+/**
+ * 「ログインが要る」画面から「ログインする」を押したとき、終わったあとに戻る画面を覚える。
+ * Web 版は Google の画面へ移って戻ってくる（アプリの画面の状態は消える）ので、端末の保存に置く
+ */
+export async function rememberLoginReturn(path: string) {
+  await db.meta.put({ key: LOGIN_RETURN_KEY, value: { path, at: Date.now() } })
+}
+
+/** ログインを終えたときに、覚えておいた戻り先を一度だけ取り出す（なければ、アカウントの画面のまま） */
+export async function takeLoginReturn(): Promise<string | undefined> {
+  const saved = await db.meta.get(LOGIN_RETURN_KEY)
+  if (!saved) return undefined
+  await db.meta.delete(LOGIN_RETURN_KEY)
+  const v = saved.value as { path?: unknown; at?: unknown } | undefined
+  if (typeof v?.path !== 'string' || !v.path.startsWith('/settings/') || typeof v.at !== 'number') return undefined
+  return Date.now() - v.at <= LOGIN_RETURN_MS ? v.path : undefined
+}
+
 /** Google でログインする（アプリ：アプリの中の Safari、Web 版：画面ごと移る） */
 export async function loginWithGoogle(): Promise<{ firstDevice: boolean } | null> {
   const result = await authorizeWithGoogle('login')
