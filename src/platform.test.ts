@@ -9,7 +9,7 @@ describe('App Store の評価の画面', () => {
     expect(url.searchParams.get('action')).toBe('write-review')
   })
 
-  it('Web 版から案内する App Store のページは、評価の画面と同じアプリを指す', () => {
+  it('App Store のページ（設定の評価の導線）は、評価の画面と同じアプリを指す', () => {
     expect(APP_STORE_REVIEW_URL.startsWith(`${APP_STORE_URL}?`)).toBe(true)
     expect(new URL(APP_STORE_URL).pathname).toMatch(/^\/app\/id\d+$/)
   })
