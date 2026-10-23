@@ -688,6 +688,41 @@ describe('同期している端末での復元', () => {
   })
 })
 
+describe('同期していない端末での復元', () => {
+  it('バックアップに無いものを、消したものとしては送らない（あとでつないだとき、サーバーのデータを消さない）', async () => {
+    const domainId = await createDomain('ラテアート')
+    const parts = await exportBackup({ includeMedia: false })
+    const later = await createSkill(domainId, input('あとで足した型'))
+    await importBackup(parts.map((p) => p.blob))
+    expect(await db.skills.get(later)).toBeUndefined()
+    expect(await db.outbox.get(['skill', later])).toBeUndefined()
+    expect(await db.outbox.get(['domain', domainId])).toBeDefined()
+  })
+})
+
+describe('同期している端末で、中身ごと復元', () => {
+  it('戻した動画・写真の中身は、いま差し替えたものとして送る（ほかの端末で切り取った中身に戻されない）', async () => {
+    const server = fakeServer()
+    vi.stubGlobal('fetch', server.fetch)
+    const domainId = await createDomain('ラテアート')
+    await addRecord({
+      skillId: await createSkill(domainId, input('ハート')),
+      reason: '',
+      nextAction: '',
+      files: [new Blob(['photo'], { type: 'image/jpeg' })],
+    })
+    const [m] = await db.media.toArray()
+    const parts = await exportBackup({ includeMedia: true })
+    await connectWithConfig({ url: 'https://api.example', token: 't' })
+    const start = Date.now()
+    await importBackup(parts.map((p) => p.blob))
+    const after = (await db.media.get(m.id))!
+    expect(await after.blob?.text()).toBe('photo')
+    expect(after.contentAt).toBeGreaterThanOrEqual(start)
+    expect(((await db.meta.get('settings'))?.value as { updatedAt: number }).updatedAt).toBeGreaterThanOrEqual(start)
+  })
+})
+
 describe('取ってくるあいだに中身を差し替えたとき', () => {
   async function withServerContent() {
     const server = fakeServer()

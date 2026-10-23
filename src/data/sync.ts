@@ -502,9 +502,13 @@ export async function connectWithConfig(config: SyncConfig): Promise<{ firstDevi
     // ただし、端末で消したものの印（行がもう無い）は残す。消さないと削除がサーバーに届かず、
     // ログアウト中に消したものが、サーバーから受け取り直して戻ってきてしまう。印の時刻は消した時刻なので、そのまま使う
     const deletions: OutboxEntry[] = []
-    for (const entry of await db.outbox.toArray()) {
-      if (entry.kind === 'settings' || discarded.has(`${entry.kind}:${entry.id}`)) continue
-      if (!(await TABLES[entry.kind]().get(entry.id))) deletions.push(entry)
+    const pending = (await db.outbox.toArray()).filter((e) => e.kind !== 'settings' && !discarded.has(`${e.kind}:${e.id}`))
+    for (const kind of ['domain', 'skill', 'record', 'media'] as const) {
+      const entries = pending.filter((e) => e.kind === kind)
+      const rows = await TABLES[kind]().bulkGet(entries.map((e) => e.id))
+      entries.forEach((e, i) => {
+        if (!rows[i]) deletions.push(e)
+      })
     }
     await db.outbox.clear()
     // 前に別のアカウントでつないでいたかもしれないので、受け取りきったあとに写真を置いた印を見直す

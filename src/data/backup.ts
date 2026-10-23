@@ -295,7 +295,7 @@ export async function importBackup(zips: Blob[]): Promise<ImportSummary> {
   })
 
   await db.transaction('rw', [db.domains, db.skills, db.records, db.media, db.meta, db.outbox], async () => {
-    // 置き換える前にあったもの。バックアップに無いものは、消したものとしてサーバーへも送る
+    // 置き換える前にあったもの。同期していれば、バックアップに無いものは、消したものとしてサーバーへも送る
     // （送らないと、下で最初から受け取り直したときに、サーバーから戻ってきてしまう）
     const before = {
       domain: (await db.domains.toCollection().primaryKeys()) as string[],
@@ -308,9 +308,15 @@ export async function importBackup(zips: Blob[]): Promise<ImportSummary> {
     const now = Date.now()
     const restamp = !!(await db.meta.get('sync:config'))
     const fresh = <T extends { updatedAt: number }>(rows: T[]): T[] => (restamp ? rows.map((r) => ({ ...r, updatedAt: now })) : rows)
-    const meta = data.meta
-      .filter((m) => !isLocalMeta(m.key))
-      .map((m) => (restamp && m.key === 'settings' ? { ...m, value: { ...(m.value as object), updatedAt: now } } : m))
+    // 中身を戻した動画・写真は、中身もいま差し替えたことにする（ほかの端末で、バックアップのあとに切り取った中身に戻されないように）。
+    // 中身の無いもの（記録だけのバックアップ）は、ほかの端末の中身を受け取れるよう、そのままにする
+    const restoredMedia = fresh(media).map((m) => (restamp && m.blob ? { ...m, contentAt: now } : m))
+    const meta = data.meta.filter((m) => !isLocalMeta(m.key))
+    // 設定も置き換える（バックアップに無ければ、既定の設定に戻したものとして送る）
+    const settings = meta.find((m) => m.key === 'settings')
+    const restoredMeta = restamp
+      ? [...meta.filter((m) => m !== settings), { key: 'settings', value: { ...(settings?.value as object | undefined), updatedAt: now } }]
+      : meta
 
     await Promise.all([db.domains.clear(), db.skills.clear(), db.records.clear(), db.media.clear()])
     // この端末の同期設定は残す
@@ -318,23 +324,32 @@ export async function importBackup(zips: Blob[]): Promise<ImportSummary> {
     await db.domains.bulkAdd(fresh(domains))
     await db.skills.bulkAdd(fresh(skills))
     await db.records.bulkAdd(fresh(records))
-    await db.media.bulkAdd(fresh(media))
-    await db.meta.bulkPut([...meta, { key: 'seeded', value: true }])
+    await db.media.bulkAdd(restoredMedia)
+    await db.meta.bulkPut([...restoredMeta, { key: 'seeded', value: true }])
     // 同期していれば、復元した内容をサーバーへも送る
     await markDirty('domain', domains.map((d) => d.id))
     await markDirty('skill', skills.map((s) => s.id))
     await markDirty('record', records.map((r) => r.id))
     await markDirty('media', media.map((m) => m.id))
     await markDirty('settings', ['settings'])
-    const gone = (ids: string[], rows: { id: string }[]) => {
-      const kept = new Set(rows.map((r) => r.id))
-      return ids.filter((id) => !kept.has(id))
+    const restored = new Set([
+      ...domains.map((d) => `domain:${d.id}`),
+      ...skills.map((x) => `skill:${x.id}`),
+      ...records.map((r) => `record:${r.id}`),
+      ...media.map((m) => `media:${m.id}`),
+    ])
+    if (restamp) {
+      const gone = (kind: string, ids: string[]) => ids.filter((id) => !restored.has(`${kind}:${id}`))
+      await markDirty('domain', gone('domain', before.domain))
+      await markDirty('skill', gone('skill', before.skill))
+      await markDirty('record', gone('record', before.record))
+      await markDirty('media', gone('media', before.media))
+    } else {
+      // 同期していないときは、消したものとしては送らない（前に消したものの印も捨てる）。あとでつないだとき、
+      // 復元した行は時刻が古いままサーバーに負けるので、削除だけが届くと、サーバーにしか無かったデータまで消えてしまう
+      await db.outbox.filter((e) => e.kind !== 'settings' && !restored.has(`${e.kind}:${e.id}`)).delete()
     }
-    await markDirty('domain', gone(before.domain, domains))
-    await markDirty('skill', gone(before.skill, skills))
-    await markDirty('record', gone(before.record, records))
-    await markDirty('media', gone(before.media, media))
-    // 同期していれば、次の同期でサーバーの内容を最初から受け取り直す（サーバーのほうが新しいものに揃える）
+    // 同期していれば、次の同期でサーバーの内容を最初から受け取り直す（復元より前の変更は、復元した内容に負ける）
     if (await db.meta.get('sync:cursor')) await db.meta.put({ key: 'sync:cursor', value: 0 })
   })
   // アプリでは、前の動画・写真のファイルを消し、戻した中身をファイルに移す
