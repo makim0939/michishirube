@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { shareFileNative } from '../data/files'
 import { isAndroidApp } from '../platform'
+import { daysBetween } from '../domain/format'
 import type { Media, SkillState } from '../domain/types'
 import { PlayIcon } from './icons'
 
@@ -24,12 +25,13 @@ export function StateBadge({ state }: { state: SkillState }) {
   return <span className={`badge state-${state}`}>{STATE_LABEL[state]}</span>
 }
 
-const DAY = 24 * 60 * 60 * 1000
-
-/** 今日から何日前か（今日は 0） */
+/**
+ * 今日から何日前か（今日は 0）。
+ * 時間の差を24時間で割ると、夏時間の切り替わる日（23時間・25時間の日）をまたいだときにずれるので、暦の日付で数える
+ */
 function daysAgo(ts: number, now: number): number {
   const startOfToday = new Date(now).setHours(0, 0, 0, 0)
-  return ts >= startOfToday ? 0 : Math.ceil((startOfToday - ts) / DAY)
+  return ts >= startOfToday ? 0 : daysBetween(ts, now)
 }
 
 export function formatAgo(ts: number, now = Date.now()): string {
@@ -39,6 +41,16 @@ export function formatAgo(ts: number, now = Date.now()): string {
   if (days < 30) return `${days}日前`
   const d = new Date(ts)
   return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`
+}
+
+/**
+ * 動画・写真を、記録の日時の古い順に並べる（同じ記録の中は、入れた順）。
+ * 動画・写真の createdAt は入れた時刻なので、あとから編集で足すと、古い杯のものでも新しく見えてしまう。
+ * 「最新と最初」は杯の新しさで決めたいので、記録の日時で並べる（記録が見つからないものは、入れた時刻で代える）
+ */
+export function sortByRecordDate(media: Media[], recordDate: (recordId: string) => number | undefined): Media[] {
+  const at = (m: Media) => recordDate(m.recordId) ?? m.createdAt
+  return [...media].sort((a, b) => at(a) - at(b) || a.createdAt - b.createdAt)
 }
 
 export function formatBytes(n: number): string {

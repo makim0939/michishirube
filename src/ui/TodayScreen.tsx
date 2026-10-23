@@ -52,6 +52,27 @@ function useNow(intervalMs = 60_000): Date {
   return now
 }
 
+/**
+ * 今日の日付（端末の時刻で）。開いたまま日付が変わったら、今週の杯数・練習中の型を数え直すために使う。
+ * 同じ日のあいだは同じ文字なので、毎分たしかめても画面は描き直さない
+ */
+function useDayKey(intervalMs = 60_000): string {
+  const [day, setDay] = useState(() => new Date().toDateString())
+  useEffect(() => {
+    const tick = () => setDay(new Date().toDateString())
+    const timer = setInterval(tick, intervalMs)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') tick()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [intervalMs])
+  return day
+}
+
 function startOfWeek(now: number): number {
   const d = new Date(now)
   d.setHours(0, 0, 0, 0)
@@ -337,9 +358,30 @@ function PracticeBlock({ practice }: { practice: Practice }) {
   )
 }
 
-/** ホームに出す内容を読み込む */
-async function loadToday() {
-  const [skills, practicing, recorded] = await Promise.all([db.skills.toArray(), practicingSkillIds(), recordedSkillIds()])
+/**
+ * いちばん古い、写真のある杯（「はじめの1杯」）。
+ * 動画・写真の createdAt は入れた時刻で、あとから編集で足すと古い杯でも新しくなるので、記録の日時の古い順にたどる。
+ * 杯の絵は今日の画面と同じく写真を先に選ぶ。ふつうは最初の数杯で見つかるので、少しずつ読む
+ */
+async function firstCupRecord(canFetch: boolean): Promise<PracticeRecord | undefined> {
+  const PAGE = 50
+  for (let offset = 0; ; offset += PAGE) {
+    const records = await db.records.orderBy('createdAt').offset(offset).limit(PAGE).toArray()
+    if (records.length === 0) return undefined
+    const media = await db.media.bulkGet([...new Set(records.flatMap((r) => r.mediaIds ?? []))])
+    const byId = new Map(media.filter((m) => !!m).map((m) => [m.id, m]))
+    const hit = records.find((r) => hasCupImage(pickCupMedia((r.mediaIds ?? []).map((id) => byId.get(id))), canFetch))
+    if (hit) return hit
+  }
+}
+
+/** ホームに出す内容を読み込む。now は、今週の杯数と練習中の型（最近の日数）を数える基準 */
+async function loadToday(now: number) {
+  const [skills, practicing, recorded] = await Promise.all([
+    db.skills.toArray(),
+    practicingSkillIds(now),
+    recordedSkillIds(),
+  ])
   const byId = indexById(skills)
   const states = computeStates(skills, practicing)
   // 練習中＝最近記録した型（「できた」の型も、続けて練習していれば出す）
@@ -348,12 +390,10 @@ async function loadToday() {
   // サーバーから写真を取ってこられるか（印が無くても、サーバーにある写真は候補にする）
   const canFetch = !!(await getSyncConfig())
   // 新しい記録から、大きな写真でめくる杯を選ぶ。最後に「はじめの1杯」（いちばん古い、写真のある杯）を置く
-  const [latest, firstMedia] = await Promise.all([
+  const [latest, firstCandidate] = await Promise.all([
     db.records.orderBy('createdAt').reverse().limit(HERO_LOOKBACK).toArray(),
-    // いちばん古い写真。古い順にたどって最初に見つかったもの
-    db.media.orderBy('createdAt').filter((m) => hasCupImage(m, canFetch)).first(),
+    firstCupRecord(canFetch),
   ])
-  const firstCandidate = firstMedia && (await db.records.get(firstMedia.recordId))
   // 動画・写真は、大きな写真の候補と各型の最近の杯の分をまとめて1回で読む
   const recentOf = perSkill.map(({ records }) => records.slice(0, RECENT))
   const mediaIds = [...latest, ...(firstCandidate ? [firstCandidate] : []), ...recentOf.flat()].flatMap(
@@ -386,7 +426,7 @@ async function loadToday() {
   }))
   // 最近練習した型を上に（撮るときに、カードを探さずに済むように）
   const practices: Practice[] = practiceOrder(unordered, (p) => p.last)
-  const thisWeek = await db.records.where('createdAt').aboveOrEqual(startOfWeek(Date.now())).count()
+  const thisWeek = await db.records.where('createdAt').aboveOrEqual(startOfWeek(now)).count()
   // 次のおすすめ：前提ができている「次の一歩」を先に、前提を練習中のものを後に並べる
   const available = sortByDepth(skills.filter((s) => states.get(s.id) === 'available'))
     .map((s) => ({ ...s, parallel: !prereqsDone(s, byId), label: recommendLabel(s, recorded) }))
@@ -423,12 +463,14 @@ export function forgetToday() {
 }
 
 export function TodayScreen() {
+  // 開いたまま日付が変わったら（月曜になった・21日を過ぎた）、数え直す
+  const day = useDayKey()
   const data = useLiveQuery(
     async () => {
-      lastToday = await loadToday()
+      lastToday = await loadToday(Date.now())
       return lastToday
     },
-    [],
+    [day],
     lastToday,
   )
 
