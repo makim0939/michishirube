@@ -4,6 +4,7 @@ import { isWebUrl } from '../domain/template'
 import type { Skill } from '../domain/types'
 import { ConfirmButton } from './common'
 import { useAction, useToast } from './feedback'
+import { t } from '../i18n'
 
 function AddReferenceForm({ skillId, onDone }: { skillId: string; onDone: () => void }) {
   const run = useAction()
@@ -21,7 +22,7 @@ function AddReferenceForm({ skillId, onDone }: { skillId: string; onDone: () => 
           return true
         })
         if (ok) {
-          toast.show('手本を追加しました')
+          toast.show(t.refs.added)
           onDone()
         }
       }}
@@ -35,23 +36,23 @@ function AddReferenceForm({ skillId, onDone }: { skillId: string; onDone: () => 
           required
           value={url}
           onChange={(e) => setUrl(e.target.value)}
-          placeholder="https://youtu.be/…（共有ボタンでコピーして貼り付け）"
+          placeholder={t.refs.urlPlaceholder}
         />
       </label>
       <label className="field">
-        <span>タイトル（任意）</span>
-        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="空ならサイト名になります" />
+        <span>{t.refs.title}</span>
+        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t.refs.titlePlaceholder} />
       </label>
       <label className="field">
-        <span>見るところのメモ（任意）</span>
-        <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="例：2:30〜 注ぎ始めの高さ" />
+        <span>{t.refs.note}</span>
+        <input value={note} onChange={(e) => setNote(e.target.value)} placeholder={t.refs.notePlaceholder} />
       </label>
       <div className="row">
         <button className="btn primary" type="submit">
-          追加する
+          {t.refs.add}
         </button>
         <button className="btn" type="button" onClick={onDone}>
-          やめる
+          {t.common.cancel}
         </button>
       </div>
     </form>
@@ -65,10 +66,10 @@ export function References({ skill }: { skill: Skill }) {
   return (
     <section className="section">
       <div className="section-head">
-        <h2>手本の動画・記事</h2>
+        <h2>{t.refs.heading}</h2>
         {!adding && (
           <button className="btn small" onClick={() => setAdding(true)}>
-            ＋ 追加
+            {t.refs.addShort}
           </button>
         )}
       </div>
@@ -90,7 +91,7 @@ export function References({ skill }: { skill: Skill }) {
               </div>
               <ConfirmButton
                 className="btn small ghost"
-                confirmLabel="削除"
+                confirmLabel={t.refs.remove}
                 onConfirm={() => run(() => removeReference(skill.id, r.id))}
               >
                 ×

@@ -1,6 +1,7 @@
 import { Capacitor } from '@capacitor/core'
 import { FEEDBACK_ENV_MAX, type FeedbackInput, type FeedbackKind, type FeedbackPlatform } from '../../shared/feedback'
 import { SERVER_URL } from './account'
+import { lang, t } from '../i18n'
 
 /** 書きかけの内容（送れなかったとき・途中で画面を離れたときに、書き直さなくて済むように端末に残す） */
 const DRAFT_KEY = 'michishirube:feedback-draft'
@@ -88,7 +89,8 @@ export async function sendFeedback(draft: FeedbackDraft): Promise<void> {
     contact: draft.contact.trim(),
     platform,
     appVersion: __APP_VERSION__,
-    env: describeEnvironment(navigator.userAgent, platform, standalone),
+    // 英語で使っている人からの報告だと分かるように、言語も添える（日本語は、これまでどおり何も足さない）
+    env: describeEnvironment(navigator.userAgent, platform, standalone) + (lang === 'en' ? '・English' : ''),
   }
   let res: Response
   try {
@@ -98,14 +100,14 @@ export async function sendFeedback(draft: FeedbackDraft): Promise<void> {
       body: JSON.stringify(body),
     })
   } catch {
-    throw new FeedbackError('送れませんでした。電波を確認してください。書いた内容は残しています')
+    throw new FeedbackError(t.errors.feedbackOffline)
   }
   if (!res.ok) {
     const json = (await res.json().catch(() => ({}))) as { message?: unknown }
     throw new FeedbackError(
       res.status === 429 && typeof json.message === 'string'
-        ? json.message
-        : '送れませんでした。しばらくしてから、もう一度送ってください。書いた内容は残しています',
+        ? t.errors.fromServer('busy', json.message, res.status)
+        : t.errors.feedbackFailed,
     )
   }
 }

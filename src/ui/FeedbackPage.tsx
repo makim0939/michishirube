@@ -3,11 +3,12 @@ import { FEEDBACK_CONTACT_MAX, FEEDBACK_MESSAGE_MAX, type FeedbackKind } from '.
 import { clearDraft, loadDraft, saveDraft, sendFeedback } from '../data/feedback'
 import { useAction, useToast } from './feedback'
 import { goBack } from './router'
+import { t } from '../i18n'
 
 const KINDS: { value: FeedbackKind; label: string; placeholder: string }[] = [
-  { value: 'idea', label: '要望', placeholder: 'こんな機能がほしい、ここが使いにくい' },
-  { value: 'bug', label: '不具合', placeholder: 'どの画面で、何をしたら、どうなりましたか' },
-  { value: 'other', label: 'その他', placeholder: '何でもどうぞ' },
+  { value: 'idea', ...t.feedback.idea },
+  { value: 'bug', ...t.feedback.bug },
+  { value: 'other', ...t.feedback.other },
 ]
 
 /**
@@ -37,7 +38,7 @@ export function FeedbackPage() {
         await sendFeedback({ kind, message, contact })
         sent.current = true
         clearDraft()
-        toast.show('届きました。ありがとうございます')
+        toast.show(t.feedback.sent)
         // 設定へ戻る（新しく積むと、戻るで空のフォームに戻ってしまう）
         goBack('/settings')
       } finally {
@@ -48,7 +49,7 @@ export function FeedbackPage() {
   return (
     <section className="section">
       <div className="stack">
-        <div className="segmented feedback-kinds" role="radiogroup" aria-label="種類">
+        <div className="segmented feedback-kinds" role="radiogroup" aria-label={t.feedback.kind}>
           {KINDS.map((k) => (
             <button
               key={k.value}
@@ -65,26 +66,26 @@ export function FeedbackPage() {
         <textarea
           rows={7}
           maxLength={FEEDBACK_MESSAGE_MAX}
-          aria-label="内容"
+          aria-label={t.feedback.message}
           placeholder={KINDS.find((k) => k.value === kind)?.placeholder}
           value={message}
           onChange={(e) => setMessage(e.target.value)}
         />
         <details className="feedback-contact" open={contact !== ''}>
-          <summary>返信がほしいとき</summary>
+          <summary>{t.feedback.wantReply}</summary>
           <input
             type="text"
             inputMode="email"
             autoComplete="email"
             maxLength={FEEDBACK_CONTACT_MAX}
-            aria-label="連絡先"
-            placeholder="メールアドレスなど"
+            aria-label={t.feedback.contact}
+            placeholder={t.feedback.contactPlaceholder}
             value={contact}
             onChange={(e) => setContact(e.target.value)}
           />
         </details>
         <button className="btn primary" disabled={sending || !message.trim()} onClick={submit}>
-          {sending ? '送っています…' : '送る'}
+          {sending ? t.feedback.sending : t.feedback.send}
         </button>
       </div>
     </section>

@@ -46,6 +46,10 @@ describe('YouTube のタイトルと説明の書き方', () => {
     expect(buildVideoText({ title: '<{型}>', description: 'a<b>' }, full)).toEqual({ title: 'ハート', description: 'ab' })
   })
 
+  it('項目は英語の名前でも書ける（言語を切り替えても、前に書いた書き方がそのまま使える）', () => {
+    expect(renderTemplate('{pattern} | {Next Step}\nNotes: {notes}', full)).toBe('ハート | 高く注ぐ\nNotes: 良かった')
+  })
+
   it('説明を空にすれば、説明なしで上がる', () => {
     expect(buildVideoText({ title: '{型}', description: '' }, full).description).toBe('')
   })

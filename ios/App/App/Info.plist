@@ -6,6 +6,12 @@
 	<string>$(CAPACITOR_DEBUG)</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
+	<!-- 対応する言語。iPhone の設定（アプリごとの言語）に、この2つが出る。日本語以外の人は英語（開発の言語）になる -->
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>ja</string>
+	</array>
 	<key>CFBundleDisplayName</key>
 	<string>ラテ帳</string>
 	<key>CFBundleExecutable</key>

@@ -3,6 +3,7 @@ import { youtubeThumbnail, youtubeUrl } from '../data/youtube'
 import { isNativeApp } from '../platform'
 import { type PlayerControl, useObjectUrl } from './common'
 import { PauseIcon, PlayIcon, SpeakerIcon } from './icons'
+import { t } from '../i18n'
 
 /**
  * 端末から消えた動画を、アプリの中で YouTube から再生する（限定公開・公開の動画を埋め込む）。
@@ -71,7 +72,7 @@ function loadApi(): Promise<YTNamespace> {
       // 電波が戻ったら、次に開いたときに読み込み直す
       api = undefined
       script.remove()
-      reject(new Error('YouTube を読み込めませんでした'))
+      reject(new Error(t.player.loadFailed))
     }
     document.head.appendChild(script)
   })
@@ -105,7 +106,7 @@ class EmbedPlayer implements YTPlayer {
     const app = window.location.protocol === 'http:' ? `&app=${encodeURIComponent(window.location.origin)}` : ''
     iframe.src = `${EMBED_PAGE}?v=${encodeURIComponent(options.videoId)}${app}`
     iframe.allow = 'autoplay; encrypted-media'
-    iframe.title = 'YouTube の動画'
+    iframe.title = t.repo.youtubeVideo
     iframe.style.cssText = 'width:100%;height:100%;border:0'
     el.replaceWith(iframe)
     this.iframe = iframe
@@ -376,8 +377,8 @@ export function YoutubePlayer({
         rel="noopener noreferrer"
       >
         <PlayIcon size={22} />
-        YouTube で見る
-        <small>アプリの中で再生できませんでした</small>
+        {t.player.watchOnYoutube}
+        <small>{t.player.cannotPlayHere}</small>
       </a>
     )
   }
@@ -390,7 +391,7 @@ export function YoutubePlayer({
         type="button"
         className={`yt-surface${started ? '' : ' cover'}`}
         style={!started ? { backgroundImage: `url(${posterUrl})` } : undefined}
-        aria-label={playing ? (controlsShown ? '一時停止' : '操作を表示') : '動画を再生'}
+        aria-label={playing ? (controlsShown ? t.player.pause : t.player.showControls) : t.common.playVideo}
         disabled={!ready}
         onClick={() => {
           // バーを隠しているときは、まずバーを出す（いきなり止めない）
@@ -415,7 +416,7 @@ export function YoutubePlayer({
           <button
             type="button"
             className="yt-control"
-            aria-label={playing ? '一時停止' : '再生'}
+            aria-label={playing ? t.player.pause : t.player.play}
             onClick={() => (playing ? player.current?.pauseVideo() : player.current?.playVideo())}
           >
             {playing ? <PauseIcon size={18} /> : <PlayIcon size={18} />}
@@ -423,7 +424,7 @@ export function YoutubePlayer({
           <input
             type="range"
             className="yt-seek"
-            aria-label="再生位置"
+            aria-label={t.player.position}
             min={0}
             max={duration || 1}
             step={0.1}
@@ -443,7 +444,7 @@ export function YoutubePlayer({
             type="button"
             className={`yt-control yt-rate${slow ? ' on' : ''}`}
             aria-pressed={slow}
-            aria-label="スロー再生"
+            aria-label={t.player.slow}
             onClick={() => {
               player.current?.setPlaybackRate(slow ? 1 : 0.5)
               setSlow(!slow)
@@ -454,7 +455,7 @@ export function YoutubePlayer({
           <button
             type="button"
             className="yt-control"
-            aria-label={muted ? '音を出す' : '音を消す'}
+            aria-label={muted ? t.player.unmute : t.player.mute}
             onClick={() => {
               if (muted) player.current?.unMute()
               else player.current?.mute()

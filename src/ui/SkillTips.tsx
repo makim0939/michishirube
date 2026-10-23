@@ -4,6 +4,7 @@ import { formatAgo, splitName, STATE_LABEL } from './common'
 import { ForwardIcon } from './icons'
 import { References } from './References'
 import { href } from './router'
+import { t } from '../i18n'
 
 /**
  * 自分のコツ。一般的な描き方の文章ではなく、自分の記録から「注ぐ前に読み返したいこと」をまとめる。
@@ -26,23 +27,23 @@ export function SkillTips({
   return (
     <section className="section">
       {/* 中身が無いあいだは、見出しも説明も出さない（記録するとここに現れる。空の枠と説明文を先に見せない） */}
-      {!empty && <h2>自分のコツ</h2>}
+      {!empty && <h2>{t.skill.tips}</h2>}
       {!empty && (
         <div className="tips-card">
           {tips.focus && (
             <div className="tip-block">
-              <span className="tip-label">いま意識していること（{formatAgo(tips.focus.at)}）</span>
+              <span className="tip-label">{t.skill.focus(formatAgo(tips.focus.at))}</span>
               <p className="tip-focus">{tips.focus.text}</p>
             </div>
           )}
           {tips.stumbles.length > 0 && (
             <div className="tip-block">
-              <span className="tip-label">つまずきやすいところ（直近{tips.window}杯）</span>
+              <span className="tip-label">{t.skill.stumbles(tips.window)}</span>
               <ul className="stumbles">
                 {tips.stumbles.map((s) => (
                   <li key={s.cause}>
                     {s.cause}
-                    <span className="stumble-count">{s.count}回</span>
+                    <span className="stumble-count">{t.skill.times(s.count)}</span>
                   </li>
                 ))}
               </ul>
@@ -50,7 +51,7 @@ export function SkillTips({
           )}
           {tips.wins.length > 0 && (
             <div className="tip-block">
-              <span className="tip-label">うまくいったときのメモ</span>
+              <span className="tip-label">{t.skill.wins}</span>
               <ul className="wins">
                 {tips.wins.map((w) => (
                   <li key={w.recordId}>
@@ -94,17 +95,17 @@ export function AboutSkill({
   if (!skill.description && prereqs.length === 0 && leadsTo.length === 0) return null
   return (
     <details className="section about-skill">
-      <summary>この型について</summary>
+      <summary>{t.skill.about}</summary>
       {skill.description && <p className="prewrap">{skill.description}</p>}
       {prereqs.length > 0 && (
         <>
-          <h3>先にやると進めやすい型</h3>
+          <h3>{t.skill.prereqs}</h3>
           <ul className="chips">{prereqs.map(link)}</ul>
         </>
       )}
       {leadsTo.length > 0 && (
         <>
-          <h3>次のステップ</h3>
+          <h3>{t.skill.leadsTo}</h3>
           <ul className="chips">{leadsTo.map(link)}</ul>
         </>
       )}

@@ -21,6 +21,7 @@ import { PatternImage } from './PatternImage'
 import { recommendLabel } from './skillLabels'
 import { LIGHT_LABEL, lightFor, lightUrl, type Light } from './world'
 import { isIosDevice, isNativeApp } from '../platform'
+import { t } from '../i18n'
 
 const HINT_KEY = 'michishirube:install-hint-dismissed'
 /** メイン写真を探しにいく、新しい記録の数 */
@@ -88,7 +89,7 @@ function Notice() {
     return (
       <a className="notice" href={href('/settings/sync')}>
         <AlertIcon size={18} />
-        <span>同期できていません。設定を確かめてください</span>
+        <span>{t.today.syncFailed}</span>
       </a>
     )
   }
@@ -97,10 +98,10 @@ function Notice() {
     return (
       <div className="notice">
         <AlertIcon size={18} />
-        <span>共有ボタン →「ホーム画面に追加」から開くと、記録が消えにくくなります</span>
+        <span>{t.today.installHint}</span>
         <button
           className="notice-close"
-          aria-label="閉じる"
+          aria-label={t.common.close}
           onClick={() => {
             writeStorage('local', HINT_KEY, '1')
             setHintHidden(true)
@@ -114,7 +115,7 @@ function Notice() {
   if (data.backlog.failed > 0) {
     return (
       <p className="notice quiet">
-        YouTube へのアップに失敗した動画が {data.backlog.failed} 本あります。次に開いたときに上げ直します
+        {t.today.uploadFailed(data.backlog.failed)}
       </p>
     )
   }
@@ -124,15 +125,12 @@ function Notice() {
       return (
         <a className="notice" href={href('/settings/storage')}>
           <AlertIcon size={18} />
-          <span>
-            動画 {data.backlog.waiting} 本が YouTube に上がっていません。「動画」の設定で
-            {isLoggedIn(data.config) ? '' : 'ログインして、'}YouTube とつないでください
-          </span>
+          <span>{t.today.notUploaded(data.backlog.waiting, isLoggedIn(data.config))}</span>
         </a>
       )
     }
     return (
-      <p className="notice quiet">YouTube へのアップ待ちの動画が {data.backlog.waiting} 本あります（開いている間に上げます）</p>
+      <p className="notice quiet">{t.today.waiting(data.backlog.waiting)}</p>
     )
   }
   return null
@@ -176,7 +174,7 @@ function HeroSlide({
       <img className="hero-image" src={url ?? lightUrl(light)} alt={url ? label : ''} />
       {url && (
         <div className="hero-caption">
-          {slide.first && <span className="hero-first">はじめの1杯</span>}
+          {slide.first && <span className="hero-first">{t.today.firstCup}</span>}
           <span className="hero-no">No.{slide.number}</span>
           <span>
             {formatAgo(slide.record.createdAt, now.getTime())}
@@ -211,7 +209,7 @@ function Hero({ slides: all }: { slides: Slide[] }) {
   }, [newest])
 
   return (
-    <section className="today-hero" aria-label={slides.length > 0 ? '最近の杯（左右にめくれます）' : undefined}>
+    <section className="today-hero" aria-label={slides.length > 0 ? t.today.heroLabel : undefined}>
       {slides.length === 0 ? (
         <img className="hero-image" src={lightUrl(light)} alt="" />
       ) : (
@@ -231,7 +229,7 @@ function Hero({ slides: all }: { slides: Slide[] }) {
       <div className="hero-shade" aria-hidden="true" />
       <div className="hero-top">
         {/* 題字は、写真に馴染む欧文（ラテ帳の読み）に、小さく和文を添える */}
-        <h1 className="wordmark" aria-label="ラテ帳">
+        <h1 className="wordmark" aria-label={t.settings.appName}>
           <span className="wordmark-latin" aria-hidden="true">
             Latte chō
           </span>
@@ -271,7 +269,7 @@ function RecentCup({
   return (
     <li>
       {/* 押すと、その1杯の動画・写真と理由を見返せる */}
-      <a className="recent-cup" href={href(`/cup/${record.id}`)} aria-label={`${name ? `${name} ` : ''}${label}の詳細`}>
+      <a className="recent-cup" href={href(`/cup/${record.id}`)} aria-label={t.today.cupDetail(`${name ? `${name} ` : ''}${label}`)}>
         {shown ? <img src={shown} alt="" onError={() => setFailedUrl(shown)} /> : <span className="recent-empty" aria-hidden="true" />}
         <span className="recent-no">
           {label}
@@ -311,23 +309,23 @@ function PracticeBlock({ practice }: { practice: Practice }) {
           <FormDots form={form} />
         </span>
         <span className="practice-count">
-          <strong>{count}</strong>杯
+          {t.today.cupCount(count)}
         </span>
       </a>
       {/* 次の一手は、書いたことがあるときだけ出す（無いときの説明は記録画面にある） */}
       {next && (
         <p className="next-line">
-          <span className="next-label">次の一手</span>
+          <span className="next-label">{t.record.nextAction}</span>
           <span className="next-text">{next}</span>
         </p>
       )}
       <a className="btn primary shoot" href={href(`/record/${skill.id}`)}>
         <CameraIcon size={20} />
         {/* 記録ボタンは、その型で何杯目か（杯の No. は全体の通し番号） */}
-        {count + 1}杯目を記録する
+        {t.today.recordNth(count + 1)}
       </a>
       {recent.length > 0 && (
-        <ul className="recent-cups" aria-label={`${main}の最近の杯`}>
+        <ul className="recent-cups" aria-label={t.today.recentOf(main)}>
           {recent.map((r) => (
             <RecentCup key={r.record.id} record={r.record} media={r.media} label={`No.${r.number}`} />
           ))}
@@ -448,11 +446,11 @@ export function TodayScreen() {
         {data.practices.length > 0 ? (
           <>
             <div className="sheet-head">
-              <h2>練習中の型</h2>
+              <h2>{t.today.practicing}</h2>
               <span className="muted small">
                 {/* 週の初め（まだ0杯）は、数を出さない */}
-                {data.thisWeek > 0 && <>今週 {data.thisWeek}杯 · </>}
-                <a href={href('/records')}>ラテ帳</a>
+                {data.thisWeek > 0 && <>{t.today.thisWeek(data.thisWeek)} · </>}
+                <a href={href('/records')}>{t.app.tabRecords}</a>
               </span>
             </div>
             <div className="practice-list">
@@ -465,38 +463,38 @@ export function TodayScreen() {
           data.available.length > 0 ? (
             // はじめて開いたとき：最初の1杯へ、迷わず進めるボタンを1つだけ出す
             <div className="sheet-empty first-run">
-              <h2>まずは1杯、撮ってみましょう</h2>
+              <h2>{t.today.firstRun}</h2>
               <a className="btn primary shoot" href={href(`/record/${data.available[0].id}`)}>
                 <CameraIcon size={20} />
-                {splitName(data.available[0].name).main}を記録する
+                {t.today.recordSkill(splitName(data.available[0].name).main)}
               </a>
               {/* 下に「次のおすすめ」が出るときは、そちらに同じリンクがある */}
               {recommended.length === 0 && (
                 <a className="sub-link" href={href('/map')}>
-                  ほかの型から選ぶ
+                  {t.today.chooseOther}
                 </a>
               )}
             </div>
           ) : (
             <div className="sheet-empty">
-              <h2>練習中の型</h2>
+              <h2>{t.today.practicing}</h2>
               <a className="btn" href={href('/map')}>
-                型を選ぶ
+                {t.today.chooseSkill}
               </a>
             </div>
           )
         ) : (
           <div className="sheet-empty">
-            <p>型がありません。</p>
+            <p>{t.today.noSkills}</p>
             <a className="btn primary" href={href('/map')}>
-              型を用意する
+              {t.today.prepareSkills}
             </a>
           </div>
         )}
 
         {data.others.length > 0 && (
           <section className="section">
-            <h2>ほかの型の最近の杯</h2>
+            <h2>{t.today.othersRecent}</h2>
             <ul className="recent-cups">
               {data.others.map((o) => (
                 <RecentCup key={o.record.id} record={o.record} media={o.media} label={`No.${o.number}`} name={o.name} />
@@ -508,9 +506,9 @@ export function TodayScreen() {
         {recommended.length > 0 && (
           <section className="section">
             <div className="sheet-head">
-              <h2>次のおすすめ</h2>
+              <h2>{t.state.available}</h2>
               <a className="small" href={href('/map')}>
-                ほかの型から選ぶ
+                {t.today.chooseOther}
               </a>
             </div>
             <ul className="type-rows">
@@ -527,7 +525,7 @@ export function TodayScreen() {
                   </a>
                   {/* 押すとすぐカメラが開く（記録すると練習中になり、上に出る） */}
                   <a className="btn small" href={href(`/record/${s.id}`)}>
-                    記録する
+                    {t.common.record}
                   </a>
                 </li>
               ))}

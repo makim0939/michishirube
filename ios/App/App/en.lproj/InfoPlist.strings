@@ -1,0 +1,6 @@
+/* アプリ名と、iOS が出す許可の文（英語）。日本語以外の言語の人には、これが出る */
+"CFBundleDisplayName" = "Latte-chō";
+"NSCameraUsageDescription" = "Used to film your latte art pours and photograph the finished cup.";
+"NSMicrophoneUsageDescription" = "Used to record sound with your pour videos (you can also record without sound).";
+"NSPhotoLibraryAddUsageDescription" = "Used to save your videos and photos to the Photos app.";
+"NSPhotoLibraryUsageDescription" = "Used to add photos and videos from your library to your records.";

@@ -13,7 +13,7 @@ import {
 import { db } from '../data/db'
 import { getSyncConfig, getSyncStatus, runSync } from '../data/sync'
 import { saveYoutubeKey } from '../data/youtube'
-import { formatDateTime } from '../domain/format'
+import { formatTime } from '../domain/format'
 import { accountLabel } from '../data/accountLabel'
 import { ConfirmButton, formatAgo, formatBytes } from './common'
 import { PHOTO_QUOTA_BYTES } from '../../shared/protocol'
@@ -21,10 +21,11 @@ import { useAction, useToast } from './feedback'
 import { replace } from './router'
 import { isIosApp, PRIVACY_URL } from '../platform'
 import { AlertIcon, CheckIcon } from './icons'
+import { t } from '../i18n'
 
 /** ログインしたあとのトースト。アプリの中で終えたときと、Web 版で Google の画面から戻ったときで、同じ文言にする */
 const loginMessage = (firstDevice: boolean) =>
-  firstDevice ? 'ログインしました。この端末の記録を保存しました' : 'ログインしました。記録を受け取りました'
+  firstDevice ? t.account.loggedInFirst : t.account.loggedIn
 
 /** Web 版で、Google の画面から戻ってきたら結果を受け取る（戻り先の URL に一度きりのコードが付いてくる） */
 function useWebAuthResult() {
@@ -42,7 +43,7 @@ function useWebAuthResult() {
         toast.show(loginMessage(firstDevice))
       } else {
         await saveYoutubeKey(result.refreshToken)
-        toast.show('YouTube とつなぎました')
+        toast.show(t.youtube.connected)
         // つなぐ操作は「動画」の画面にあるので、戻ってきたらそこへ（Web 版は、サーバーが同期の画面へ戻す）
         replace('/settings/storage')
       }
@@ -65,23 +66,23 @@ function LoginSection({ legacy }: { legacy: boolean }) {
   return (
     <section className="section">
       <div className="stack">
-        <p>ログインすると、記録と写真をほかの端末でも使えます。</p>
-        {legacy && <p className="muted small">前の同期で置いた記録は、ログインすると引き継ぎます。</p>}
+        <p>{t.account.intro}</p>
+        {legacy && <p className="muted small">{t.account.legacy}</p>}
         <div className="login-buttons">
           {isIosApp && (
             <button className="login-btn apple" disabled={busy} onClick={() => login(loginWithApple)}>
               {!busy && <AppleLogo />}
-              {busy ? 'ログインしています…' : 'Apple でログイン'}
+              {busy ? t.account.signingIn : t.account.apple}
             </button>
           )}
           <button className="login-btn google" disabled={busy} onClick={() => login(loginWithGoogle)}>
             {!busy && <GoogleLogo />}
-            {busy ? 'ログインしています…' : 'Google でログイン'}
+            {busy ? t.account.signingIn : t.account.google}
           </button>
         </div>
         <p className="muted small">
           <a href={PRIVACY_URL} target="_blank" rel="noopener noreferrer">
-            プライバシーポリシー
+            {t.settings.privacy}
           </a>
         </p>
       </div>
@@ -137,7 +138,7 @@ export function SyncSettings({ notice }: { notice?: string }) {
   return (
     <>
       <section className="section">
-        <h2>アカウント</h2>
+        <h2>{t.settings.account}</h2>
         <div className="stack">
           <p className="status-line">
             {status.error ? <AlertIcon size={16} /> : <CheckIcon size={16} />}
@@ -147,18 +148,18 @@ export function SyncSettings({ notice }: { notice?: string }) {
             {status.error
               ? status.error
               : status.lastSyncedAt
-                ? `最後の同期：${formatAgo(status.lastSyncedAt)} ${formatDateTime(status.lastSyncedAt).split(' ')[1]}`
-                : '同期しています…'}
-            {pending > 0 && `（送っていない変更が ${pending} 件）`}
+                ? t.account.lastSync(`${formatAgo(status.lastSyncedAt)} ${formatTime(status.lastSyncedAt)}`)
+                : t.account.syncing}
+            {pending > 0 && t.account.pending(pending)}
           </p>
           {!!status.tooLarge && (
             <p className="muted small">
-              大きすぎて送れない記録・型が {status.tooLarge} 件あります。メモや説明を短くすると送ります。
+              {t.account.tooLarge(status.tooLarge)}
             </p>
           )}
           {status.photosFull && (
             <p className="muted small">
-              保存できる写真の量（{formatBytes(PHOTO_QUOTA_BYTES)}）を超えたため、写真の一部をほかの端末に送れていません。いらない写真・記録を消すと、あとでまた送ります。
+              {t.account.photosFull(formatBytes(PHOTO_QUOTA_BYTES))}
             </p>
           )}
           <div className="row wrap">
@@ -167,24 +168,24 @@ export function SyncSettings({ notice }: { notice?: string }) {
               onClick={() =>
                 run(async () => {
                   await runSync()
-                  toast.show('同期しました')
+                  toast.show(t.account.synced)
                 })
               }
             >
-              今すぐ同期
+              {t.account.syncNow}
             </button>
             <ConfirmButton
               className="btn small ghost"
-              confirmLabel="ログアウトする"
-              message="この端末のログインを終えます。端末の記録はそのまま残り、保存した記録も消えません。"
+              confirmLabel={t.account.logoutConfirm}
+              message={t.account.logoutMessage}
               onConfirm={() =>
                 run(async () => {
                   await logout()
-                  toast.show('ログアウトしました')
+                  toast.show(t.account.loggedOut)
                 })
               }
             >
-              ログアウト
+              {t.account.logout}
             </ConfirmButton>
           </div>
         </div>
@@ -193,19 +194,19 @@ export function SyncSettings({ notice }: { notice?: string }) {
       <section className="section danger-zone">
         <ConfirmButton
           className="btn ghost"
-          confirmLabel="削除する"
-          message="アカウントと、保存した記録・写真をすべて削除します。元に戻せません。この端末の記録と、YouTube に上げた動画は残ります。"
+          confirmLabel={t.common.delete}
+          message={t.account.deleteMessage}
           onConfirm={() =>
             run(async () => {
               toast.show(
                 (await deleteAccount())
-                  ? 'アカウントを削除しました'
-                  : 'ログインが切れていたため、削除できたか確かめられませんでした。ほかの端末で削除していなければ、ログインし直してから削除してください',
+                  ? t.account.deleted
+                  : t.account.deleteUnknown,
               )
             })
           }
         >
-          アカウントを削除
+          {t.account.delete}
         </ConfirmButton>
       </section>
     </>

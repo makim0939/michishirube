@@ -1,7 +1,8 @@
 <?xml version='1.0' encoding='utf-8'?>
+<!-- アプリ名の標準（英語）。日本語は values-ja に置く -->
 <resources>
-    <string name="app_name">ラテ帳</string>
-    <string name="title_activity_main">ラテ帳</string>
-    <string name="package_name">me.makimura.lattecho.app</string>
-    <string name="custom_url_scheme">me.makimura.lattecho.app</string>
+    <string name="app_name">Latte-chō</string>
+    <string name="title_activity_main">Latte-chō</string>
+    <string name="package_name" translatable="false">me.makimura.lattecho.app</string>
+    <string name="custom_url_scheme" translatable="false">me.makimura.lattecho.app</string>
 </resources>

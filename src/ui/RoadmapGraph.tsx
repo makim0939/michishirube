@@ -7,6 +7,7 @@ import type { Skill, SkillState } from '../domain/types'
 import { splitName, STATE_LABEL } from './common'
 import { PatternImage } from './PatternImage'
 import { go } from './router'
+import { t } from '../i18n'
 
 const NODE_WIDTH = 208
 const NODE_HEIGHT = 60
@@ -96,7 +97,7 @@ export function RoadmapGraph({ skills, practicing }: { skills: Skill[]; practici
         minZoom={0.3}
         maxZoom={1.5}
       >
-        <Controls showInteractive={false} fitViewOptions={{ padding: 0.1 }} aria-label="表示の操作" />
+        <Controls showInteractive={false} fitViewOptions={{ padding: 0.1 }} aria-label={t.roadmap.graphControls} />
       </ReactFlow>
     </div>
   )

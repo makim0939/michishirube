@@ -8,6 +8,7 @@ import { formatAgo, splitName } from './common'
 import { type Cup, CupGrid } from './CupGrid'
 import { pickCupMedia } from './cupImage'
 import { href } from './router'
+import { t } from '../i18n'
 
 /** 一度にたくさん読み込みすぎないよう、少しずつ出す（3列なので3の倍数） */
 const PAGE = 24
@@ -66,23 +67,23 @@ export function RecordsScreen() {
   return (
     <div className="screen">
       <header className="screen-header">
-        <h1>ラテ帳</h1>
-        <span className="pill">{data.total}杯</span>
+        <h1>{t.app.tabRecords}</h1>
+        <span className="pill">{t.common.cups(data.total)}</span>
       </header>
 
       {data.recorded.size > 1 && (
         <label className="field">
-          <span className="sr-only">型で絞り込む</span>
+          <span className="sr-only">{t.records.filter}</span>
           <select value={skillFilter} onChange={(e) => {
             setSkillFilter(e.target.value)
             setLimit(PAGE)
           }}>
-            <option value="">すべての型</option>
+            <option value="">{t.records.all}</option>
             {data.skills
               .filter((s) => data.recorded.has(s.id))
               .map((s) => (
                 <option key={s.id} value={s.id}>
-                  {manyDomains ? `${domainName.get(s.domainId)}・` : ''}
+                  {manyDomains ? `${domainName.get(s.domainId)}${t.common.sep}` : ''}
                   {splitName(s.name).main}
                 </option>
               ))}
@@ -92,9 +93,9 @@ export function RecordsScreen() {
 
       {shown.length === 0 ? (
         <div className="empty">
-          <p>まだ記録がありません。</p>
+          <p>{t.common.noRecordsYet}</p>
           <a className="btn primary" href={href('/')}>
-            今日の練習へ
+            {t.records.toToday}
           </a>
         </div>
       ) : (
@@ -108,7 +109,7 @@ export function RecordsScreen() {
 
       {more && (
         <button className="btn" onClick={() => setLimit((n) => n + PAGE)}>
-          さらに表示
+          {t.records.more}
         </button>
       )}
     </div>

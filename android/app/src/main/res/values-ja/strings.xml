@@ -1,0 +1,6 @@
+<?xml version='1.0' encoding='utf-8'?>
+<!-- 日本語のアプリ名。日本語以外の人には values（英語）の名前が出る -->
+<resources>
+    <string name="app_name">ラテ帳</string>
+    <string name="title_activity_main">ラテ帳</string>
+</resources>

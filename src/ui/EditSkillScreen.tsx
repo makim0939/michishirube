@@ -8,13 +8,14 @@ import { ConfirmButton, Empty } from './common'
 import { useAction, useToast } from './feedback'
 import { backHandler, goBack, href, replace } from './router'
 import { BackIcon } from './icons'
+import { t } from '../i18n'
 
 function SkillForm({
   initial,
   candidates,
   onSubmit,
   cancelPath,
-  noCandidatesText = 'この分野にほかの型はありません。',
+  noCandidatesText = t.editSkill.noCandidates,
   extra,
 }: {
   initial: SkillInput
@@ -43,16 +44,16 @@ function SkillForm({
       }}
     >
       <label className="field">
-        <span>名前</span>
-        <input value={form.name} onChange={(e) => set('name', e.target.value)} required placeholder="例：ハート" />
+        <span>{t.editSkill.name}</span>
+        <input value={form.name} onChange={(e) => set('name', e.target.value)} required placeholder={t.editSkill.namePlaceholder} />
       </label>
       <label className="field">
-        <span>説明・やり方</span>
+        <span>{t.editSkill.description}</span>
         <textarea rows={5} value={form.description} onChange={(e) => set('description', e.target.value)} />
       </label>
 
       <fieldset className="field">
-        <legend>前提（この型の前に身につけておくとよい型）</legend>
+        <legend>{t.editSkill.prereqs}</legend>
         {candidates.length === 0 ? (
           <p className="muted">{noCandidatesText}</p>
         ) : (
@@ -76,15 +77,15 @@ function SkillForm({
             ))}
           </ul>
         )}
-        {candidates.length > 1 && <small className="muted">複数選んだときは、どれか1つでよい</small>}
+        {candidates.length > 1 && <small className="muted">{t.editSkill.anyOne}</small>}
       </fieldset>
 
       <div className="row">
         <button className="btn primary" type="submit" disabled={busy}>
-          保存する
+          {t.common.save}
         </button>
         <a className="btn" href={href(cancelPath)} onClick={backHandler(cancelPath)}>
-          やめる
+          {t.common.cancel}
         </a>
       </div>
       {extra}
@@ -103,7 +104,7 @@ export function EditSkillScreen({ id }: { id: string }) {
 
   if (!data) return null
   const { skill, skills } = data
-  if (!skill) return <Empty>型が見つかりません。</Empty>
+  if (!skill) return <Empty>{t.common.skillNotFound}</Empty>
   // 自分より後ろのスキルを前提にすると循環するので、候補から外す
   const after = descendants(skill.id, skills)
   const candidates = sortByDepth(skills.filter((s) => s.id !== skill.id && !after.has(s.id)))
@@ -111,10 +112,10 @@ export function EditSkillScreen({ id }: { id: string }) {
   return (
     <div className="screen">
       <header className="screen-header">
-        <a className="back" href={href(`/skill/${id}`)} onClick={backHandler(`/skill/${id}`)} aria-label="戻る">
+        <a className="back" href={href(`/skill/${id}`)} onClick={backHandler(`/skill/${id}`)} aria-label={t.common.back}>
           <BackIcon size={26} />
         </a>
-        <h1>型を編集</h1>
+        <h1>{t.editSkill.title}</h1>
       </header>
       <SkillForm
         key={skill.id}
@@ -125,7 +126,7 @@ export function EditSkillScreen({ id }: { id: string }) {
         }}
         candidates={candidates}
         // ほかの型があるのに候補が空なのは、ほかの型がすべて、この型のあとに続くものだから（前提にすると循環する）
-        noCandidatesText={skills.length > 1 ? 'ほかの型は、すべてこの型のあとにやる型です。' : undefined}
+        noCandidatesText={skills.length > 1 ? t.editSkill.allAfter : undefined}
         cancelPath={`/skill/${id}`}
         onSubmit={async (input) => {
           const ok = await run(async () => {
@@ -133,7 +134,7 @@ export function EditSkillScreen({ id }: { id: string }) {
             return true
           })
           if (ok) {
-            toast.show('保存しました')
+            toast.show(t.editSkill.saved)
             goBack(`/skill/${id}`)
           }
         }}
@@ -141,8 +142,8 @@ export function EditSkillScreen({ id }: { id: string }) {
           <div className="danger-zone">
             <ConfirmButton
               className="btn ghost"
-              confirmLabel="削除する"
-              message="この型と、その記録・動画・写真をすべて削除します。元に戻せません。"
+              confirmLabel={t.common.delete}
+              message={t.editSkill.deleteMessage}
               onConfirm={async () => {
                 const ok = await run(async () => {
                   await deleteSkill(id)
@@ -151,7 +152,7 @@ export function EditSkillScreen({ id }: { id: string }) {
                 if (ok) replace(`/map/${skill.domainId}`)
               }}
             >
-              この型を削除
+              {t.editSkill.delete}
             </ConfirmButton>
           </div>
         }
@@ -168,15 +169,15 @@ export function NewSkillScreen({ domainId }: { domainId: string }) {
   }, [domainId])
 
   if (!data) return null
-  if (!data.domain) return <Empty>分野が見つかりません。</Empty>
+  if (!data.domain) return <Empty>{t.common.domainNotFound}</Empty>
 
   return (
     <div className="screen">
       <header className="screen-header">
-        <a className="back" href={href(`/map/${domainId}`)} onClick={backHandler(`/map/${domainId}`)} aria-label="戻る">
+        <a className="back" href={href(`/map/${domainId}`)} onClick={backHandler(`/map/${domainId}`)} aria-label={t.common.back}>
           <BackIcon size={26} />
         </a>
-        <h1>{data.domain.name} に型を追加</h1>
+        <h1>{t.map.addSkillTo(data.domain.name)}</h1>
       </header>
       <SkillForm
         initial={{ name: '', description: '', prereqIds: [] }}

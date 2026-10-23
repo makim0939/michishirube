@@ -10,6 +10,7 @@ import { ConfirmButton } from './common'
 import { useAction, useToast } from './feedback'
 import { AlertIcon, CheckIcon } from './icons'
 import { href } from './router'
+import { t } from '../i18n'
 
 /**
  * 設定「動画」で保存先を YouTube にしたときの、YouTube とのつながり。
@@ -24,10 +25,10 @@ export function YoutubeSettings() {
       <div className="stack">
         <p className="status-line small">
           <AlertIcon size={16} />
-          YouTube に上げるには、ログインが必要です。
+          {t.youtube.needLogin}
         </p>
         <a className="btn small" href={href('/settings/sync')}>
-          ログインする
+          {t.youtube.login}
         </a>
       </div>
     )
@@ -61,32 +62,32 @@ function YoutubeConnection() {
     setBusy(false)
     if (!left) return
     const rest = left.waiting + left.failed
-    if (rest === 0) toast.show('YouTube に上げました')
-    else if (left.preparing > 0) toast.show(`画質をそろえています（${left.preparing} 本）。終わると自動で上げます`)
-    else toast.show(left.error ? `まだ ${rest} 本残っています：${left.error}` : `まだ ${rest} 本残っています。しばらくしてからもう一度試してください`, 'error')
+    if (rest === 0) toast.show(t.youtube.uploaded)
+    else if (left.preparing > 0) toast.show(t.youtube.preparing(left.preparing))
+    else toast.show(left.error ? t.youtube.restError(rest, left.error) : t.youtube.rest(rest), 'error')
   }
 
-  if (status === undefined) return <p className="muted small">確認しています…</p>
-  if (status === null) return <p className="muted small">YouTube の状態を確かめられませんでした。</p>
-  if (!status.configured) return <p className="muted small">いまは YouTube とつなげません。</p>
+  if (status === undefined) return <p className="muted small">{t.youtube.checking}</p>
+  if (status === null) return <p className="muted small">{t.youtube.statusFailed}</p>
+  if (!status.configured) return <p className="muted small">{t.youtube.unavailable}</p>
   return (
     <div className="stack">
       <p className="status-line">
         {status.connected ? <CheckIcon size={16} /> : <AlertIcon size={16} />}
-        {status.connected ? 'YouTube とつながっています。' : 'YouTube とまだつながっていません。つなぐまで、動画は端末に置きます。'}
-        {status.connected && !!pending && `アップ待ちの動画が ${pending} 本あります。`}
+        {status.connected ? t.youtube.isConnected : t.youtube.notConnected}
+        {status.connected && !!pending && t.youtube.pending(pending)}
       </p>
       {status.connected ? (
         <div className="row wrap">
           {!!pending && (
             <button className="btn small" disabled={busy} onClick={uploadNowAndReport}>
-              {busy ? 'アップしています…' : '今すぐアップ'}
+              {busy ? t.youtube.uploading : t.youtube.uploadNow}
             </button>
           )}
           <ConfirmButton
             className="btn small ghost"
-            confirmLabel="つながりを切る"
-            message="この端末と YouTube のつながりをやめます。上げた動画は YouTube に残ります。"
+            confirmLabel={t.youtube.disconnectConfirm}
+            message={t.youtube.disconnectMessage}
             onConfirm={() =>
               run(async () => {
                 await disconnectYoutube()
@@ -94,7 +95,7 @@ function YoutubeConnection() {
               })
             }
           >
-            つなぐのをやめる
+            {t.youtube.disconnect}
           </ConfirmButton>
         </div>
       ) : (
@@ -105,20 +106,20 @@ function YoutubeConnection() {
             setBusy(true)
             const ok = await run(() => connectYoutube())
             setBusy(false)
-            if (ok) toast.show('YouTube とつなぎました')
+            if (ok) toast.show(t.youtube.connected)
             refresh()
           }}
         >
-          {busy ? 'つないでいます…' : 'YouTube とつなぐ'}
+          {busy ? t.youtube.connecting : t.youtube.connect}
         </button>
       )}
       {/* YouTube API の審査で求められた表示（利用規約に沿うことの確認・子ども向けではない）。つなぐボタンの下に残す */}
       <p className="muted small">
-        YouTube に上げる動画は、
+        {t.youtube.terms1}
         <a href={YOUTUBE_TERMS_URL} target="_blank" rel="noopener noreferrer">
-          YouTube 利用規約
+          {t.youtube.terms}
         </a>
-        に沿った内容であることを、あなたが確認したものとみなされます。動画は「子ども向けではない」として上げます。
+        {t.youtube.terms2}
       </p>
     </div>
   )

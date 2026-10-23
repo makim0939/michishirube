@@ -5,6 +5,7 @@ import { useCupImageUrl } from './cupImage'
 import { AlertIcon } from './icons'
 import { PatternImage } from './PatternImage'
 import { href } from './router'
+import { t } from '../i18n'
 
 export interface Cup {
   record: PracticeRecord
@@ -28,7 +29,9 @@ function CupTile({ cup }: { cup: Cup }) {
       <a
         className="cup-tile"
         href={href(`/cup/${cup.record.id}`)}
-        aria-label={`No.${cup.number}${cup.skillName ? ` ${splitName(cup.skillName).main}` : ''}${cup.failed ? '（アップに失敗）' : ''}の詳細`}
+        aria-label={t.today.cupDetail(
+          `No.${cup.number}${cup.skillName ? ` ${splitName(cup.skillName).main}` : ''}${cup.failed ? t.cup.uploadFailed : ''}`,
+        )}
       >
         {url ? (
           <img src={url} alt="" />

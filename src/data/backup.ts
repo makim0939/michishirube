@@ -4,6 +4,7 @@ import type { Domain, Media, PracticeRecord, Skill } from '../domain/types'
 import { contentBlob, hasContent, resetContentFiles } from './content'
 import { formatFileStamp } from '../domain/format'
 import { db, markDirty, type Meta } from './db'
+import { t } from '../i18n'
 
 /**
  * バックアップは ZIP 1つ：data.json と media/ 以下の動画・写真。
@@ -205,13 +206,13 @@ function parseBackupData(text: string): BackupData {
   try {
     data = JSON.parse(text)
   } catch {
-    throw new BackupError('data.json を読み込めませんでした')
+    throw new BackupError(t.backup.noData)
   }
   const d = data as Partial<BackupData>
-  if (d.format !== FORMAT) throw new BackupError('ラテ帳のバックアップファイルではありません')
-  if (d.version !== VERSION) throw new BackupError(`未対応のバックアップ形式です（version ${String(d.version)}）`)
+  if (d.format !== FORMAT) throw new BackupError(t.backup.notBackup)
+  if (d.version !== VERSION) throw new BackupError(t.backup.unsupported(String(d.version)))
   for (const key of ['domains', 'skills', 'records', 'media', 'meta'] as const) {
-    if (!Array.isArray(d[key])) throw new BackupError(`バックアップの ${key} が壊れています`)
+    if (!Array.isArray(d[key])) throw new BackupError(t.backup.broken(key))
   }
   return d as BackupData
 }
@@ -258,15 +259,15 @@ export async function importBackup(zips: Blob[]): Promise<ImportSummary> {
     try {
       entries = await readZip(zip)
     } catch {
-      throw new BackupError('バックアップのファイルとして読み込めませんでした')
+      throw new BackupError(t.backup.unreadable)
     }
     for (const [name, blob] of entries) {
       if (name !== 'data.json') files.set(name, blob)
-      else if (dataFile) throw new BackupError('別々のバックアップが混ざっています。1回分のファイルだけを選んでください')
+      else if (dataFile) throw new BackupError(t.backup.mixed)
       else dataFile = blob
     }
   }
-  if (!dataFile) throw new BackupError('バックアップの本体が見つかりません（分けて保存したときは、1つ目のファイルも選んでください）')
+  if (!dataFile) throw new BackupError(t.backup.noMain)
   const data = parseBackupData(strFromU8(new Uint8Array(await dataFile.arrayBuffer())))
 
   // 古い形式（同期・参考資料の前）のバックアップも読めるよう、足りない項目を補う

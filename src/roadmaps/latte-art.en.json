@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "domain": "Latte art",
+  "skills": [
+    { "key": "heart", "name": "Heart" },
+    { "key": "tulip", "name": "Tulip", "prereqs": ["heart"] },
+    { "key": "rosetta", "name": "Rosetta (Leaf)", "prereqs": ["tulip"] },
+    { "key": "layer-heart", "name": "Layered Heart", "prereqs": ["rosetta"] },
+    { "key": "wing-tulip", "name": "Wing Tulip", "prereqs": ["rosetta"] },
+    { "key": "wing-heart", "name": "Wing Heart", "prereqs": ["layer-heart"] },
+    { "key": "swan", "name": "Swan", "prereqs": ["wing-tulip", "wing-heart"] }
+  ]
+}

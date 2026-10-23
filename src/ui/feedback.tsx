@@ -4,6 +4,7 @@ import { splitName } from './common'
 import { go } from './router'
 import { patternFor, patternUrl } from './world'
 import { useBackHandler } from './useBackHandler'
+import { lang, t } from '../i18n'
 
 // ---- トースト ----
 
@@ -113,11 +114,11 @@ function CelebrationOverlay({
         ) : (
           <div className="celebration-badge empty" aria-hidden="true" />
         )}
-        <p className="celebration-kicker">できた</p>
+        <p className="celebration-kicker">{t.celebration.kicker}</p>
         <h2 id="celebration-title">{splitName(celebration.skill.name).main}</h2>
         {unlocked.length > 0 ? (
           <div className="celebration-unlocked">
-            <p>次のおすすめになった型</p>
+            <p>{t.celebration.unlocked}</p>
             <ul>
               {unlocked.map((s) => (
                 <li key={s.id}>{splitName(s.name).main}</li>
@@ -125,22 +126,22 @@ function CelebrationOverlay({
             </ul>
           </div>
         ) : (
-          <p className="muted">この型のあとに、新しくおすすめになる型はありません。</p>
+          <p className="muted">{t.celebration.noneUnlocked}</p>
         )}
         <div className="celebration-actions">
           {unlocked.length === 1 && (
             // 次の型は、記録すればそのまま練習中になる。押すとすぐカメラが開く
             <button className="btn primary" autoFocus onClick={() => go(`/record/${unlocked[0].id}`)}>
-              「{splitName(unlocked[0].name).main}」を記録する
+              {t.celebration.recordNext(splitName(unlocked[0].name).main)}
             </button>
           )}
           {unlocked.length > 1 && (
             <button className="btn primary" autoFocus onClick={() => go('/')}>
-              次に練習する型を選ぶ
+              {t.celebration.chooseNext}
             </button>
           )}
           <button className="btn" autoFocus={unlocked.length === 0} onClick={onClose}>
-            閉じる
+            {t.common.close}
           </button>
         </div>
       </div>
@@ -154,7 +155,8 @@ function CelebrationOverlay({
  */
 export function toastDuration(message: string, tone: 'ok' | 'error', hasAction: boolean): number {
   const floor = tone === 'error' || hasAction ? 5000 : 2500
-  const reading = 1500 + message.length * 80
+  // 日本語は1字に、英語は1語に、だいたい同じ時間がかかる。英語は字数が多いので、1字の時間を短くする
+  const reading = 1500 + message.length * (lang === 'en' ? 30 : 80)
   return Math.min(Math.max(floor, reading), 6000)
 }
 

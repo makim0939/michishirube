@@ -1,3 +1,4 @@
+import { locale } from '../i18n'
 import type { PracticeRecord } from './types'
 
 /**
@@ -29,7 +30,7 @@ export function summarizeTips(records: PracticeRecord[], { window = 10, wins = 3
     stumbles: [...counts]
       .map(([cause, count]) => ({ cause, count }))
       // 同じ回数なら、名前の順にして並びを安定させる
-      .sort((a, b) => b.count - a.count || a.cause.localeCompare(b.cause, 'ja')),
+      .sort((a, b) => b.count - a.count || a.cause.localeCompare(b.cause, locale)),
     window: recent.length,
     wins: records
       .filter((r) => r.outcome === 'good' && (r.reason ?? '').trim())

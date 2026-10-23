@@ -6,6 +6,7 @@ import { useCupImageUrl } from './cupImage'
 import { MediaItem } from './MediaItem'
 import { useBackHandler } from './useBackHandler'
 import { CheckIcon, ChevronDownIcon, PlayIcon } from './icons'
+import { t } from '../i18n'
 
 type Kind = 'video' | 'image'
 type Slot = 0 | 1
@@ -35,7 +36,7 @@ export function Compare({ media, numberOf }: { media: Media[]; numberOf: (m: Med
   const custom = !!chosenPair && chosenPair.every((m) => !!m)
   const pair: [Media, Media] = custom ? (chosenPair as [Media, Media]) : fallback
   const label = (m: Media, i: Slot) => {
-    if (!custom) return i === 0 ? '最新' : '最初'
+    if (!custom) return i === 0 ? t.compare.latest : t.compare.first
     const n = numberOf(m)
     return n ? `No.${n}` : ''
   }
@@ -58,20 +59,20 @@ export function Compare({ media, numberOf }: { media: Media[]; numberOf: (m: Med
     <section className="section">
       <div className="section-head">
         <div className="compare-title">
-          <h2>{custom ? '選んだ2杯' : '最新と最初'}</h2>
+          <h2>{custom ? t.compare.chosen : t.compare.latestAndFirst}</h2>
           {custom && (
             <button type="button" className="quiet-button" onClick={() => setChosen(undefined)}>
-              最新と最初に戻す
+              {t.compare.reset}
             </button>
           )}
         </div>
         {kinds.length > 1 && (
           <div className="segmented small">
             <button className={kind === 'image' ? 'selected' : ''} onClick={() => switchKind('image')}>
-              写真
+              {t.compare.photo}
             </button>
             <button className={kind === 'video' ? 'selected' : ''} onClick={() => switchKind('video')}>
-              動画
+              {t.compare.video}
             </button>
           </div>
         )}
@@ -91,7 +92,7 @@ export function Compare({ media, numberOf }: { media: Media[]; numberOf: (m: Med
             <button
               type="button"
               className="compare-label"
-              aria-label={`「${label(m, i as Slot) || '選んだ杯'}」をほかの杯と入れ替える`}
+              aria-label={t.compare.swapLabel(label(m, i as Slot) || t.compare.chosenCup)}
               onClick={() => setEditing(i as Slot)}
             >
               {label(m, i as Slot)}
@@ -112,14 +113,14 @@ export function Compare({ media, numberOf }: { media: Media[]; numberOf: (m: Med
           }}
         >
           <PlayIcon size={16} />
-          同時に再生（音なし）
+          {t.compare.playBoth}
         </button>
       )}
 
       {editing !== undefined && (
         <CupPickerSheet
           // 押した「最新 ▾」と同じ言葉で、どちらを入れ替えるのかを示す
-          title={`「${label(pair[editing], editing) || '選んだ杯'}」と入れ替える杯`}
+          title={t.compare.pickTitle(label(pair[editing], editing) || t.compare.chosenCup)}
           // 新しい順に並べる（見比べの左が新しいほう）
           list={[...list].reverse()}
           current={pair[editing].id}
@@ -184,7 +185,7 @@ function CupPickerSheet({
         <div className="picker-head">
           <h2>{title}</h2>
           <button type="button" className="btn small" autoFocus onClick={onClose}>
-            閉じる
+            {t.common.close}
           </button>
         </div>
         <ul className="picker-grid">
@@ -223,7 +224,7 @@ function PickerItem({
       <button
         type="button"
         className={selected ? 'cup-pick selected' : 'cup-pick'}
-        aria-label={number ? `No.${number}` : '杯'}
+        aria-label={number ? `No.${number}` : t.compare.cup}
         aria-pressed={selected}
         disabled={disabled}
         onClick={onPick}

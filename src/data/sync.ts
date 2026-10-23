@@ -6,6 +6,7 @@ import { DEFAULT_SETTINGS, type Media, type Settings } from '../domain/types'
 import { ContentUnavailableError, contentBlob, hasContent, moveContentsToFiles } from './content'
 import { db } from './db'
 import { listContentFiles, usesFiles } from './files'
+import { t } from '../i18n'
 
 /**
  * サーバー（Cloudflare Worker + D1）との同期。Google でログインした人のデータだけをやり取りする（account.ts）。
@@ -79,12 +80,12 @@ export async function api(config: SyncConfig, path: string, init: RequestInit = 
       headers: { Authorization: `Bearer ${config.token}`, ...(init.headers ?? {}) },
     })
   } catch {
-    throw new SyncError('つながりません。電波を確認してください')
+    throw new SyncError(t.errors.offline)
   }
-  if (res.status === 401) throw new SyncError('ログインし直してください', 401)
+  if (res.status === 401) throw new SyncError(t.errors.relogin, 401)
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { message?: string; error?: string }
-    throw new SyncError(body.message ?? body.error ?? `エラーが起きました（${res.status}）`, res.status)
+    throw new SyncError(t.errors.fromServer(body.error, body.message, res.status), res.status)
   }
   return res
 }

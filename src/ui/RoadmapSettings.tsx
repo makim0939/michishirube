@@ -9,6 +9,7 @@ import { ConfirmButton, saveFile } from './common'
 import { useAction, useToast } from './feedback'
 import { PlusIcon } from './icons'
 import { go } from './router'
+import { t } from '../i18n'
 
 /**
  * 設定の「ロードマップ」。用意されているロードマップを入れる・ファイルで読み書きする・分野を足す・名前を変える・消す。
@@ -32,12 +33,12 @@ export function RoadmapSettings() {
       try {
         json = JSON.parse(await file.text())
       } catch {
-        throw new Error('ファイルを読み込めませんでした')
+        throw new Error(t.roadmap.readFailed)
       }
       return importTemplate(json)
     })
     if (id) {
-      toast.show('ロードマップを読み込みました')
+      toast.show(t.roadmap.imported)
       go(`/map/${id}`)
     }
   }
@@ -45,7 +46,7 @@ export function RoadmapSettings() {
   return (
     <>
       <section className="section">
-        <h2>分野</h2>
+        <h2>{t.map.domains}</h2>
         <ul className="list">
           {data.domains.map((d) => (
             <DomainRow key={d.id} domain={d} count={data.skills.filter((s) => s.domainId === d.id).length} />
@@ -56,35 +57,35 @@ export function RoadmapSettings() {
         ) : (
           <button className="btn" onClick={() => setAddingDomain(true)}>
             <PlusIcon size={18} />
-            分野を追加（ピアノなど）
+            {t.roadmap.addDomain}
           </button>
         )}
       </section>
 
       <section className="section">
-        <h2>用意されているロードマップ</h2>
+        <h2>{t.roadmap.bundled}</h2>
         <ul className="list">
-          {BUNDLED_TEMPLATES.map((t) => (
-            <li key={t.domain} className="list-row">
+          {BUNDLED_TEMPLATES.map((tpl) => (
+            <li key={tpl.domain} className="list-row">
               <span className="list-main">
-                <span>{t.domain}</span>
-                <span className="list-sub">型 {t.skills.length}</span>
+                <span>{tpl.domain}</span>
+                <span className="list-sub">{t.roadmap.skillCount(tpl.skills.length)}</span>
               </span>
               <button
                 className="btn small"
                 onClick={async () => {
-                  const id = await run(() => importTemplate(t))
+                  const id = await run(() => importTemplate(tpl))
                   if (id) {
                     toast.show(
-                      data.domains.some((d) => d.name === t.domain)
-                        ? `「${t.domain}」をもう1つ追加しました`
-                        : `「${t.domain}」を追加しました`,
+                      data.domains.some((d) => d.name === tpl.domain)
+                        ? t.roadmap.addedAgain(tpl.domain)
+                        : t.roadmap.added(tpl.domain),
                     )
                     go(`/map/${id}`)
                   }
                 }}
               >
-                追加
+                {t.roadmap.add}
               </button>
             </li>
           ))}
@@ -92,9 +93,9 @@ export function RoadmapSettings() {
       </section>
 
       <section className="section">
-        <h2>ファイルから読み込む</h2>
+        <h2>{t.roadmap.fromFile}</h2>
         <button className="btn" onClick={() => importInput.current?.click()}>
-          ロードマップのファイルを読み込む
+          {t.roadmap.importFile}
         </button>
         <input
           ref={importInput}
@@ -120,7 +121,7 @@ function DomainRow({ domain, count }: { domain: Domain; count: number }) {
     <li className="list-row domain-row">
       <button type="button" className="list-main domain-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>
         <span>{domain.name}</span>
-        <span className="list-sub">型 {count}</span>
+        <span className="list-sub">{t.roadmap.skillCount(count)}</span>
       </button>
       {open && (
         <div className="stack domain-actions">
@@ -139,12 +140,12 @@ function DomainRow({ domain, count }: { domain: Domain; count: number }) {
             >
               <input autoFocus value={renaming} onChange={(e) => setRenaming(e.target.value)} />
               <button className="btn small primary" type="submit">
-                保存
+                {t.record.saveShort}
               </button>
             </form>
           ) : (
             <button className="btn small" onClick={() => setRenaming(domain.name)}>
-              名前を変える
+              {t.roadmap.rename}
             </button>
           )}
           <button
@@ -157,15 +158,15 @@ function DomainRow({ domain, count }: { domain: Domain; count: number }) {
               })
             }
           >
-            ファイルに書き出す
+            {t.roadmap.export}
           </button>
           <ConfirmButton
             className="btn small ghost"
-            confirmLabel="削除する"
-            message={`「${domain.name}」の型と、記録・動画・写真をすべて削除します。元に戻せません。`}
+            confirmLabel={t.common.delete}
+            message={t.roadmap.deleteMessage(domain.name)}
             onConfirm={() => run(() => deleteDomain(domain.id))}
           >
-            削除
+            {t.refs.remove}
           </ConfirmButton>
         </div>
       )}
@@ -188,12 +189,12 @@ function NewDomainForm({ onDone }: { onDone: () => void }) {
         }
       }}
     >
-      <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="分野の名前（例：ピアノ）" />
+      <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder={t.roadmap.domainPlaceholder} />
       <button className="btn small primary" type="submit">
-        作る
+        {t.roadmap.create}
       </button>
       <button className="btn small" type="button" onClick={onDone}>
-        やめる
+        {t.common.cancel}
       </button>
     </form>
   )

@@ -1,4 +1,5 @@
 import type { Domain, Reference, Skill } from './types'
+import { t } from '../i18n'
 
 /**
  * ロードマップの配布形式。key でスキル同士の前提を表し、取り込むときに id へ置き換える。
@@ -36,37 +37,37 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 }
 
 function webUrl(url: string, field: string): string {
-  if (!isWebUrl(url)) throw new TemplateError(`${field} は http(s) の URL にしてください`)
+  if (!isWebUrl(url)) throw new TemplateError(t.template.url(field))
   return url
 }
 
 function str(v: unknown, field: string): string {
-  if (typeof v !== 'string' || v.trim() === '') throw new TemplateError(`${field} は空でない文字列にしてください`)
+  if (typeof v !== 'string' || v.trim() === '') throw new TemplateError(t.template.string(field))
   return v
 }
 
 export function parseTemplate(input: unknown): RoadmapTemplate {
-  if (!isRecord(input)) throw new TemplateError('ロードマップのファイルではありません')
-  if (input.version !== 1) throw new TemplateError('version は 1 にしてください')
+  if (!isRecord(input)) throw new TemplateError(t.template.notRoadmap)
+  if (input.version !== 1) throw new TemplateError(t.template.version)
   const domain = str(input.domain, 'domain')
   if (!Array.isArray(input.skills) || input.skills.length === 0) {
-    throw new TemplateError('skills にスキルを1つ以上入れてください')
+    throw new TemplateError(t.template.noSkills)
   }
 
   const skills: TemplateSkill[] = input.skills.map((raw, i) => {
-    if (!isRecord(raw)) throw new TemplateError(`skills[${i}] がオブジェクトではありません`)
+    if (!isRecord(raw)) throw new TemplateError(t.template.object(`skills[${i}]`))
     const references = raw.references === undefined ? [] : raw.references
-    if (!Array.isArray(references)) throw new TemplateError(`skills[${i}].references は配列にしてください`)
+    if (!Array.isArray(references)) throw new TemplateError(t.template.array(`skills[${i}].references`))
     const prereqs = raw.prereqs === undefined ? [] : raw.prereqs
     if (!Array.isArray(prereqs) || prereqs.some((p) => typeof p !== 'string')) {
-      throw new TemplateError(`skills[${i}].prereqs は文字列の配列にしてください`)
+      throw new TemplateError(t.template.stringArray(`skills[${i}].prereqs`))
     }
     return {
       key: str(raw.key, `skills[${i}].key`),
       name: str(raw.name, `skills[${i}].name`),
       description: typeof raw.description === 'string' ? raw.description : '',
       references: references.map((r, j) => {
-        if (!isRecord(r)) throw new TemplateError(`skills[${i}].references[${j}] がオブジェクトではありません`)
+        if (!isRecord(r)) throw new TemplateError(t.template.object(`skills[${i}].references[${j}]`))
         const field = `skills[${i}].references[${j}]`
         return {
           title: str(r.title, `${field}.title`),
@@ -80,12 +81,12 @@ export function parseTemplate(input: unknown): RoadmapTemplate {
 
   const keys = new Set<string>()
   for (const s of skills) {
-    if (keys.has(s.key)) throw new TemplateError(`key「${s.key}」が重複しています`)
+    if (keys.has(s.key)) throw new TemplateError(t.template.duplicate(s.key))
     keys.add(s.key)
   }
   for (const s of skills) {
     for (const p of s.prereqs ?? []) {
-      if (!keys.has(p)) throw new TemplateError(`「${s.name}」の前提「${p}」が見つかりません`)
+      if (!keys.has(p)) throw new TemplateError(t.template.missingPrereq(s.name, p))
     }
   }
   assertAcyclic(skills)
@@ -97,7 +98,7 @@ function assertAcyclic(skills: TemplateSkill[]) {
   const state = new Map<string, 'visiting' | 'done'>()
   const visit = (key: string) => {
     if (state.get(key) === 'done') return
-    if (state.get(key) === 'visiting') throw new TemplateError(`前提が循環しています（${byKey.get(key)!.name}）`)
+    if (state.get(key) === 'visiting') throw new TemplateError(t.template.cycle(byKey.get(key)!.name))
     state.set(key, 'visiting')
     for (const p of byKey.get(key)!.prereqs ?? []) visit(p)
     state.set(key, 'done')

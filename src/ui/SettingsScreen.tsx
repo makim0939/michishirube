@@ -34,6 +34,7 @@ import { showYoutubeSection } from './youtubeSection'
 import { forgetToday } from './TodayScreen'
 import { APP_STORE_REVIEW_URL, isIosApp, isNativeApp, PRIVACY_URL } from '../platform'
 import { AlertIcon, BackIcon, CheckIcon, ForwardIcon } from './icons'
+import { getLangChoice, setLangChoice, t, type Lang } from '../i18n'
 
 function StorageStatus() {
   const [info, setInfo] = useState<{ usage?: number; quota?: number; persisted?: boolean }>()
@@ -58,8 +59,8 @@ function StorageStatus() {
     <div className="stack">
       {info.usage !== undefined && (
         <p>
-          使用量 {formatBytes(info.usage)}
-          {info.quota ? ` / 上限の目安 ${formatBytes(info.quota)}` : ''}
+          {t.settings.usage(formatBytes(info.usage))}
+          {info.quota ? t.settings.quota(formatBytes(info.quota)) : ''}
         </p>
       )}
       {/* ブラウザに保存を頼むのは Web 版だけ（アプリはアプリの保存場所を使う） */}
@@ -67,8 +68,8 @@ function StorageStatus() {
         <p className="status-line">
           {info.persisted ? <CheckIcon size={16} /> : <AlertIcon size={16} />}
           {info.persisted
-            ? '容量が足りなくなっても、ブラウザが自動で消さない設定になっています。'
-            : '容量が足りなくなると、ブラウザが自動で消す可能性があります。'}
+            ? t.settings.persisted
+            : t.settings.notPersisted}
         </p>
       )}
       {!isNativeApp && !info.persisted && (
@@ -79,7 +80,7 @@ function StorageStatus() {
             await refresh()
           }}
         >
-          消さないようにブラウザへ頼む
+          {t.settings.askPersist}
         </button>
       )}
     </div>
@@ -89,13 +90,14 @@ function StorageStatus() {
 const SHOW_ROADMAP_SETTINGS = false
 
 const TITLES: Record<SettingsSection, string> = {
-  storage: '動画',
-  sync: 'アカウント',
-  backup: 'バックアップ',
-  roadmaps: 'ロードマップ',
-  data: 'データの削除',
-  feedback: 'ご意見・ご要望',
-  'video-text': 'タイトルと説明',
+  storage: t.settings.video,
+  sync: t.settings.account,
+  backup: t.settings.backup,
+  roadmaps: t.settings.roadmaps,
+  data: t.settings.dataTitle,
+  feedback: t.settings.feedback,
+  'video-text': t.settings.videoText,
+  language: t.settings.language,
 }
 
 /**
@@ -108,7 +110,7 @@ export function SettingsScreen({ section, notice }: { section?: SettingsSection;
   return (
     <div className="screen">
       <header className="screen-header">
-        <a className="back" href={href(back)} onClick={backHandler(back)} aria-label={section === 'video-text' ? '動画に戻る' : '設定に戻る'}>
+        <a className="back" href={href(back)} onClick={backHandler(back)} aria-label={section === 'video-text' ? t.settings.backToVideo : t.settings.backToSettings}>
           <BackIcon size={26} />
         </a>
         <h1>{TITLES[section]}</h1>
@@ -120,6 +122,7 @@ export function SettingsScreen({ section, notice }: { section?: SettingsSection;
       {section === 'video-text' && <YoutubeTextSettings />}
       {section === 'data' && <DataPage />}
       {section === 'feedback' && <FeedbackPage />}
+      {section === 'language' && <LanguagePage />}
     </div>
   )
 }
@@ -148,50 +151,54 @@ function SettingsHome() {
   })
   if (!data) return null
   const loggedIn = isLoggedIn(data.config)
-  const sync = !loggedIn ? 'ログインしていません' : data.status.error ? '同期できていません' : accountLabel(data.config?.email)
+  const sync = !loggedIn ? t.settings.notLoggedIn : data.status.error ? t.settings.syncFailed : accountLabel(data.config?.email)
   return (
     <div className="screen">
       <header className="screen-header">
-        <h1>設定</h1>
+        <h1>{t.settings.title}</h1>
       </header>
 
       <section className="section">
-        <h2>記録の保存</h2>
+        <h2>{t.settings.saving}</h2>
         <ul className="settings-list">
           <Row
             to="storage"
-            label="動画"
-            value={`${data.video.storage === 'device' ? 'この端末' : 'YouTube'}・${data.video.quality === 'high' ? '高画質' : '標準画質'}`}
+            label={t.settings.video}
+            value={`${data.video.storage === 'device' ? t.settings.thisDevice : 'YouTube'}${t.common.sep}${data.video.quality === 'high' ? t.settings.high : t.settings.standardQuality}`}
           />
-          <Row to="sync" label="アカウント" value={sync} warn={loggedIn && !!data.status.error} />
-          <Row to="backup" label="バックアップ" />
+          <Row to="sync" label={t.settings.account} value={sync} warn={loggedIn && !!data.status.error} />
+          <Row to="backup" label={t.settings.backup} />
         </ul>
       </section>
 
       {/* ラテアート専用の間は隠す（実装は残し、別の練習も扱うようにするとき、この行を出す）。画面そのもの（/settings/roadmaps）は開ける */}
       {SHOW_ROADMAP_SETTINGS && (
         <section className="section">
-          <h2>型</h2>
+          <h2>{t.app.tabSkills}</h2>
           <ul className="settings-list">
-            <Row to="roadmaps" label="ロードマップ" value={`${data.domains}つの分野`} />
+            <Row to="roadmaps" label={t.settings.roadmaps} value={t.settings.domainCount(data.domains)} />
           </ul>
         </section>
       )}
 
       <section className="section">
-        <h2>その他</h2>
+        <h2>{t.settings.other}</h2>
         <ul className="settings-list">
-          <Row to="feedback" label="ご意見・ご要望" />
+          {/* アプリの言語は、端末の設定（アプリごとの言語）で変える。Web 版だけ、ここで選ぶ */}
+          {!isNativeApp && (
+            <Row to="language" label={t.settings.language} value={LANGUAGE_NAME[getLangChoice()]} />
+          )}
+          <Row to="feedback" label={t.settings.feedback} />
           {/* 評価の導線は、App Store があるアプリ（iPhone・iPad）だけ。出すのは設定の1行だけで、評価のお願いは出さない */}
           {isIosApp && (
             <li>
               <a className="settings-row" href={APP_STORE_REVIEW_URL} target="_blank" rel="noopener noreferrer">
-                <span className="settings-label">App Store で評価する</span>
+                <span className="settings-label">{t.settings.rate}</span>
                 <ForwardIcon size={16} />
               </a>
             </li>
           )}
-          <Row to="data" label="この端末のデータを削除" />
+          <Row to="data" label={t.settings.deleteData} />
           <li>
             <a
               className="settings-row"
@@ -199,14 +206,14 @@ function SettingsHome() {
               target="_blank"
               rel="noopener noreferrer"
             >
-              <span className="settings-label">プライバシーポリシー</span>
+              <span className="settings-label">{t.settings.privacy}</span>
               <ForwardIcon size={16} />
             </a>
           </li>
         </ul>
       </section>
 
-      <p className="muted small center">ラテ帳 v{__APP_VERSION__}</p>
+      <p className="muted small center">{t.settings.appName} v{__APP_VERSION__}</p>
     </div>
   )
 }
@@ -219,7 +226,7 @@ function Choice({
   onSelect,
 }: {
   label: string
-  sub: string
+  sub?: string
   selected: boolean
   onSelect: () => void
 }) {
@@ -228,7 +235,7 @@ function Choice({
       <button type="button" className="settings-row choice" role="radio" aria-checked={selected} onClick={onSelect}>
         <span className="settings-label">
           {label}
-          <span className="settings-sub">{sub}</span>
+          {sub && <span className="settings-sub">{sub}</span>}
         </span>
         {selected && <CheckIcon size={18} />}
       </button>
@@ -256,35 +263,35 @@ function StoragePage() {
       // 連携していなければ上げられないので、そのことを伝える（連携すると上げ始める）。
       // 連携の鍵はこの端末にあるので、通信せずに分かる（電波が無くても、連携済みを「未連携」と言わない）
       if (await isYoutubeConnected()) {
-        toast.show('動画を YouTube に上げ始めます')
+        toast.show(t.settings.toastYoutubeStart)
         void resumeUploads().catch(() => {})
       } else if (isLoggedIn(await getSyncConfig())) {
-        toast.show('YouTube とつなぐと、動画を上げ始めます')
+        toast.show(t.settings.toastYoutubeConnect)
       } else {
         // YouTube とつなぐには、先にログインが要る（下に、ログインへのボタンを出す）
-        toast.show('YouTube に上げるには、ログインして YouTube とつないでください')
+        toast.show(t.settings.toastYoutubeLogin)
       }
     } else {
-      toast.show('これから撮る動画は、この端末にだけ置きます')
+      toast.show(t.settings.toastDevice)
     }
     void optimizeVideos()
   }
 
   const changeQuality = async (value: VideoQuality) => {
     await setVideoQuality(value)
-    toast.show(value === 'high' ? 'これから撮る動画は高画質になります' : 'これから撮る動画は標準の画質になります')
+    toast.show(value === 'high' ? t.settings.toastHigh : t.settings.toastStandard)
     void optimizeVideos()
   }
 
   const changeKeepHigh = async (value: boolean) => {
     await setKeepHigh(value)
-    toast.show(value ? '高画質の動画を、そのまま残します' : `${KEEP_HIGH_DAYS}日たった高画質の動画を、標準に軽くします`)
+    toast.show(value ? t.settings.toastKeepHigh : t.settings.toastShrink(KEEP_HIGH_DAYS))
     void optimizeVideos()
   }
 
   const changePrivacy = async (value: YoutubePrivacy) => {
     await setYoutubePrivacy(value)
-    toast.show(value === 'public' ? 'これから上げる動画は、だれでも見られます' : 'これから上げる動画は、リンクを知っている人だけが見られます')
+    toast.show(value === 'public' ? t.settings.toastPublic : t.settings.toastUnlisted)
   }
 
   // いま選んでいる項目をもう一度押したときに、トーストや動画の作り直し（optimizeVideos）が走らないようにする
@@ -296,17 +303,17 @@ function StoragePage() {
   return (
     <>
       <section className="section">
-        <h2>保存先</h2>
-        <ul className="settings-list" role="radiogroup" aria-label="保存先">
+        <h2>{t.settings.storage}</h2>
+        <ul className="settings-list" role="radiogroup" aria-label={t.settings.storage}>
           <Choice
-            label="この端末"
-            sub="端末にだけ置きます"
+            label={t.settings.thisDevice}
+            sub={t.settings.thisDeviceSub}
             selected={storage === 'device'}
             onSelect={select(storage, 'device', changeStorage)}
           />
           <Choice
             label="YouTube"
-            sub={`上げて${TIDY_AFTER_DAYS}日たつと、端末から消します`}
+            sub={t.settings.youtubeSub(TIDY_AFTER_DAYS)}
             selected={storage === 'youtube'}
             onSelect={select(storage, 'youtube', changeStorage)}
           />
@@ -316,17 +323,17 @@ function StoragePage() {
       </section>
 
       <section className="section">
-        <h2>画質</h2>
-        <ul className="settings-list" role="radiogroup" aria-label="画質">
+        <h2>{t.settings.quality}</h2>
+        <ul className="settings-list" role="radiogroup" aria-label={t.settings.quality}>
           <Choice
-            label="標準"
-            sub={`30秒で約${megabytesPer30s('standard')}MB`}
+            label={t.settings.standard}
+            sub={t.settings.standardSub(megabytesPer30s('standard'))}
             selected={quality === 'standard'}
             onSelect={select(quality, 'standard', changeQuality)}
           />
           <Choice
-            label="高画質"
-            sub={`30秒で約${megabytesPer30s('high')}MB。SNS 向け`}
+            label={t.settings.high}
+            sub={t.settings.highSub(megabytesPer30s('high'))}
             selected={quality === 'high'}
             onSelect={select(quality, 'high', changeQuality)}
           />
@@ -337,9 +344,9 @@ function StoragePage() {
             <li>
               <label className="settings-row">
                 <span className="settings-label">
-                  高画質のまま残す
+                  {t.settings.keepHigh}
                   <span className="settings-sub">
-                    {keepHigh ? 'ずっと高画質で置きます' : `${KEEP_HIGH_DAYS}日たつと標準画質にします`}
+                    {keepHigh ? t.settings.keepHighOn : t.settings.keepHighOff(KEEP_HIGH_DAYS)}
                   </span>
                 </span>
                 <input
@@ -357,31 +364,56 @@ function StoragePage() {
       {storage === 'youtube' && (
         <section className="section">
           <h2>YouTube</h2>
-          <ul className="settings-list" role="radiogroup" aria-label="YouTube の公開範囲">
+          <ul className="settings-list" role="radiogroup" aria-label={t.settings.privacyLabel}>
             <Choice
-              label="リンクを知っている人だけ"
-              sub="検索や一覧には出ません"
+              label={t.settings.unlisted}
+              sub={t.settings.unlistedSub}
               selected={youtubePrivacy === 'unlisted'}
               onSelect={select(youtubePrivacy, 'unlisted', changePrivacy)}
             />
             <Choice
-              label="だれでも"
-              sub="検索にも出ます"
+              label={t.settings.public}
+              sub={t.settings.publicSub}
               selected={youtubePrivacy === 'public'}
               onSelect={select(youtubePrivacy, 'public', changePrivacy)}
             />
           </ul>
           <ul className="settings-list">
-            <Row to="video-text" label="タイトルと説明" value={customTemplates ? '自分で設定' : '標準'} />
+            <Row to="video-text" label={t.settings.videoText} value={customTemplates ? t.settings.custom : t.settings.standard} />
           </ul>
         </section>
       )}
 
       <section className="section">
-        <h2>端末の容量</h2>
+        <h2>{t.settings.deviceStorage}</h2>
         <StorageStatus />
       </section>
     </>
+  )
+}
+
+/** 言語の名前は、どの言語で表示していても、その言語自身の書き方で出す（読めない言語に迷い込んでも戻れるように） */
+const LANGUAGE_NAME: Record<Lang | 'auto', string> = { auto: t.settings.languageAuto, ja: '日本語', en: 'English' }
+
+/** 言語（Web 版だけ）。選ぶと読み込み直して切り替わる */
+function LanguagePage() {
+  const current = getLangChoice()
+  return (
+    <section className="section">
+      <ul className="settings-list" role="radiogroup" aria-label={t.settings.language}>
+        {(['auto', 'ja', 'en'] as const).map((choice) => (
+          <Choice
+            key={choice}
+            label={LANGUAGE_NAME[choice]}
+            sub={choice === 'auto' ? t.settings.languageAutoSub : undefined}
+            selected={current === choice}
+            onSelect={() => {
+              if (choice !== current) setLangChoice(choice)
+            }}
+          />
+        ))}
+      </ul>
+    </section>
   )
 }
 
@@ -416,17 +448,17 @@ function BackupPage() {
   return (
     <section className="section">
       <p className="muted">
-        記録 {data.counts.records} 件・動画と写真 {data.counts.media} 件（{formatBytes(data.mediaSize)}）
+        {t.settings.backupCounts(data.counts.records, data.counts.media, formatBytes(data.mediaSize))}
       </p>
       <div className="stack">
         <button className="btn primary" disabled={busy !== null} onClick={() => doExport(true)}>
-          {busy === 'full' ? '書き出し中…' : '動画・写真も含めて書き出す'}
+          {busy === 'full' ? t.settings.exporting : t.settings.exportFull}
         </button>
         <button className="btn" disabled={busy !== null} onClick={() => doExport(false)}>
-          {busy === 'notes' ? '書き出し中…' : '記録とロードマップだけ書き出す（軽い）'}
+          {busy === 'notes' ? t.settings.exporting : t.settings.exportNotes}
         </button>
         <button className="btn" disabled={busy !== null} onClick={() => restoreInput.current?.click()}>
-          バックアップから復元
+          {t.settings.restore}
         </button>
         <input
           ref={restoreInput}
@@ -443,9 +475,9 @@ function BackupPage() {
       {exported.length > 0 && (
         <div className="confirm">
           <p>
-            バックアップができました。
+            {t.settings.exported}
             {/* 保存先は、共有シートの選択肢（ファイル・ドライブなど）で選べるので、ここでは案内しない */}
-            {exported.length > 1 && `大きいので ${exported.length} つに分けました。復元するときは、全部を選んでください。`}
+            {exported.length > 1 && t.settings.exportedParts(exported.length)}
           </p>
           <div className="stack">
             {exported.map((part) => (
@@ -460,12 +492,12 @@ function BackupPage() {
                 }
               >
                 {saved.has(part.name) ? '✓ ' : ''}
-                {exported.length > 1 ? `${part.name.match(/(\d+)of\d+\.zip$/)?.[1]} つ目を保存` : '保存する'}（
-                {formatBytes(part.blob.size)}）
+                {exported.length > 1 ? t.settings.savePart(part.name.match(/(\d+)of\d+\.zip$/)?.[1] ?? '') : t.common.save}
+                {t.settings.paren(formatBytes(part.blob.size))}
               </button>
             ))}
             <button className="btn ghost" onClick={() => setExported([])}>
-              閉じる
+              {t.common.close}
             </button>
           </div>
         </div>
@@ -473,9 +505,12 @@ function BackupPage() {
       {pendingRestore.length > 0 && (
         <div className="confirm">
           <p>
-            {pendingRestore.length === 1 ? `「${pendingRestore[0].name}」` : `${pendingRestore.length} つのファイル`}（
-            {formatBytes(pendingRestore.reduce((sum, f) => sum + f.size, 0))}）で、
-            <strong>いまのデータをすべて置き換えます。</strong>元に戻せません。
+            {t.settings.restoreWith(
+              pendingRestore.length === 1 ? pendingRestore[0].name : pendingRestore.length,
+              formatBytes(pendingRestore.reduce((sum, f) => sum + f.size, 0)),
+            )}
+            <strong>{t.settings.restoreReplace}</strong>
+            {t.settings.cannotUndo}
           </p>
           <div className="row">
             <button
@@ -487,10 +522,7 @@ function BackupPage() {
                   try {
                     const s = await importBackup(pendingRestore)
                     setPendingRestore([])
-                    toast.show(
-                      `復元しました（型 ${s.skills}・記録 ${s.records}・動画と写真 ${s.media}）` +
-                        (s.missingMedia > 0 ? `。含まれていなかった動画・写真 ${s.missingMedia} 件は外しました` : ''),
-                    )
+                    toast.show(t.settings.restored(s.skills, s.records, s.media, s.missingMedia))
                     go('/')
                   } finally {
                     setBusy(null)
@@ -498,10 +530,10 @@ function BackupPage() {
                 })
               }
             >
-              {busy === 'restore' ? '復元中…' : '置き換える'}
+              {busy === 'restore' ? t.settings.restoring : t.settings.replace}
             </button>
             <button className="btn" onClick={() => setPendingRestore([])}>
-              やめる
+              {t.common.cancel}
             </button>
           </div>
         </div>
@@ -515,11 +547,11 @@ function DataPage() {
   const toast = useToast()
   return (
     <section className="section">
-      <p className="muted">この端末のロードマップ・記録・動画・写真・設定をすべて削除します。</p>
+      <p className="muted">{t.settings.deleteAllNote}</p>
       <ConfirmButton
         className="btn ghost"
-        confirmLabel="すべて削除する"
-        message="この端末のロードマップ・記録・動画・写真・設定をすべて削除し、ログインも解除します。保存した記録・写真と YouTube の動画は消えないので、ログインし直せば戻ります。この端末にだけある動画（YouTube に上げていないもの）と、まだ送れていない変更は戻りません。"
+        confirmLabel={t.settings.deleteAll}
+        message={t.settings.deleteAllConfirm}
         onConfirm={() =>
           run(async () => {
             // 送っていない変更があれば、先に送っておく（電波が悪ければ、長くは待たない）
@@ -537,12 +569,12 @@ function DataPage() {
             // 覚えているホームの内容と写真も捨てる（削除したはずのものを、メモリにも画面にも残さない）
             forgetToday()
             clearImageCaches()
-            toast.show('すべて削除しました')
+            toast.show(t.settings.deletedAll)
             go('/')
           })
         }
       >
-        削除する
+        {t.common.delete}
       </ConfirmButton>
     </section>
   )
