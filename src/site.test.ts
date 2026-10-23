@@ -43,6 +43,13 @@ describe('アプリのトップページ（サーバーと同じドメインで�
     expect(html).not.toContain('ラテ帳を開く')
   })
 
+  // Web 版（GitHub Pages のサブパス）でも開くので、サイトの中を / で始まるリンクにしない
+  it('英語のプライバシーポリシーのリンクは、Web 版の中で開いても、ラテ帳のサイトに届く', () => {
+    const html = read('../worker/site/privacy-en.html')
+    expect(html).not.toMatch(/href="\//)
+    expect(html).toContain('<a href="https://latte.makimura.me/en">Latte-chō home page</a>')
+  })
+
   it('トップページのフッターの「お問い合わせ」は、makimura.me のお問い合わせページへ', () => {
     expect(read('../worker/site/index.html')).toContain('<a href="https://www.makimura.me/contact">お問い合わせ</a>')
   })

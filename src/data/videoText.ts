@@ -1,6 +1,7 @@
 import { formatDate, formatDateTime, OUTCOME_LABEL } from '../domain/format'
 import type { PracticeRecord, Skill } from '../domain/types'
 import { t } from '../i18n'
+import { en } from '../i18n/en'
 import { SITE_URL } from '../platform'
 import { db } from './db'
 
@@ -17,14 +18,9 @@ export type TemplateVars = Partial<Record<TemplateField, string>>
 export const TEMPLATE_FIELD_LABEL: Record<TemplateField, string> = t.videoText.fields
 
 /** 英語の項目名 → 元の名前。言語を変えても、前に書いたテンプレートがそのまま使えるよう、どちらの名前も受け付ける */
-const EN_FIELD: Record<string, TemplateField> = {
-  pattern: '型',
-  date: '日付',
-  datetime: '日時',
-  result: '結果',
-  notes: 'メモ',
-  'next step': '次の一手',
-}
+const EN_FIELD: Record<string, TemplateField> = Object.fromEntries(
+  Object.entries(en.videoText.fields).map(([field, name]) => [name.toLowerCase(), field as TemplateField]),
+)
 
 export const DEFAULT_TITLE = t.videoText.defaultTitle
 /** 最後の2行は、説明欄のリンクから、アプリの紹介ページに来てもらうため */

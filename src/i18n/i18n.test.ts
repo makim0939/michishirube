@@ -80,3 +80,27 @@ describe('英語で使っているとき', () => {
     expect(title).toBe('Latte art | Oct 10, 2026 9:05 AM')
   })
 })
+
+describe('英語のときのサーバーのエラー', () => {
+  it('次にすることが分かるエラーは、英語で次にすることを伝える（日本語のサーバーの文は出さない）', async () => {
+    const { en } = await import('./en')
+    expect(en.errors.fromServer('reauth', 'YouTube の連携をやり直してください', 409)).toContain('Reconnect')
+    expect(en.errors.fromServer('busy', '混み合っています', 429)).toContain('busy')
+    expect(en.errors.fromServer('forbidden', undefined, 403)).toBe('Something went wrong (403)')
+  })
+
+  it('日本語は、サーバーの文をそのまま出し、文が無ければ番号を出す（エラーの名前は出さない）', async () => {
+    const { ja } = await import('./ja')
+    expect(ja.errors.fromServer('busy', '混み合っています', 429)).toBe('混み合っています')
+    expect(ja.errors.fromServer('forbidden', undefined, 403)).toBe('エラーが起きました（403）')
+  })
+})
+
+describe('原因の直し方', () => {
+  it('英語で付けた原因にも、いまの言語（日本語）の直し方を出す', async () => {
+    const { causeTip } = await import('../domain/causes')
+    expect(causeTip('Too hot')).toBe(causeTip('熱すぎた'))
+    expect(causeTip('熱すぎた')).toBe('60℃前後で止める')
+    expect(causeTip('知らない原因')).toBeUndefined()
+  })
+})

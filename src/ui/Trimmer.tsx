@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import { inMemory, probeDuration } from '../data/mediaPrep'
-import { clampRange, startTrim, waitUntilSeekable, type TrimJob, type TrimRange } from '../data/trim'
+import { clampRange, startTrim, TrimCancelled, waitUntilSeekable, type TrimJob, type TrimRange } from '../data/trim'
 import { traceVideo } from '../debug'
 import { PauseIcon, PlayIcon, SpeakerIcon } from './icons'
 import { useBackHandler } from './useBackHandler'
@@ -271,7 +271,7 @@ export function Trimmer({
         if (job.current !== j) return
         if (interrupted.current) {
           setError(t.editor.interrupted)
-        } else if (!(e instanceof Error && e.message === t.trim.cancelled)) {
+        } else if (!(e instanceof TrimCancelled)) {
           setError(e instanceof Error ? e.message : String(e))
         }
       })

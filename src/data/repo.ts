@@ -1,13 +1,12 @@
 import { newlyUnlocked, practicingFrom, PRACTICING_DAYS, wouldCreateCycle } from '../domain/logic'
 import { isWebUrl, parseTemplate, templateToEntities, type RoadmapTemplate } from '../domain/template'
 import type { Media, Outcome, PracticeRecord, Reference, Skill } from '../domain/types'
-import { lang } from '../i18n'
 import latteArt from '../roadmaps/latte-art.json'
 import latteArtEn from '../roadmaps/latte-art.en.json'
 import { moveContentsToFiles, optimizeVideos } from './content'
 import { db, markDirty, newId } from './db'
 import type { VideoQuality, YoutubePrivacy } from './videoStorage'
-import { t } from '../i18n'
+import { lang, t } from '../i18n'
 
 /**
  * 同梱の型。最初に入れるのは、そのときの言語のもの（入れたあとは、言語を変えても入れ直さない。名前は自分で変えられる）

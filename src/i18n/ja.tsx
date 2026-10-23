@@ -428,9 +428,9 @@ export const ja = {
   errors: {
     offline: 'つながりません。電波を確認してください',
     relogin: 'ログインし直してください',
-    /** サーバーからのエラー。日本語は、サーバーの文をそのまま出す */
-    fromServer: (code: string | undefined, message: string | undefined, status: number) =>
-      message ?? code ?? `エラーが起きました（${status}）`,
+    /** サーバーからのエラー。日本語は、サーバーの文をそのまま出す（文が無ければ番号。code は英語で使う） */
+    fromServer: (_code: string | undefined, message: string | undefined, status: number) =>
+      message ?? `エラーが起きました（${status}）`,
     privateBrowsing: 'この画面ではログインできません（プライベートブラウズでは使えません）',
     loginOtherWindow: 'この画面ではログインを終えられませんでした。ログインを始めた画面でもう一度試してください',
     apple: (detail: string) => `Apple の認証でエラーになりました（${detail}）`,

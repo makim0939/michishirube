@@ -2,6 +2,14 @@ import { dlog, traceVideo } from '../debug'
 import { extensionFor, pickRecorderMimeType, QUALITY, recorderSupports } from './mediaPrep'
 import { t } from '../i18n'
 
+/** 切り取りを、利用者がやめた（エラーとしては出さない。文言で見分けないよう、専用のエラーにする） */
+export class TrimCancelled extends Error {
+  constructor() {
+    super(t.trim.cancelled)
+    this.name = 'TrimCancelled'
+  }
+}
+
 /**
  * 動画を切り取る・音を消す。指定した範囲を再生しながら、映像はキャンバス、音声は Web Audio 経由で録り直す
  * （音を消すときは映像だけを録る）。
@@ -201,7 +209,7 @@ export function startTrim(
   recorder.onstop = () => {
     cleanup()
     if (cancelled) {
-      rejectDone(new Error(t.trim.cancelled))
+      rejectDone(new TrimCancelled())
       return
     }
     if (failed) {
@@ -246,7 +254,7 @@ export function startTrim(
         // まだ録り始めていない、または録画がすでに止まっている
         stopped = true
         cleanup()
-        rejectDone(new Error(t.trim.cancelled))
+        rejectDone(new TrimCancelled())
         return
       }
       finish()

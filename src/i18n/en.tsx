@@ -342,7 +342,7 @@ export const en: Messages = {
     addSkill: 'Add a pattern',
     noRoadmap: 'No roadmap.',
     addRoadmap: 'Add a roadmap',
-    lastPractice: (ago) => ` · last practiced ${ago.toLowerCase()}`,
+    lastPractice: (ago) => ` · last practiced: ${ago}`,
     addSkillTo: (domain) => `Add a pattern to ${domain}`,
   },
   skill: {
@@ -358,7 +358,7 @@ export const en: Messages = {
     records: (n) => `Records (${n} ${n === 1 ? 'cup' : 'cups'})`,
     showMore: (n) => `Show more (${n} left)`,
     tips: 'Your tips',
-    focus: (ago) => `Focusing on now (${ago.toLowerCase()})`,
+    focus: (ago) => `Focusing on now (${ago})`,
     stumbles: (n) => `Common stumbles (last ${n})`,
     times: (n) => `${n}×`,
     wins: 'Notes from good cups',
@@ -420,13 +420,17 @@ export const en: Messages = {
   errors: {
     offline: "Can't connect. Please check your connection",
     relogin: 'Please sign in again',
-    // サーバーの文は日本語なので、分かっているエラーは英語に置き換え、ほかは番号だけ出す
+    // サーバーの文は日本語なので、次にすることが分かるエラーは英語に置き換え、ほかは番号だけ出す
     fromServer: (code, _message, status) =>
-      code === 'busy'
-        ? "It's busy right now. Please wait a moment and try again"
-        : code === 'quota'
-          ? "You've reached the limit for photos stored on the server"
-          : `Something went wrong (${status})`,
+      ({
+        busy: "It's busy right now. Please wait a moment and try again",
+        quota: "You've reached the limit for photos stored on the server",
+        reauth: 'Disconnected from YouTube. Reconnect it in Video settings',
+        unauthorized: 'Please sign in again',
+        youtube_not_configured: "Can't connect to YouTube right now",
+        google_not_configured: "Can't sign in with Google right now",
+        apple_unavailable: "Can't sign in with Apple right now. Please try again in a while",
+      })[code ?? ''] ?? `Something went wrong (${status})`,
     privateBrowsing: "You can't sign in from this window (private browsing isn't supported)",
     loginOtherWindow: "Couldn't finish signing in here. Please try again in the window where you started",
     apple: (detail) => `Sign in with Apple failed (${detail})`,

@@ -69,6 +69,8 @@ export function describeEnvironment(ua: string, platform: FeedbackPlatform, stan
     const browser = /Edg\//.test(ua) ? 'Edge' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\/|CriOS/.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : ''
     parts.push(browser, standalone ? 'ホーム画面から' : 'ブラウザ')
   }
+  // 英語で使っている人からの報告だと分かるように、言語も添える（日本語は、これまでどおり何も足さない）
+  if (lang === 'en') parts.push('English')
   return parts.filter(Boolean).join('・').slice(0, FEEDBACK_ENV_MAX)
 }
 
@@ -89,8 +91,7 @@ export async function sendFeedback(draft: FeedbackDraft): Promise<void> {
     contact: draft.contact.trim(),
     platform,
     appVersion: __APP_VERSION__,
-    // 英語で使っている人からの報告だと分かるように、言語も添える（日本語は、これまでどおり何も足さない）
-    env: describeEnvironment(navigator.userAgent, platform, standalone) + (lang === 'en' ? '・English' : ''),
+    env: describeEnvironment(navigator.userAgent, platform, standalone),
   }
   let res: Response
   try {
