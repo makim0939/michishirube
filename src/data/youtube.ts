@@ -5,6 +5,7 @@ import { usesFiles } from './files'
 import { db, markDirty, mediaByIndex } from './db'
 import { authorizeWithGoogle } from './account'
 import { api, getSyncConfig, postJson, SyncError, type SyncConfig } from './sync'
+import { cupNumbers } from './repo'
 import { buildVideoText, getVideoTemplates, templateVars } from './videoText'
 import { getVideoSettings, getVideoStorage, uploadBacklog, type YoutubePrivacy } from './videoStorage'
 
@@ -120,7 +121,8 @@ export async function videoMeta(media: Media): Promise<VideoMeta> {
     db.skills.get(media.skillId),
     getVideoSettings(),
   ])
-  const text = buildVideoText(await getVideoTemplates(), templateVars(media.createdAt, record, skill))
+  const number = record && (await cupNumbers([record])).get(record.id)
+  const text = buildVideoText(await getVideoTemplates(), templateVars(media.createdAt, record, skill, number))
   return { ...text, privacy: media.youtubePrivacy ?? settings.youtubePrivacy }
 }
 

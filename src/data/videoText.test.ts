@@ -11,6 +11,7 @@ import {
   renderTemplate,
   resetVideoTemplates,
   setVideoTemplate,
+  previewVars,
   templateVars,
 } from './videoText'
 
@@ -56,6 +57,19 @@ describe('YouTube のタイトルと説明の書き方', () => {
     expect(v.次の一手).toBe('n')
     expect(v.メモ).toBeUndefined()
   })
+
+  it('通し番号は、番号が分かるときだけ入る。分からない行は、行ごと消える', () => {
+    expect(templateVars(0, undefined, undefined, 12).通し番号).toBe('12')
+    expect(templateVars(0).通し番号).toBeUndefined()
+    const t = { title: '{型}', description: 'No.{通し番号}\n{結果}' }
+    expect(buildVideoText(t, { 型: 'ハート', 通し番号: '12', 結果: 'x' }).description).toBe('No.12\nx')
+    expect(buildVideoText(t, { 型: 'ハート', 結果: 'x' }).description).toBe('x')
+  })
+
+  it('標準の書き方には、通し番号を入れない', () => {
+    expect(DEFAULT_TITLE).not.toContain('通し番号')
+    expect(DEFAULT_DESCRIPTION).not.toContain('通し番号')
+  })
 })
 
 describe('説明の長さ', () => {
@@ -92,5 +106,20 @@ describe('書き方の保存', () => {
     expect((await getVideoTemplates()).description).toBe('')
     expect((await videoMeta(media)).description).toBe('')
     await resetVideoTemplates()
+  })
+})
+
+describe('通し番号', () => {
+  it('動画のタイトルとプレビューで、全記録の中の何杯目かが同じになる', async () => {
+    await db.records.bulkPut([
+      { id: 'a', skillId: 's', createdAt: 100, mediaIds: [], outcome: 'meh', reason: '', nextAction: '' },
+      { id: 'b', skillId: 's', createdAt: 200, mediaIds: [], outcome: 'meh', reason: '', nextAction: '' },
+    ] as never)
+    await setVideoTemplate('title', 'No.{通し番号}')
+    const media = { id: 'm2', recordId: 'b', skillId: 's', type: 'video/mp4', createdAt: 200 } as Media
+    expect((await videoMeta(media)).title).toBe('No.2')
+    expect(buildVideoText(await getVideoTemplates(), (await previewVars()).vars).title).toBe('No.2')
+    await resetVideoTemplates()
+    await db.records.bulkDelete(['a', 'b'])
   })
 })
