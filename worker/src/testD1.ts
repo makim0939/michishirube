@@ -6,6 +6,7 @@
 
 // worker の型（workers-types）には Node の型が無いので、使う分だけ書く
 interface SqliteStatement {
+  columns(): unknown[]
   all(...params: unknown[]): Record<string, unknown>[]
   get(...params: unknown[]): Record<string, unknown> | undefined
   run(...params: unknown[]): { changes: number | bigint }
@@ -40,10 +41,10 @@ class Statement {
   async run() {
     return this.exec()
   }
-  /** 結果を返す文（SELECT・RETURNING）か、書き込みだけの文かで、node:sqlite の呼び方を分ける */
+  /** 結果の列がある文（SELECT・RETURNING）か、書き込みだけの文かで、node:sqlite の呼び方を分ける */
   exec<T>() {
     const stmt = this.db.prepare(this.sql)
-    if (/^\s*(SELECT|WITH)\b|\bRETURNING\b/i.test(this.sql)) {
+    if (stmt.columns().length > 0) {
       return { results: stmt.all(...this.params) as T[], meta: { changes: 0 } }
     }
     const { changes } = stmt.run(...this.params)
@@ -59,7 +60,8 @@ export async function testD1(): Promise<D1Database> {
     readdir(path: string): Promise<string[]>
     readFile(path: string, encoding: 'utf8'): Promise<string>
   }
-  const dir = new URL('../migrations/', (import.meta as unknown as { url: string }).url).pathname
+  // pathname のままだと、空白・日本語を含むパスが %XX のまま残るので、戻す
+  const dir = decodeURIComponent(new URL('../migrations/', (import.meta as unknown as { url: string }).url).pathname)
   for (const name of (await readdir(dir)).filter((n) => n.endsWith('.sql')).sort()) db.exec(await readFile(dir + name, 'utf8'))
   const d1 = {
     prepare: (sql: string) => new Statement(db, sql),

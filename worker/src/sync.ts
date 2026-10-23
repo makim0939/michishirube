@@ -79,15 +79,17 @@ export function writeStatements(db: D1Database, userId: string, changes: EntityC
     ])
     return db
       .prepare(
-        // 中身は updatedAt が新しいときだけ書き換える。seq は負けたときも付け直す：
+        // 中身は updatedAt が新しいときだけ書き換える。seq は、古くて負けたときも付け直す：
         // 送った端末は、勝ったほうをすでに受け取った（since より前の seq）つもりでいるので、そのままだと勝ったほうが二度と届かず、
-        // 端末だけが負けた中身（時計が遅れた端末の編集・削除）のまま残る。付け直せば、この応答で勝ったほうが返る
+        // 端末だけが負けた中身（時計が遅れた端末の編集・削除）のまま残る。付け直せば、この応答で勝ったほうが返る。
+        // 同じ時刻のときは付け直さない（応答が届かずに送り直したときに、全端末が同じ行を受け取り直さないように。
+        // 同じ時刻で中身が違うときは、端末が同じ時刻のものを取り込まないので、付け直しても揃わない）
         `INSERT INTO user_entities (user_id, kind, id, data, updated_at, deleted, seq) VALUES ${values}
          ON CONFLICT (user_id, kind, id) DO UPDATE SET
            data = CASE WHEN excluded.updated_at > user_entities.updated_at THEN excluded.data ELSE user_entities.data END,
            deleted = CASE WHEN excluded.updated_at > user_entities.updated_at THEN excluded.deleted ELSE user_entities.deleted END,
            updated_at = MAX(excluded.updated_at, user_entities.updated_at),
-           seq = excluded.seq`,
+           seq = CASE WHEN excluded.updated_at = user_entities.updated_at THEN user_entities.seq ELSE excluded.seq END`,
       )
       .bind(...params)
   })

@@ -56,6 +56,13 @@ describe('sync（D1 に書き込む）', () => {
     expect(res.changes).toMatchObject([{ id: 'r1', updatedAt: 200, deleted: false, data: { note: '残す' } }])
   })
 
+  it('同じ時刻の変更（応答が届かずに送り直したもの）では、seq を付け直さない（全端末が受け取り直さない）', async () => {
+    const db = await setup()
+    const first = await sync(db, 'u1', { since: 0, changes: [record(100, '同じ')] })
+    const res = await sync(db, 'u1', { since: first.cursor, changes: [record(100, '同じ')] })
+    expect(res.changes).toEqual([])
+  })
+
   it('新しい変更は、これまで通り上書きする', async () => {
     const db = await setup()
     const first = await sync(db, 'u1', { since: 0, changes: [record(100, '古い')] })

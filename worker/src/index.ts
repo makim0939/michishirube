@@ -47,11 +47,25 @@ interface Env extends FeedbackMailEnv {
   FEEDBACK_LIMITER?: RateLimit
 }
 
+/**
+ * 制限を数える接続元。IPv6 は、上位 64 ビット（/64）でまとめる
+ * （ふつう1つの回線に /64 がまるごと割り当てられるので、アドレスを替えながら送ると、制限をすり抜けられる）
+ */
+export function clientKey(ip: string): string {
+  // IPv4（IPv4 を埋め込んだ IPv6 も）は、そのまま
+  if (!ip.includes(':') || ip.includes('.')) return ip
+  const [head, tail = ''] = ip.split('::')
+  const left = head ? head.split(':') : []
+  const right = tail ? tail.split(':') : []
+  const groups = ip.includes('::') ? [...left, ...Array(Math.max(0, 8 - left.length - right.length)).fill('0'), ...right] : left
+  return `${groups.slice(0, 4).map((g) => g.toLowerCase().replace(/^0+(?=.)/, '')).join(':')}::/64`
+}
+
 /** 接続元ごとの制限を超えたか。接続元が分からない（Cloudflare を通っていない）ときと、制限の仕組みが無いときは、通す */
 async function overClientLimit(limiter: RateLimit | undefined, c: Context<App>): Promise<boolean> {
   const ip = c.req.header('CF-Connecting-IP')
   if (!limiter || !ip) return false
-  const { success } = await limiter.limit({ key: ip })
+  const { success } = await limiter.limit({ key: clientKey(ip) })
   return !success
 }
 
@@ -115,8 +129,9 @@ app.post('/api/sync', async (c) => c.json(await sync(c.env.DB, c.get('userId'), 
 /** アプリの「ご意見・ご要望」から届く。ログインしていなくても送れる（使いにくさを伝えたい人が、ログインで離れないように） */
 app.post('/api/feedback', async (c) => {
   const input = parseFeedback(await jsonBody(c))
-  // ひとりの相手が全体の上限（1分に30件）を使い切って、ほかの人が送れなくならないように、先に接続元ごとに絞る
-  if ((await overClientLimit(c.env.FEEDBACK_LIMITER, c)) || (await tooManyFeedbacks(c.env.DB))) return c.json({ error: 'busy', message: '混み合っています。少しおいてから送ってください' }, 429)
+  // ひとりの相手が全体の上限（1分に30件）を使い切って、ほかの人が送れなくならないように、接続元ごとにも絞る。
+  // 全体の上限で断られた分は、接続元の回数に数えない（混み合っている間に送り直した人が、そのあとも締め出されないように）
+  if ((await tooManyFeedbacks(c.env.DB)) || (await overClientLimit(c.env.FEEDBACK_LIMITER, c))) return c.json({ error: 'busy', message: '混み合っています。少しおいてから送ってください' }, 429)
   const id = await saveFeedback(c.env.DB, input)
   // メールは待たずに送る（遅くても失敗しても、利用者の送信には影響させない）
   c.executionCtx.waitUntil(notifyFeedback(c.env, input, id))
@@ -223,8 +238,9 @@ app.post('/api/auth/start', async (c) => {
   if (fromApp !== true && (typeof returnTo !== 'string' || !isAllowedReturn(returnTo, parseOrigins(c.env.ALLOWED_ORIGINS)))) {
     throw new BadRequest('returnTo is not allowed')
   }
-  // 先に接続元ごとに絞る（全体の上限だけだと、ひとりの相手が使い切って、全員がログインできなくなる）
-  if ((await overClientLimit(c.env.AUTH_LIMITER, c)) || (await tooManyAuthStarts(c.env.DB))) return c.json({ error: 'busy', message: '混み合っています。少しおいてから試してください' }, 429)
+  // 接続元ごとにも絞る（全体の上限だけだと、ひとりの相手が使い切って、全員がログインできなくなる）。
+  // 全体の上限で断られた分は、接続元の回数に数えない
+  if ((await tooManyAuthStarts(c.env.DB)) || (await overClientLimit(c.env.AUTH_LIMITER, c))) return c.json({ error: 'busy', message: '混み合っています。少しおいてから試してください' }, 429)
   let userId: string | null = null
   if (kind === 'youtube') {
     const token = bearerToken(c.req.header('Authorization'))
@@ -268,13 +284,18 @@ app.get('/api/youtube/callback', async (c) => {
   const state = c.env.APP_TOKEN ? await verifyState(c.req.query('state') ?? '', c.env.APP_TOKEN) : null
   const request = state ? await readAuthRequest(c.env.DB, state.id) : null
   if (!config || !state || !request || request.status !== 'pending') return c.html(resultPage('invalid'), 400)
+  // アプリへ戻すスキームが無い state（この変更の前に始めた、前の版のもの）は、結果を渡す先が無い。
+  // Google のコードを替える前に断る（替えてから断ると、だれにも渡らないセッション・鍵ができる）
+  if (state.app && !isAllowedAppScheme(state.scheme)) {
+    await finishAuthRequest(c.env.DB, request.id, 'failed')
+    return c.html(resultPage('invalid'), 400)
+  }
   const kind: AuthKind = request.kind
   const returnTo = state.returnTo && isAllowedReturn(state.returnTo, parseOrigins(c.env.ALLOWED_ORIGINS)) ? state.returnTo : undefined
   /** 認可した画面を、始めたアプリ・Web 版へ戻す URL。成功したら一度きりのコードを付ける */
   const back = (status: string, oneTimeCode?: string) => {
     const params = new URLSearchParams({ auth_id: request.id, auth_status: status, ...(oneTimeCode ? { auth_code: oneTimeCode } : {}) })
-    // スキームを載せていない state（この変更の前に始めた、前の版のもの）は、アプリへ戻さない
-    if (state.app) return isAllowedAppScheme(state.scheme) ? `${state.scheme}://auth?${params}` : undefined
+    if (state.app) return `${state.scheme}://auth?${params}`
     return returnTo ? `${returnTo.split('#')[0].split('?')[0]}?${params}#/settings/sync` : undefined
   }
   const code = c.req.query('code')

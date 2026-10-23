@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { PHOTO_MAX_BYTES, PHOTO_QUOTA_BYTES } from '../../shared/protocol'
 import { createSession } from './accounts'
 import { APP_SCHEME } from './auth'
-import app from './index'
+import app, { clientKey } from './index'
 import { testD1 } from './testD1'
 
 const challenge = 'a'.repeat(43)
@@ -73,6 +73,33 @@ describe('認可を始める', () => {
     expect(busy.status).toBe(429)
     expect(await busy.json()).toMatchObject({ error: 'busy' })
     expect((await start(env, startBody(4), '198.51.100.7')).status).toBe(200)
+  })
+})
+
+describe('接続元のまとめ方', () => {
+  it('IPv4 はそのまま、IPv6 は上位 64 ビットでまとめる', () => {
+    expect(clientKey('203.0.113.1')).toBe('203.0.113.1')
+    expect(clientKey('2001:db8:0:1:aaaa::1')).toBe('2001:db8:0:1::/64')
+    expect(clientKey('2001:0DB8:0000:0001:ffff:ffff:ffff:ffff')).toBe('2001:db8:0:1::/64')
+    expect(clientKey('2001:db8::1')).toBe('2001:db8:0:0::/64')
+    expect(clientKey('::ffff:192.0.2.1')).toBe('::ffff:192.0.2.1')
+  })
+})
+
+describe('Google の画面から戻る', () => {
+  it('アプリへ戻すスキームが無い state は、Google のコードを替える前に断る', async () => {
+    const { db, env } = await setup()
+    const { signState } = await import('./auth')
+    const { createAuthRequest } = await import('./accounts')
+    await createAuthRequest(db, { id: 'request-id-00000001', kind: 'login', challenge, userId: null })
+    const state = await signState({ id: 'request-id-00000001', app: true, issuedAt: Date.now() }, 'secret')
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const res = await app.request(`/api/youtube/callback?state=${encodeURIComponent(state)}&code=x`, {}, env)
+    vi.unstubAllGlobals()
+    expect(res.status).toBe(400)
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(await db.prepare('SELECT COUNT(*) AS n FROM sessions').first()).toEqual({ n: 1 })
   })
 })
 
