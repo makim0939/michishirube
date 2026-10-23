@@ -61,14 +61,20 @@ export async function tidyVideos(now = Date.now()): Promise<{ count: number; byt
     }
   }
   let bytes = 0
+  let count = 0
   await db.transaction('rw', db.media, async () => {
     for (const id of ids) {
       const m = await db.media.get(id)
-      bytes += m?.blob?.size ?? (m?.file ? m.size : 0)
+      // YouTube を確かめている間に、切り取って差し替えた・上げ直しになった動画は消さない
+      // （新しい中身は、まだどこにも上がっていない。確かめたのは前の動画）
+      const checked = media.find((c) => c.id === id)
+      if (!m || !checked || m.contentAt !== checked.contentAt || m.upload !== 'done' || m.youtubeId !== checked.youtubeId) continue
+      bytes += m.blob?.size ?? (m.file ? m.size : 0)
+      count += 1
       // 中身はこの端末だけのものなので、同期の対象にしない（updatedAt も変えない）。
       // アプリのファイルは、行から外すと watchContentFiles が消す
       await db.media.update(id, { blob: undefined, file: undefined })
     }
   })
-  return { count: ids.length, bytes }
+  return { count, bytes }
 }

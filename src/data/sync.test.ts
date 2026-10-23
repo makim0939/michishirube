@@ -2,9 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { exportBackup, importBackup } from './backup'
 import { db } from './db'
 import { pickRecorderMimeType } from './mediaPrep'
-import { addRecord, createDomain, createSkill, ensureSeeded } from './repo'
+import { addRecord, createDomain, createSkill, deleteSkill, ensureSeeded } from './repo'
 import { getVideoStorage, setVideoStorage, setYoutubePrivacy } from './videoStorage'
-import { applyRemote, connectWithConfig, fetchPhoto, getSyncStatus, postJson, runSync } from './sync'
+import { applyRemote, connectWithConfig, disconnectSync, fetchPhoto, fetchPoster, getSyncStatus, postJson, runSync } from './sync'
 import { logout } from './account'
 import { selectVideosToDrop } from './tidy'
 import { uploadNow, uploadVideo, videoMeta, youtubePlayable } from './youtube'
@@ -619,5 +619,113 @@ describe('アプリのファイルにある中身の同期', () => {
     const { file: _file, ...remote } = m
     await applyRemote([{ kind: 'media', id: m.id, updatedAt: 5, deleted: false, data: { ...remote, upload: 'done', youtubeId: 'yt' } }])
     expect(await db.media.get(m.id)).toMatchObject({ file: 'media/m1-1.mp4', youtubeId: 'yt' })
+  })
+})
+
+describe('消したものを、つなぎ直しても戻さない', () => {
+  it('ログアウト中に消したものは、ログインし直したときに削除として送る（サーバーから戻ってこない）', async () => {
+    const server = fakeServer()
+    vi.stubGlobal('fetch', server.fetch)
+    const domainId = await createDomain('ラテアート')
+    const keep = await createSkill(domainId, input('ハート'))
+    const gone = await createSkill(domainId, input('チューリップ'))
+    await connectWithConfig({ url: 'https://api.example', token: 't1' })
+    expect(server.rows.get(`skill:${gone}`)?.deleted).toBe(false)
+
+    await disconnectSync()
+    await deleteSkill(gone)
+    await connectWithConfig({ url: 'https://api.example', token: 't2' })
+    expect(server.rows.get(`skill:${gone}`)?.deleted).toBe(true)
+    expect(await db.skills.get(gone)).toBeUndefined()
+    expect(await db.skills.get(keep)).toBeDefined()
+    expect(await db.outbox.count()).toBe(0)
+  })
+
+  it('2台目で捨てた初期データの削除は、サーバーへ送らない', async () => {
+    const server = fakeServer()
+    vi.stubGlobal('fetch', server.fetch)
+    server.rows.set('domain:remote', {
+      kind: 'domain',
+      id: 'remote',
+      updatedAt: 5,
+      deleted: false,
+      data: { id: 'remote', name: 'ラテアート', order: 1, createdAt: 1 },
+      seq: 1,
+    })
+    await ensureSeeded()
+    const seeded = [...(await db.domains.toArray()).map((d) => d.id), ...(await db.skills.toArray()).map((s) => s.id)]
+    await connectWithConfig({ url: 'https://api.example', token: 't' })
+    for (const id of seeded) {
+      expect(server.rows.has(`domain:${id}`)).toBe(false)
+      expect(server.rows.has(`skill:${id}`)).toBe(false)
+    }
+  })
+})
+
+describe('同期している端末での復元', () => {
+  it('復元した内容は、ほかの端末で消した・変えたものより優先し、バックアップに無いものは消す', async () => {
+    const server = fakeServer()
+    vi.stubGlobal('fetch', server.fetch)
+    const domainId = await createDomain('ラテアート')
+    const skillId = await createSkill(domainId, input('ハート'))
+    const parts = await exportBackup({ includeMedia: false })
+    const later = await createSkill(domainId, input('あとで足した型'))
+    await connectWithConfig({ url: 'https://api.example', token: 't' })
+
+    // バックアップのあとで、ほかの端末が型を消した
+    const row = server.rows.get(`skill:${skillId}`)!
+    server.rows.set(`skill:${skillId}`, { ...row, updatedAt: Date.now() + 1, deleted: true, data: null, seq: 100 })
+    await runSync()
+    expect(await db.skills.get(skillId)).toBeUndefined()
+
+    await new Promise((r) => setTimeout(r, 5))
+    await importBackup(parts.map((p) => p.blob))
+    await runSync()
+    expect((await db.skills.get(skillId))?.name).toBe('ハート')
+    expect(server.rows.get(`skill:${skillId}`)?.deleted).toBe(false)
+    expect(await db.skills.get(later)).toBeUndefined()
+    expect(server.rows.get(`skill:${later}`)?.deleted).toBe(true)
+  })
+})
+
+describe('取ってくるあいだに中身を差し替えたとき', () => {
+  async function withServerContent() {
+    const server = fakeServer()
+    const base = server.fetch.getMockImplementation()!
+    let replace = async () => {}
+    server.fetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (new URL(url).pathname.startsWith('/api/photos/') && !init?.method) {
+        await replace()
+        return new Response(new Blob(['old'], { type: 'image/jpeg' }))
+      }
+      return base(url, init)
+    })
+    vi.stubGlobal('fetch', server.fetch)
+    await connectWithConfig({ url: 'https://api.example', token: 't' })
+    return (fn: () => Promise<void>) => {
+      replace = fn
+    }
+  }
+
+  it('写真：差し替えた新しい写真を、取ってきた古い写真で上書きしない', async () => {
+    const onFetch = await withServerContent()
+    const row = { id: 'm1', recordId: 'r1', skillId: 's1', type: 'image/jpeg', size: 3, createdAt: 1, updatedAt: 1, contentAt: 1, cloudPhoto: true }
+    await db.media.add(row)
+    onFetch(async () => {
+      await db.media.update('m1', { blob: new Blob(['new'], { type: 'image/jpeg' }), contentAt: 2 })
+    })
+    expect(await (await fetchPhoto(row))?.text()).toBe('old')
+    expect(await (await db.media.get('m1'))?.blob?.text()).toBe('new')
+  })
+
+  it('サムネイル：差し替えた動画に、古い動画のサムネイルを付けない', async () => {
+    const onFetch = await withServerContent()
+    const row = { id: 'm1', recordId: 'r1', skillId: 's1', type: 'video/mp4', size: 3, createdAt: 1, updatedAt: 1, contentAt: 1, cloudPoster: true }
+    await db.media.add(row)
+    onFetch(async () => {
+      await db.media.update('m1', { contentAt: 2 })
+    })
+    await fetchPoster(row)
+    expect((await db.media.get('m1'))?.poster).toBeUndefined()
   })
 })

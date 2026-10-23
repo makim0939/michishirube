@@ -295,20 +295,45 @@ export async function importBackup(zips: Blob[]): Promise<ImportSummary> {
   })
 
   await db.transaction('rw', [db.domains, db.skills, db.records, db.media, db.meta, db.outbox], async () => {
+    // 置き換える前にあったもの。バックアップに無いものは、消したものとしてサーバーへも送る
+    // （送らないと、下で最初から受け取り直したときに、サーバーから戻ってきてしまう）
+    const before = {
+      domain: (await db.domains.toCollection().primaryKeys()) as string[],
+      skill: (await db.skills.toCollection().primaryKeys()) as string[],
+      record: (await db.records.toCollection().primaryKeys()) as string[],
+      media: (await db.media.toCollection().primaryKeys()) as string[],
+    }
+    // 同期していれば、復元した内容を、いま書いたものとして送る。バックアップのときの時刻のままだと、
+    // そのあとほかの端末で変えた・消したものに負けて、「すべて置き換える」のに、復元した内容が消えたり戻されたりする
+    const now = Date.now()
+    const restamp = !!(await db.meta.get('sync:config'))
+    const fresh = <T extends { updatedAt: number }>(rows: T[]): T[] => (restamp ? rows.map((r) => ({ ...r, updatedAt: now })) : rows)
+    const meta = data.meta
+      .filter((m) => !isLocalMeta(m.key))
+      .map((m) => (restamp && m.key === 'settings' ? { ...m, value: { ...(m.value as object), updatedAt: now } } : m))
+
     await Promise.all([db.domains.clear(), db.skills.clear(), db.records.clear(), db.media.clear()])
     // この端末の同期設定は残す
     await db.meta.filter((m) => !isLocalMeta(m.key)).delete()
-    await db.domains.bulkAdd(domains)
-    await db.skills.bulkAdd(skills)
-    await db.records.bulkAdd(records)
-    await db.media.bulkAdd(media)
-    await db.meta.bulkPut([...data.meta.filter((m) => !isLocalMeta(m.key)), { key: 'seeded', value: true }])
-    // 同期していれば、復元した内容をサーバーへも送る（サーバーのほうが新しいものは上書きされない）
+    await db.domains.bulkAdd(fresh(domains))
+    await db.skills.bulkAdd(fresh(skills))
+    await db.records.bulkAdd(fresh(records))
+    await db.media.bulkAdd(fresh(media))
+    await db.meta.bulkPut([...meta, { key: 'seeded', value: true }])
+    // 同期していれば、復元した内容をサーバーへも送る
     await markDirty('domain', domains.map((d) => d.id))
     await markDirty('skill', skills.map((s) => s.id))
     await markDirty('record', records.map((r) => r.id))
     await markDirty('media', media.map((m) => m.id))
     await markDirty('settings', ['settings'])
+    const gone = (ids: string[], rows: { id: string }[]) => {
+      const kept = new Set(rows.map((r) => r.id))
+      return ids.filter((id) => !kept.has(id))
+    }
+    await markDirty('domain', gone(before.domain, domains))
+    await markDirty('skill', gone(before.skill, skills))
+    await markDirty('record', gone(before.record, records))
+    await markDirty('media', gone(before.media, media))
     // 同期していれば、次の同期でサーバーの内容を最初から受け取り直す（サーバーのほうが新しいものに揃える）
     if (await db.meta.get('sync:cursor')) await db.meta.put({ key: 'sync:cursor', value: 0 })
   })

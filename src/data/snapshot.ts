@@ -1,6 +1,6 @@
 import { withoutLegacySkillFields } from '../../shared/protocol'
 import type { Domain, Media, PracticeRecord, Skill } from '../domain/types'
-import { db, type Meta } from './db'
+import { db, type Meta, type OutboxEntry } from './db'
 import { readTextFile, usesFiles, writeTextFile } from './files'
 
 /**
@@ -23,6 +23,11 @@ export interface Snapshot {
   records: PracticeRecord[]
   media: Media[]
   meta: Meta[]
+  /**
+   * サーバーへ送っていない変更の印（前の版の写しには無い）。消したものは行が残らず、印だけが手がかりなので、
+   * 写しに入れておかないと、戻したときに削除が送られず、サーバーから受け取り直して戻ってきてしまう
+   */
+  outbox?: OutboxEntry[]
 }
 
 /** 写しに入れる形。動画・写真の中身とサムネイル（画像）は入れない */
@@ -50,14 +55,15 @@ export function parseSnapshot(text: string | undefined): Snapshot | undefined {
 }
 
 async function readAll() {
-  const [domains, skills, records, media, meta] = await Promise.all([
+  const [domains, skills, records, media, meta, outbox] = await Promise.all([
     db.domains.toArray(),
     db.skills.toArray(),
     db.records.toArray(),
     db.media.toArray(),
     db.meta.toArray(),
+    db.outbox.toArray(),
   ])
-  return { domains, skills, records, media, meta }
+  return { domains, skills, records, media, meta, outbox }
 }
 
 async function writeSnapshot() {
@@ -117,6 +123,8 @@ export async function restoreSnapshotIfEmpty(): Promise<boolean> {
     await db.records.bulkPut(snapshot.records)
     await db.media.bulkPut(snapshot.media)
     await db.meta.bulkPut(snapshot.meta)
+    // 消したものの印は、消した時刻のまま戻す（その時刻を削除の時刻として送る）。残っている行は、下で積み直す
+    if (Array.isArray(snapshot.outbox)) await db.outbox.bulkPut(snapshot.outbox)
     const at = Date.now()
     await db.outbox.bulkPut([
       ...snapshot.domains.map((d) => ({ kind: 'domain' as const, id: d.id, at })),
