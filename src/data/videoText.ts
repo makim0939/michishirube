@@ -59,6 +59,20 @@ export function renderTemplate(template: string, vars: TemplateVars): string {
   return out.join('\n').replace(/\n{3,}/g, '\n\n').trim()
 }
 
+/**
+ * タイトルを max 文字までに切る。String#slice は UTF-16 の単位で切るので、絵文字（サロゲートペア）の途中で切れて、
+ * 壊れた文字が残ってしまう。1文字（コードポイント）ずつ足し、UTF-16 の長さでも max を超えないところで止める
+ * （YouTube が文字を UTF-16 で数えても、コードポイントで数えても、上限に収まるように）
+ */
+export function cutChars(text: string, max: number): string {
+  let out = ''
+  for (const ch of text) {
+    if (out.length + ch.length > max) break
+    out += ch
+  }
+  return out
+}
+
 function clean(text: string) {
   return text.replace(/[<>]/g, '')
 }
@@ -77,7 +91,7 @@ export function buildVideoText(templates: VideoTemplates, vars: TemplateVars): {
       .replace(/(\s*｜\s*){2,}/g, '｜')
       .replace(/^\s*｜\s*|\s*｜\s*$/g, '')
   const title = oneLine(templates.title) || oneLine(DEFAULT_TITLE) || 'ラテ帳'
-  return { title: title.slice(0, TITLE_MAX), description: cutBytes(clean(renderTemplate(templates.description, vars)), DESCRIPTION_MAX_BYTES) }
+  return { title: cutChars(title, TITLE_MAX), description: cutBytes(clean(renderTemplate(templates.description, vars)), DESCRIPTION_MAX_BYTES) }
 }
 
 /** 記録・型から、テンプレートに入れる中身を作る。ts は動画を撮った時刻 */

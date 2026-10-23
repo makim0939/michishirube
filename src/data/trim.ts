@@ -1,5 +1,5 @@
 import { dlog, traceVideo } from '../debug'
-import { extensionFor, pickRecorderMimeType, QUALITY, recorderSupports } from './mediaPrep'
+import { extensionFor, fallBackFromRecorderType, pickRecorderMimeType, QUALITY, recorderSupports } from './mediaPrep'
 
 /**
  * 動画を切り取る・音を消す。指定した範囲を再生しながら、映像はキャンバス、音声は Web Audio 経由で録り直す
@@ -62,19 +62,50 @@ export function startTrim(
     return { done: Promise.reject(new Error('この端末では動画を作り直せません')), cancel: () => {} }
   }
 
+  const scale = Math.min(1, preset.shortSide / Math.min(video.videoWidth, video.videoHeight))
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.round(video.videoWidth * scale) || 1280
+  canvas.height = Math.round(video.videoHeight * scale) || 720
+  const draw = canvas.getContext('2d')!
+
   // ---- ここまでをタップの処理の中で同期的に行う（iPhone の自動再生の制限のため） ----
   const untrace = traceVideo(video, 'trim')
   dlog('trim start', range, mimeType, 'audio', audio.state, 'rs', video.readyState, 'muted', muted)
   // 音を消すときは、音声の経路を作らない（映像だけを録る）
   let source: MediaElementAudioSourceNode | null = null
   let audioOut: MediaStreamAudioDestinationNode | null = null
-  if (!muted) {
-    void audio.resume()
-    source = audioSourceFor(video, audio)
-    audioOut = audio.createMediaStreamDestination()
-    // 録り直している間はスピーカーから鳴らさず、録音にだけ流す
-    source.disconnect()
-    source.connect(audioOut)
+  let stream: MediaStream | null = null
+  let recorder: MediaRecorder
+  // 録画の準備（音の経路の付け替え・MediaRecorder を作る）は、再生を始める前に済ませる。
+  // ここで失敗したとき、音をスピーカーに戻し、再生も始めないまま、失敗を返せるように
+  // （作れない形式・端末で例外になると、プレビューの音が消えたまま、画面にも何も出なくなるため）
+  try {
+    if (!muted) {
+      void audio.resume()
+      source = audioSourceFor(video, audio)
+      audioOut = audio.createMediaStreamDestination()
+      // 録り直している間はスピーカーから鳴らさず、録音にだけ流す
+      source.disconnect()
+      source.connect(audioOut)
+    }
+    stream = new MediaStream([
+      ...canvas.captureStream(30).getVideoTracks(),
+      ...(audioOut ? audioOut.stream.getAudioTracks() : []),
+    ])
+    recorder = new MediaRecorder(stream, {
+      mimeType,
+      videoBitsPerSecond: preset.video,
+      ...(muted ? {} : { audioBitsPerSecond: preset.audio }),
+    })
+  } catch (e) {
+    dlog('recorder create failed', e instanceof Error ? `${e.name}: ${e.message}` : String(e))
+    untrace()
+    restoreSpeaker(source, audio)
+    stream?.getTracks().forEach((t) => t.stop())
+    return {
+      done: Promise.reject(new Error('この端末では動画を作り直せませんでした。元の動画はそのままです')),
+      cancel: () => {},
+    }
   }
   video.muted = muted
   // タップの中で一度だけ再生を始めて止め、この video の音つき再生を許可させる。
@@ -93,20 +124,6 @@ export function startTrim(
   })()
   // ------------------------------------------------------------------------------
 
-  const scale = Math.min(1, preset.shortSide / Math.min(video.videoWidth, video.videoHeight))
-  const canvas = document.createElement('canvas')
-  canvas.width = Math.round(video.videoWidth * scale) || 1280
-  canvas.height = Math.round(video.videoHeight * scale) || 720
-  const draw = canvas.getContext('2d')!
-  const stream = new MediaStream([
-    ...canvas.captureStream(30).getVideoTracks(),
-    ...(audioOut ? audioOut.stream.getAudioTracks() : []),
-  ])
-  const recorder = new MediaRecorder(stream, {
-    mimeType,
-    videoBitsPerSecond: preset.video,
-    ...(muted ? {} : { audioBitsPerSecond: preset.audio }),
-  })
   const chunks: Blob[] = []
   recorder.ondataavailable = (e) => {
     if (e.data.size > 0) chunks.push(e.data)
@@ -164,6 +181,25 @@ export function startTrim(
     finish()
   }
   video.addEventListener('ended', onEnded)
+  // 途中で画面が隠れた（アプリの切り替え）せいで止まったのなら、形式のせいにしない
+  let hidden = false
+  const onVisibility = () => {
+    if (document.visibilityState === 'hidden') hidden = true
+  }
+  document.addEventListener('visibilitychange', onVisibility)
+
+  /**
+   * 失敗の知らせ。録画の部品のせい（エラー・勝手に止まった・空）なら、Android ではほかの形式に切り替えて、
+   * 次からはそちらで作り直す（H.264 を作る部品が無い端末で、MP4 のまま、ずっと失敗し続けないように）。
+   * iPhone はほかの形式が無いので、切り替えない（MP4 のまま）
+   */
+  const failure = (message: string, byEncoder: boolean) => {
+    if (byEncoder && !hidden && document.visibilityState !== 'hidden' && fallBackFromRecorderType(mimeType, !muted, quality)) {
+      dlog('trim: mark broken', mimeType)
+      return new Error('この端末に合う形式に切り替えました。もう一度「完了」を押してください。元の動画はそのままです')
+    }
+    return new Error(message)
+  }
 
   const cleanup = () => {
     video.removeEventListener('ended', onEnded)
@@ -171,12 +207,9 @@ export function startTrim(
     dlog('cleanup', 'frames', firstTime, lastTime, 'chunks', chunks.length)
     video.pause()
     video.muted = true
-    // 録り終えたら、プレビューの音がまたスピーカーから出るように戻す
-    if (source) {
-      source.disconnect()
-      source.connect(audio.destination)
-    }
-    stream.getTracks().forEach((t) => t.stop())
+    document.removeEventListener('visibilitychange', onVisibility)
+    restoreSpeaker(source, audio)
+    stream?.getTracks().forEach((t) => t.stop())
   }
 
   const finish = () => {
@@ -189,29 +222,32 @@ export function startTrim(
     // 録り始める前に終わった（動画が最後まで進んでしまった・失敗した）。待たせたままにしない
     cleanup()
     rejectDone(
-      new Error(
-        failed
-          ? `動画を作り直せませんでした（${failed}）。元の動画はそのままです`
-          : '動画を作り直せませんでした。もう一度試してください。元の動画はそのままです',
-      ),
+      failed
+        ? failure(`動画を作り直せませんでした（${failed}）。元の動画はそのままです`, true)
+        : new Error('動画を作り直せませんでした。もう一度試してください。元の動画はそのままです'),
     )
   }
 
   recorder.onstop = () => {
+    // 止めていないのに止まった（録画の部品が途中で止めた）。コマを描き続けないように、ここで止める
+    const stoppedItself = !stopped
+    stopped = true
     cleanup()
     if (cancelled) {
       rejectDone(new Error('キャンセルしました'))
       return
     }
     if (failed) {
-      rejectDone(new Error(`動画を作り直せませんでした（${failed}）。元の動画はそのままです`))
+      rejectDone(failure(`動画を作り直せませんでした（${failed}）。元の動画はそのままです`, true))
       return
     }
     const type = (recorder.mimeType || mimeType).split(';')[0]
     const blob = new Blob(chunks, { type })
     const recorded = firstTime === null ? 0 : lastTime - firstTime
-    if (blob.size === 0 || !isLongEnough(recorded, range)) {
-      rejectDone(new Error('途中で止まり、最後まで作り直せませんでした。元の動画はそのままです'))
+    if (blob.size === 0 || stoppedItself || !isLongEnough(recorded, range)) {
+      rejectDone(
+        failure('途中で止まり、最後まで作り直せませんでした。元の動画はそのままです', blob.size === 0 || stoppedItself),
+      )
       return
     }
     const base = fileName.replace(/\.[^.]+$/, '').replace(/-edit$/, '')
@@ -226,7 +262,16 @@ export function startTrim(
         if (stopped) return
         dlog('first frame', mediaTime)
         draw.drawImage(video, 0, 0, canvas.width, canvas.height)
-        recorder.start(1000)
+        try {
+          recorder.start(1000)
+        } catch (e) {
+          // ここで投げると、呼び出し元に届かず、いつまでも「作り直しています」のままになる
+          dlog('recorder start failed', e instanceof Error ? `${e.name}: ${e.message}` : String(e))
+          stopped = true
+          cleanup()
+          rejectDone(new Error('この端末では動画を作り直せませんでした。元の動画はそのままです'))
+          return
+        }
         frame(mediaTime)
       })
     })
@@ -277,6 +322,13 @@ export function waitUntilSeekable(video: HTMLVideoElement, target: number, timeo
     const timer = setInterval(check, 100)
     const limit = setTimeout(done, timeoutMs)
   })
+}
+
+/** 録り終えたら（または準備で失敗したら）、プレビューの音がまたスピーカーから出るように戻す */
+function restoreSpeaker(source: MediaElementAudioSourceNode | null, audio: AudioContext) {
+  if (!source) return
+  source.disconnect()
+  source.connect(audio.destination)
 }
 
 /**

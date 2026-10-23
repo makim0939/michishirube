@@ -1761,7 +1761,8 @@ span.recorder-side {
 
 .recorder-error {
   position: absolute;
-  inset: auto 16px 140px;
+  /* 下の「動画・写真」の切り替えとシャッター（下から 24px + 76px + 14px + 38px と、ホームバーの分）に重ねない */
+  inset: auto 16px calc(env(safe-area-inset-bottom, 0px) + 168px);
   padding: 16px;
   border-radius: var(--radius);
   background: rgb(0 0 0 / 75%);
