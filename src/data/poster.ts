@@ -30,6 +30,20 @@ export function hasCupImage(m: Media | undefined, canFetch = false): boolean {
   return !!m && !isVideo(m) && (hasContent(m) || !!m.cloudPhoto || (canFetch && mayBeOnServer(m)))
 }
 
+/**
+ * 作ったサムネイルを、その動画の行に付ける。作っているあいだに中身が差し替わった（切り取った・ほかの端末で替えた）なら、
+ * 付けない（前の動画のコマが、新しい動画のサムネイルとして残らないように。新しい動画のものは、次に出すときに作る）。
+ * 付けたら true
+ */
+export async function attachPoster(m: Pick<Media, 'id' | 'contentAt' | 'createdAt'>, poster: Blob, end: boolean) {
+  return db.transaction('rw', db.media, async () => {
+    const current = await db.media.get(m.id)
+    if (!current || (current.contentAt ?? current.createdAt) !== (m.contentAt ?? m.createdAt)) return false
+    await db.media.update(m.id, { poster, posterEnd: end })
+    return true
+  })
+}
+
 // 動画を読み込むのは重いので、1本ずつ順に作る。同じ動画を二重に作らない
 let queue: Promise<unknown> = Promise.resolve()
 const pending = new Set<string>()
@@ -51,10 +65,11 @@ export function ensurePoster(m: Media) {
       const content = await contentBlob(m)
       if (!content) return
       const poster = await makePoster(await inMemory(content))
+      // 作り直したら、サーバーにも置き直す（cloudPosterEnd が立つまで同期で送る）。
+      // 差し替わっていて付けなかったら、新しい動画のために、作れなかった印も付けない
+      if (poster && (poster.end || !m.poster) && !(await attachPoster(m, poster.blob, poster.end))) return
       // 最後のコマにできなかったら、最初のコマで我慢して、開いている間は作り直さない
       if (!poster?.end) failed.add(m.id)
-      // 作り直したら、サーバーにも置き直す（cloudPosterEnd が立つまで同期で送る）
-      if (poster && (poster.end || !m.poster)) await db.media.update(m.id, { poster: poster.blob, posterEnd: poster.end })
     })
     .catch(() => {
       // 作れない・取れないときは、作るほうは開いている間は試さない（取るほうは次に出すときにまた試す）

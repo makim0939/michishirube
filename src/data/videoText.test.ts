@@ -67,6 +67,11 @@ describe('タイトルの長さ', () => {
     expect(title).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/)
   })
 
+  it('国旗などの、いくつかの文字でできた絵文字も、途中で切らない', () => {
+    const { title } = buildVideoText({ title: `${'あ'.repeat(98)}🇯🇵`, description: '' }, full)
+    expect(title).toBe('あ'.repeat(98))
+  })
+
   it('絵文字だけのタイトルも、ペアのまま切る', () => {
     const { title } = buildVideoText({ title: '🍵'.repeat(80), description: '' }, full)
     expect(title).toBe('🍵'.repeat(50))

@@ -189,6 +189,18 @@ export function Recorder({
     recorder.current?.stop()
   }
 
+  /**
+   * 録画を始められなかった。「使える」と答えたのに作れない・始められない形式なら、Android では次からほかの形式で撮る
+   * （iPhone は MP4 しか使わないので、切り替えずに知らせるだけ）
+   */
+  const startFailed = (mimeType: string) => {
+    if (fallBackFromRecorderType(mimeType, audio, quality)) {
+      setNotice('この端末に合う録画の形式に切り替えました。もう一度撮ってください')
+    } else {
+      setError('この端末では録画を始められませんでした。標準のカメラを使ってください。')
+    }
+  }
+
   const start = () => {
     stoppedByUser.current = false
     hiddenWhileRecording.current = false
@@ -206,7 +218,7 @@ export function Recorder({
         ...(audio ? { audioBitsPerSecond: QUALITY[quality].audio } : {}),
       })
     } catch {
-      setError('この端末では録画を始められませんでした。標準のカメラを使ってください。')
+      startFailed(mimeType)
       return
     }
     r.ondataavailable = (e) => {
@@ -243,7 +255,7 @@ export function Recorder({
     try {
       r.start(1000)
     } catch {
-      setError('この端末では録画を始められませんでした。標準のカメラを使ってください。')
+      startFailed(mimeType)
       return
     }
     setStartedAt(Date.now())
@@ -305,6 +317,8 @@ export function Recorder({
 
   const switchMode = (next: Mode) => {
     writeStorage('local', MODE_KEY, next)
+    // カメラは開けていて、録画を始められなかっただけなら、写真には切り替えれば撮れる（開き直さないときも、失敗を消す）
+    if (ready) setError(undefined)
     setMode(next)
   }
 

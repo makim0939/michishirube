@@ -102,10 +102,11 @@ export function startTrim(
     untrace()
     restoreSpeaker(source, audio)
     stream?.getTracks().forEach((t) => t.stop())
-    return {
-      done: Promise.reject(new Error('この端末では動画を作り直せませんでした。元の動画はそのままです')),
-      cancel: () => {},
-    }
+    // 「使える」と答えたのに作れない形式なら、Android では次からほかの形式で作り直す（iPhone は MP4 のまま）
+    const message = fallBackFromRecorderType(mimeType, !muted, quality)
+      ? 'この端末に合う形式に切り替えました。もう一度「完了」を押してください。元の動画はそのままです'
+      : 'この端末では動画を作り直せませんでした。元の動画はそのままです'
+    return { done: Promise.reject(new Error(message)), cancel: () => {} }
   }
   video.muted = muted
   // タップの中で一度だけ再生を始めて止め、この video の音つき再生を許可させる。
@@ -201,7 +202,11 @@ export function startTrim(
     return new Error(message)
   }
 
+  // エラーのあと、finish と onstop の両方から呼ばれることがあるので、1回だけ片付ける
+  let cleanedUp = false
   const cleanup = () => {
+    if (cleanedUp) return
+    cleanedUp = true
     video.removeEventListener('ended', onEnded)
     untrace()
     dlog('cleanup', 'frames', firstTime, lastTime, 'chunks', chunks.length)
@@ -229,6 +234,8 @@ export function startTrim(
   }
 
   recorder.onstop = () => {
+    // エラーで、すでに失敗を返して片付けた（エラーのあと、止まった知らせも来る）
+    if (settled) return
     // 止めていないのに止まった（録画の部品が途中で止めた）。コマを描き続けないように、ここで止める
     const stoppedItself = !stopped
     stopped = true
@@ -246,7 +253,11 @@ export function startTrim(
     const recorded = firstTime === null ? 0 : lastTime - firstTime
     if (blob.size === 0 || stoppedItself || !isLongEnough(recorded, range)) {
       rejectDone(
-        failure('途中で止まり、最後まで作り直せませんでした。元の動画はそのままです', blob.size === 0 || stoppedItself),
+        // 空でも、2秒より短い範囲なら形式のせいにしない（録画と同じ。始めてすぐ止めると空になることがある）
+        failure(
+          '途中で止まり、最後まで作り直せませんでした。元の動画はそのままです',
+          stoppedItself || (blob.size === 0 && range.end - range.start >= 2),
+        ),
       )
       return
     }
@@ -269,7 +280,7 @@ export function startTrim(
           dlog('recorder start failed', e instanceof Error ? `${e.name}: ${e.message}` : String(e))
           stopped = true
           cleanup()
-          rejectDone(new Error('この端末では動画を作り直せませんでした。元の動画はそのままです'))
+          rejectDone(failure('この端末では動画を作り直せませんでした。元の動画はそのままです', true))
           return
         }
         frame(mediaTime)
