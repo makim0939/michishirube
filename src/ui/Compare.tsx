@@ -17,13 +17,13 @@ type Slot = 0 | 1
 export function Compare({
   media,
   numberOf,
-  dateOf = (m) => m.createdAt,
+  dateOf,
 }: {
   /** 杯の日時の古い順 */
   media: Media[]
   numberOf: (m: Media) => number | undefined
   /** その動画・写真の杯の日時（間の日数に使う。入れた時刻は、あとから編集で足すと杯の日時とずれる） */
-  dateOf?: (m: Media) => number
+  dateOf: (m: Media) => number
 }) {
   const videos = media.filter(isVideo)
   const images = media.filter((m) => !isVideo(m))

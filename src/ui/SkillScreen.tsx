@@ -140,7 +140,6 @@ export function SkillScreen({ id }: { id: string }) {
               className="btn achieve"
               disabled={achieving}
               onClick={() => {
-                if (achieving) return
                 setAchieving(true)
                 void run(async () => {
                   try {

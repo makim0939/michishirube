@@ -159,6 +159,8 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
   /** 入り終わるのを待っている保存（「もう1杯」か）。待っていなければ null */
   const queuedSave = useRef<boolean | null>(null)
   const saveRef = useRef<(more: boolean) => unknown>(undefined)
+  /** 前に入れ始めた動画・写真が一覧に入り終わる時。入れ始めた順に並べるため、後から始めたものは、これを待ってから入れる */
+  const prepChain = useRef<Promise<unknown>>(Promise.resolve())
   /** 保存せずに離れようとしたときの行き先（null なら確認を出していない） */
   const [confirmLeave, setConfirmLeave] = useState<{ back: true } | { to: string } | null>(null)
   const [recording, setRecording] = useState(false)
@@ -219,8 +221,6 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
     return true
   }
 
-  // Android の「戻る」（ボタン・端からのスワイプ）も、画面の「<」と同じく確認を通す。
-  // 確認が出ているときの「戻る」は、確認を閉じて続ける。カメラ・編集・型の選択は、それぞれが先に受け止める
   // 入り終わるのを待っていた保存を、入ったあとの一覧で続ける
   useEffect(() => {
     if (preparing > 0 || queuedSave.current === null) return
@@ -228,7 +228,16 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
     queuedSave.current = null
     void saveRef.current?.(more)
   }, [preparing])
+  // 画面を離れたら、待っていた保存はやめる（「保存せずに戻る」を選んだあとに、保存されてしまわないように）
+  useEffect(
+    () => () => {
+      queuedSave.current = null
+    },
+    [],
+  )
 
+  // Android の「戻る」（ボタン・端からのスワイプ）も、画面の「<」と同じく確認を通す。
+  // 確認が出ているときの「戻る」は、確認を閉じて続ける。カメラ・編集・型の選択は、それぞれが先に受け止める
   useBackHandler(() => {
     const action = recordBackAction({ saving, confirming: !!confirmLeave, unsaved })
     if (action === 'closeConfirm') setConfirmLeave(null)
@@ -289,9 +298,13 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
       // 写真は縮小してから持つ（端末の容量と同期の量を抑える）。
       // Android は、選んだファイルを少したつと読めなくなる（読む許可が切れる）ので、動画もすぐメモリに写す。
       // 1つ読めなくても、ほかの動画・写真は入れる（撮り直さずに済むように）
-      const settled = await Promise.allSettled(
+      // 準備は並んで進めてよいが、一覧に入れるのは入れ始めた順（大きな動画の後に撮った写真が、先に並ばないように）
+      const work = Promise.allSettled(
         picked.map((f) => (f.type.startsWith('image/') ? compressPhoto(f) : isAndroidApp ? detach(f) : f)),
       )
+      const ready = prepChain.current.then(() => work)
+      prepChain.current = ready
+      const settled = await ready
       // 縮小した写真もメモリ上に作り直したもの
       const added = settled.flatMap((r, i) =>
         r.status === 'fulfilled'
@@ -493,6 +506,8 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
               onClick={() => {
                 // 「保存せずに戻る」と選んだ書きかけは、次に開いたときに現れないよう消す
                 if (!editing) clearDraft()
+                // 動画・写真が入り終わるのを待っていた保存も、やめる
+                queuedSave.current = null
                 if ('to' in confirmLeave) go(confirmLeave.to)
                 else goBack(fallback)
               }}

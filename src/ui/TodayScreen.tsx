@@ -34,11 +34,16 @@ const RECOMMEND = 3
 
 const WEEKDAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
 
-/** いまの時刻。開いたままや、裏から戻ったときにも、日付と光が古いままにならないようにする */
-function useNow(intervalMs = 60_000): Date {
-  const [now, setNow] = useState(() => new Date())
+/**
+ * 時刻から作る値を、定期的と、裏から戻ったときに読み直す（開いたままでも古いままにならないように）。
+ * 読んだ値が前と同じなら（文字など）、画面は描き直さない
+ */
+function useClock<T>(read: () => T, intervalMs = 60_000): T {
+  const [value, setValue] = useState(read)
+  const latestRead = useRef(read)
+  latestRead.current = read
   useEffect(() => {
-    const tick = () => setNow(new Date())
+    const tick = () => setValue(latestRead.current())
     const timer = setInterval(tick, intervalMs)
     const onVisible = () => {
       if (document.visibilityState === 'visible') tick()
@@ -49,28 +54,17 @@ function useNow(intervalMs = 60_000): Date {
       document.removeEventListener('visibilitychange', onVisible)
     }
   }, [intervalMs])
-  return now
+  return value
 }
 
-/**
- * 今日の日付（端末の時刻で）。開いたまま日付が変わったら、今週の杯数・練習中の型を数え直すために使う。
- * 同じ日のあいだは同じ文字なので、毎分たしかめても画面は描き直さない
- */
-function useDayKey(intervalMs = 60_000): string {
-  const [day, setDay] = useState(() => new Date().toDateString())
-  useEffect(() => {
-    const tick = () => setDay(new Date().toDateString())
-    const timer = setInterval(tick, intervalMs)
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') tick()
-    }
-    document.addEventListener('visibilitychange', onVisible)
-    return () => {
-      clearInterval(timer)
-      document.removeEventListener('visibilitychange', onVisible)
-    }
-  }, [intervalMs])
-  return day
+/** いまの時刻。開いたままや、裏から戻ったときにも、日付と光が古いままにならないようにする */
+function useNow(): Date {
+  return useClock(() => new Date())
+}
+
+/** 今日の日付（端末の時刻で）。開いたまま日付が変わったら、今週の杯数・練習中の型を数え直すために使う */
+function useDayKey(): string {
+  return useClock(() => new Date().toDateString())
 }
 
 function startOfWeek(now: number): number {
@@ -365,9 +359,15 @@ function PracticeBlock({ practice }: { practice: Practice }) {
  */
 async function firstCupRecord(canFetch: boolean): Promise<PracticeRecord | undefined> {
   const PAGE = 50
-  for (let offset = 0; ; offset += PAGE) {
-    const records = await db.records.orderBy('createdAt').offset(offset).limit(PAGE).toArray()
+  // offset で飛ばすと、そのぶん毎回たどり直すので、前の頁の最後の日時から続けて読む。
+  // 同じミリ秒の記録が頁の境目にまたがると飛ぶことがあるが、記録は1件ずつ保存するので、まず起きない
+  let last: number | undefined
+  for (;;) {
+    const records = await (last === undefined ? db.records.orderBy('createdAt') : db.records.where('createdAt').above(last))
+      .limit(PAGE)
+      .toArray()
     if (records.length === 0) return undefined
+    last = records[records.length - 1].createdAt
     const media = await db.media.bulkGet([...new Set(records.flatMap((r) => r.mediaIds ?? []))])
     const byId = new Map(media.filter((m) => !!m).map((m) => [m.id, m]))
     const hit = records.find((r) => hasCupImage(pickCupMedia((r.mediaIds ?? []).map((id) => byId.get(id))), canFetch))

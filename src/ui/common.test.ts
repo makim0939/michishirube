@@ -23,7 +23,9 @@ describe('formatAgo（夏時間のある地域）', () => {
     process.env.TZ = 'America/New_York'
   })
   afterAll(() => {
-    process.env.TZ = saved
+    // もともと無かったときは消す（undefined を入れると、"undefined" という文字になる）
+    if (saved === undefined) delete process.env.TZ
+    else process.env.TZ = saved
   })
 
   it('夏時間が始まる日（23時間）をまたいでも、暦の日付で数える', () => {
