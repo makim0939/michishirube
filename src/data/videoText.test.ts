@@ -58,6 +58,26 @@ describe('YouTube のタイトルと説明の書き方', () => {
   })
 })
 
+describe('タイトルの長さ', () => {
+  it('100文字に収め、絵文字の途中で切らない（壊れた文字を残さない）', () => {
+    // 99文字のあとに絵文字（UTF-16 で2つ分）。slice(0, 100) だと、絵文字の前半だけが残る
+    const { title } = buildVideoText({ title: `${'あ'.repeat(99)}🍵`, description: '' }, full)
+    expect(title.length).toBeLessThanOrEqual(100)
+    expect(title).toBe('あ'.repeat(99))
+    expect(title).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/)
+  })
+
+  it('国旗などの、いくつかの文字でできた絵文字も、途中で切らない', () => {
+    const { title } = buildVideoText({ title: `${'あ'.repeat(98)}🇯🇵`, description: '' }, full)
+    expect(title).toBe('あ'.repeat(98))
+  })
+
+  it('絵文字だけのタイトルも、ペアのまま切る', () => {
+    const { title } = buildVideoText({ title: '🍵'.repeat(80), description: '' }, full)
+    expect(title).toBe('🍵'.repeat(50))
+  })
+})
+
 describe('説明の長さ', () => {
   it('YouTube の上限はバイトなので、日本語でも 5000 バイトに収める', () => {
     const { description } = buildVideoText({ title: '{型}', description: 'あ'.repeat(3000) }, full)

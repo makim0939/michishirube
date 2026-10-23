@@ -168,7 +168,13 @@ export async function deleteFile(path: string) {
   }
 }
 
-/** 文字のファイルを書く。書きかけで止まっても前のものが残るよう、別名で書いてから入れ替える */
+/**
+ * 文字のファイルを書く。書きかけで止まっても前のものが残るよう、別名（.tmp）に書き終えてから入れ替える。
+ * 入れ替えは「元を消す → 別名を元の名前に変える」の2手（rename が上書きするかは、iOS と Android の実装で
+ * 保証されていないため、先に消す）。その間で止まると、元は無く、書き終えた .tmp だけが残るので、
+ * 読む側は、元が読めなければ .tmp を読むこと（snapshot.ts の restoreSnapshotIfEmpty がそうしている）。
+ * .tmp を書き終えて元を消す前に止まったときは、元（1回前の内容）を読む。書く前に止まったのと同じで、最後の1回分だけ失う
+ */
 export async function writeTextFile(path: string, text: string) {
   const tmp = fullPath(`${path}.tmp`)
   await Filesystem.writeFile({ path: tmp, directory: DIR, data: text, encoding: Encoding.UTF8 })

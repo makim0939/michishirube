@@ -259,8 +259,15 @@ export function Trimmer({
     setError(undefined)
     playUntil.current = null
     // タップの処理の中で AudioContext を作り、再生を始める（iPhone の制限のため）
-    audio.current ??= new AudioContext()
-    const j = startTrim(v, audio.current, range, name, { muted })
+    let j: TrimJob
+    try {
+      audio.current ??= new AudioContext()
+      j = startTrim(v, audio.current, range, name, { muted })
+    } catch (e) {
+      // 準備の途中で投げても、押したのに何も起きない、にしない
+      setError(e instanceof Error ? `動画を作り直せませんでした（${e.message}）。元の動画はそのままです` : String(e))
+      return
+    }
     job.current = j
     interrupted.current = false
     setProcessing(true)

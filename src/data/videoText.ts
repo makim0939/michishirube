@@ -22,17 +22,40 @@ const DESCRIPTION_KEY = 'youtubeDescriptionTemplate'
 const TITLE_MAX = 100
 const DESCRIPTION_MAX_BYTES = 4900
 
-/** UTF-8 で max バイトまでに切る（日本語は1文字3バイトなので、文字数では足りない）。文字の途中では切らない */
-function cutBytes(text: string, max: number): string {
-  const enc = new TextEncoder()
-  let bytes = 0
+/**
+ * 見た目の1文字（書記素。国旗・家族の絵文字なども1つ）ずつに分ける。Intl.Segmenter が無い古い端末では、コードポイントで分ける
+ * （String#slice のように UTF-16 の単位で切ると、絵文字の途中で切れて、壊れた文字が残るため）
+ */
+function graphemes(text: string): Iterable<string> {
+  if (typeof Intl !== 'undefined' && 'Segmenter' in Intl) {
+    return Array.from(new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text), (s) => s.segment)
+  }
+  return text
+}
+
+/** 文字の途中では切らずに、measure で測った大きさが max までに収まるよう、頭から切る */
+function cutBy(text: string, max: number, measure: (s: string) => number): string {
+  let size = 0
   let out = ''
-  for (const ch of text) {
-    bytes += enc.encode(ch).length
-    if (bytes > max) break
+  for (const ch of graphemes(text)) {
+    size += measure(ch)
+    if (size > max) break
     out += ch
   }
   return out
+}
+
+/** UTF-8 で max バイトまでに切る（日本語は1文字3バイトなので、文字数では足りない） */
+function cutBytes(text: string, max: number): string {
+  const enc = new TextEncoder()
+  return cutBy(text, max, (ch) => enc.encode(ch).length)
+}
+
+/**
+ * タイトルを max 文字までに切る。UTF-16 の長さで測る（YouTube が UTF-16 で数えても、コードポイントで数えても、上限に収まるように）
+ */
+export function cutChars(text: string, max: number): string {
+  return cutBy(text, max, (ch) => ch.length)
 }
 
 /**
@@ -77,7 +100,7 @@ export function buildVideoText(templates: VideoTemplates, vars: TemplateVars): {
       .replace(/(\s*｜\s*){2,}/g, '｜')
       .replace(/^\s*｜\s*|\s*｜\s*$/g, '')
   const title = oneLine(templates.title) || oneLine(DEFAULT_TITLE) || 'ラテ帳'
-  return { title: title.slice(0, TITLE_MAX), description: cutBytes(clean(renderTemplate(templates.description, vars)), DESCRIPTION_MAX_BYTES) }
+  return { title: cutChars(title, TITLE_MAX), description: cutBytes(clean(renderTemplate(templates.description, vars)), DESCRIPTION_MAX_BYTES) }
 }
 
 /** 記録・型から、テンプレートに入れる中身を作る。ts は動画を撮った時刻 */

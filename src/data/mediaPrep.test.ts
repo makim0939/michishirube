@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { canTranscode } from './content'
-import { judgeRecording, pickRecorderMimeType, recorderSupports, focusAt, keepAutoFocus, tapToSourcePoint } from './mediaPrep'
+import { fallBackFromRecorderType, judgeRecording, pickRecorderMimeType, recorderSupports, focusAt, keepAutoFocus, tapToSourcePoint } from './mediaPrep'
 
 const IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148'
 const ANDROID = 'Mozilla/5.0 (Linux; Android 14; Pixel 6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36'
@@ -37,6 +37,31 @@ describe('録画の形式', () => {
     device(ANDROID, { 'michishirube:recorder-broken': JSON.stringify({ ua: ANDROID, types: ['video/mp4'] }) })
     expect(recorderSupports('video/mp4')).toBe(false)
     expect(pickRecorderMimeType(recorderSupports, true, 'standard')).toMatch(/^video\/webm/)
+  })
+})
+
+describe('録画・切り取りに失敗した形式を外す', () => {
+  it('Android では、ほかの形式があれば MP4 を外し、次から WebM で撮る・作り直す', () => {
+    const store: Record<string, string> = {}
+    device(ANDROID, store)
+    expect(fallBackFromRecorderType('video/mp4;codecs=avc1.42E01E', false, 'standard')).toBe(true)
+    expect(pickRecorderMimeType(recorderSupports, false, 'standard')).toMatch(/^video\/webm/)
+  })
+
+  it('iPhone では、失敗しても MP4 を外さない（WebM にすると、編集・共有・アップが壊れる）', () => {
+    const store: Record<string, string> = {}
+    device(IPHONE, store)
+    expect(fallBackFromRecorderType('video/mp4;codecs=avc1.42E01E,mp4a.40.2', true, 'high')).toBe(false)
+    expect(store['michishirube:recorder-broken']).toBeUndefined()
+    expect(pickRecorderMimeType(recorderSupports, true, 'high')).toMatch(/^video\/mp4/)
+  })
+
+  it('ほかの形式が無ければ、外さない（撮れる形式が無くならないように）', () => {
+    const store: Record<string, string> = {}
+    device(ANDROID, store)
+    vi.stubGlobal('MediaRecorder', { isTypeSupported: (t: string) => t.startsWith('video/mp4') })
+    expect(fallBackFromRecorderType('video/mp4', true, 'standard')).toBe(false)
+    expect(store['michishirube:recorder-broken']).toBeUndefined()
   })
 })
 

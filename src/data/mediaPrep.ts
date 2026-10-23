@@ -144,6 +144,17 @@ export function markRecorderTypeBroken(mimeType: string) {
   }
 }
 
+/**
+ * 録画（切り取りの録り直しも）が空になった・勝手に止まった形式を、ほかの形式があるときだけ外す。外したら true。
+ * iPhone・iPad は recorderSupports が MP4 しか答えないので「ほかの形式」が無く、外さない（WebM に切り替えない）
+ */
+export function fallBackFromRecorderType(mimeType: string, withAudio: boolean, quality: VideoQuality): boolean {
+  const container = mimeType.split(';')[0]
+  const others = !!pickRecorderMimeType((t) => recorderSupports(t) && !t.startsWith(container), withAudio, quality)
+  if (others) markRecorderTypeBroken(mimeType)
+  return others
+}
+
 export type RecordingVerdict = 'ok' | 'too-short' | 'broken'
 
 /**
