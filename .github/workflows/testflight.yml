@@ -141,7 +141,6 @@ jobs:
 
       # アップロードが成功したときだけ（前のステップが失敗すると、ここへ来ない）。ブランチとタグは、まとめて 1 回で push する
       - name: タグとブランチを push
-        id: push
         if: inputs.version != ''
         env:
           VERSION: ${{ inputs.version }}

@@ -245,7 +245,11 @@ GitHub → Actions →「iOS を TestFlight にアップロード」→ Run work
 
 流れ：実行 → Environment の承認を押す → 終わったら、実行の要約（Summary）にある PR を確認してマージし、App Store Connect の TestFlight で、ビルドの処理を待つ。PR を作れないときは、要約に、手元で作るコマンドが出る。
 
-**メモ**：CI が作った PR は、GitHub の仕様で、`ci.yml` が自動では走らない（`GITHUB_TOKEN` で作ったため）。版を上げるだけの差分なので、必要なら、手元でテストする。書き込みの権限（`contents: write`）は、アップロードのジョブだけにあり、トークンはビルド中のコードには渡さず、push のステップだけが使う。
+**メモ**：
+- PR は、**マージコミットでマージする**（スカッシュ・リベースだと、タグが指すコミットが `main` の履歴に入らない）。
+- ref に選ぶブランチには、`scripts/release-version.mjs` が必要（この仕組みを入れる前に切ったブランチは、先に `main` を取り込む）。
+- アップロードのあとの push が失敗したときは、ビルドは TestFlight に上がっているが、タグは無い。そのまま再実行すると、次のビルド番号でもう一度上がる（タグはそのとき付く）。
+- CI が作った PR は、GitHub の仕様で、`ci.yml` が自動では走らない（`GITHUB_TOKEN` で作ったため）。版を上げるだけの差分なので、必要なら、手元でテストする。書き込みの権限（`contents: write`）は、アップロードのジョブだけにあり、トークンはビルド中のコードには渡さず、push のステップだけが使う。
 
 **ビルド番号**：書き出しのとき、Xcode が、App Store Connect の最後のビルド番号の次を、自動で付ける（`manageAppVersionAndBuildNumber`）。だから、CI では、リポジトリの `CURRENT_PROJECT_VERSION` を上げなくてよい（手元でアーカイブするときの手順 4 は、これまでどおり）。リポジトリの値は、仮のままでよい。
 

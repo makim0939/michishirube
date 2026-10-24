@@ -13,7 +13,7 @@ const fail = (msg) => {
   process.exit(1)
 }
 
-if (!/^\d+\.\d+\.\d+$/.test(next)) fail('版は X.Y.Z（数字だけ）の形で入れてください')
+if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(next)) fail('版は X.Y.Z（数字だけ）の形で入れてください')
 
 const pkgText = readFileSync(PKG, 'utf8')
 const current = JSON.parse(pkgText).version
