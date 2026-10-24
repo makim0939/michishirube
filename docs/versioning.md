@@ -21,6 +21,7 @@ Android の `versionName` は、`-PversionName` を渡さなければ `package.j
 - 版とは別に、**ストアに送るたびに1つ上げる**（同じ版の作り直しでも、上げないと受け付けられない）。
 - 版を上げたあとも、リセットしない（増やし続ける）。
 - ふだんは 1 のまま。実際に送るとき（`docs/app-store-submission.md` の手順 4）に上げる。
+- GitHub Actions から TestFlight に上げるときは、Xcode が、App Store Connect の最後の番号の次を自動で付ける（`docs/app-store-submission.md` の「CI から上げる」）。リポジトリの値は上げなくてよいが、上がった番号は、リリースの PR で反映しておく（手元で上げるときの基準になる）。
 
 ## リリースの流れ
 

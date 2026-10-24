@@ -206,6 +206,44 @@ Contact: makim0939@gmail.com
 9. 文面・画面写真・プライバシー・審査メモを入れて、「審査へ提出」。
 10. 審査は、通常1〜2日。指摘が来たら、メッセージ（Resolution Center）に、答える。
 
+### CI から上げる（GitHub Actions）
+
+手元の Xcode を使わず、`main`（または選んだ ref）から、TestFlight まで上げる。ワークフローは `.github/workflows/testflight.yml`（手動実行だけ。PR・push では動かない）。署名は、App Store Connect API キーによるクラウド署名。
+
+**一度きりの準備（ユーザーの作業。秘密の値は、自分で GitHub に登録する。チャットやリポジトリに貼らない）**
+
+1. App Store Connect →「ユーザとアクセス」→「統合」→「App Store Connect API」→ チームキー →「+」。名前は「GitHub Actions」など、アクセス権は **App Manager** 以上。
+2. 作ったら、**Issuer ID**（画面上部）と **キー ID** を控え、`.p8` を**1回だけ**ダウンロードできる（あとで再取得できない）。
+3. `.p8` を base64 にしてクリップボードへ：`base64 -i AuthKey_XXXX.p8 | pbcopy`
+4. GitHub のリポジトリ → Settings → Environments → New environment → 名前 `testflight`。
+   - 「Required reviewers」に自分を入れる（起動しても、承認するまで動かない）。
+   - 「Deployment branches and tags」は、`main` だけに限ると安全（その場合、別の ref を上げるときは、一時的に広げる）。
+5. その Environment の Secrets に、4 つ登録する：
+
+   | 名前 | 中身 |
+   |---|---|
+   | `ASC_KEY_ID` | キー ID |
+   | `ASC_ISSUER_ID` | Issuer ID |
+   | `ASC_API_KEY_P8` | 手順 3 の base64 |
+   | `APPLE_TEAM_ID` | Apple Developer のチーム ID（10 文字） |
+
+6. 登録できたら、手元の `.p8` は安全な場所にしまうか消す。
+
+**上げるとき**
+
+1. 版（`MARKETING_VERSION`）を、このリリースの値にしてから（`docs/versioning.md`）、GitHub → Actions →「iOS を TestFlight にアップロード」→ Run workflow（ref の既定は `main`）。
+2. Environment の承認を押す。
+3. 終わったら、App Store Connect の TestFlight で、ビルドが処理されるのを待つ。
+
+**ビルド番号**：書き出しのとき、Xcode が、App Store Connect の最後のビルド番号の次を、自動で付ける（`manageAppVersionAndBuildNumber`）。だから、CI では、リポジトリの `CURRENT_PROJECT_VERSION` を上げなくてよい（手元でアーカイブするときの手順 4 は、これまでどおり）。リポジトリの値は、仮のままでよい。
+
+**つまずきやすい点**
+
+- Xcode の版：ランナー（既定 `macos-latest`）の Xcode は、手元（27.0）と違うことがある。ログの「Xcode の版」で確かめる。古くて、SDK が足りないとき（「iOS 27 SDK が必要」などと、アップロードで断られる）は、起動時の「ランナー」を、新しいイメージ（例：`macos-26`）にする。それでも入っていなければ、ワークフローに `xcode-select` の手順を足す。
+- 署名：「No profiles / Signing requires a development team」は、`APPLE_TEAM_ID` の間違い。「Cloud signing permission error」などは、API キーの権限不足（App Manager 以上にする。または、アカウントの「クラウド管理の配布証明書」を使う権限がキーに無い）。
+- クラウド署名が通らないときの案：配布用の証明書（`.p12`）と App Store 用のプロビジョニングプロファイルを、Secrets に入れ、一時キーチェーンに取り込んで、手動署名にする。実装の前に、ユーザーに相談する。
+- `.p8` の base64 に改行が入っていても読めるが、中身を欠かさない（`-----BEGIN PRIVATE KEY-----` の行まで含める）。
+
 ### TestFlight（任意）
 
 審査に出す前に、TestFlight で、自分の iPhone に入れて確認できる（ビルドをアップロードしたあと）。有料プログラムの加入後は、7日で切れる署名の制限も、なくなる。

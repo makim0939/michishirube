@@ -1,0 +1,101 @@
+name: iOS を TestFlight にアップロード
+
+# 手動で起動したときだけ動く（PR・push では動かさない）。公開リポジトリで、署名の鍵を守るため。
+# 鍵・ID は、Environment「testflight」の Secrets に入れる（手順は docs/app-store-submission.md の「CI から上げる」）。
+# Environment に「承認が必要」を設定してあるので、起動しても、承認するまでジョブは始まらない
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'ビルドするブランチ・タグ・コミット'
+        default: main
+        required: true
+      runner:
+        description: 'ランナー（Xcode の版は、ここで決まる）'
+        default: macos-latest
+        required: true
+
+permissions:
+  contents: read
+
+# 同時に 2 つ上げない（ビルド番号の取り合いを避ける）
+concurrency:
+  group: testflight
+  cancel-in-progress: false
+
+jobs:
+  upload:
+    runs-on: ${{ inputs.runner }}
+    environment: testflight
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # VITE_API_URL は、既定の本番（https://latte.makimura.me）のまま作る
+      - run: pnpm app:build
+      - name: Xcode の版
+        run: xcodebuild -version
+
+      - name: アーカイブして App Store Connect にアップロード
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          # ログに値が出ないようにする
+          echo "::add-mask::$ASC_KEY_ID"
+          echo "::add-mask::$ASC_ISSUER_ID"
+          echo "::add-mask::$APPLE_TEAM_ID"
+
+          KEY_PATH="$RUNNER_TEMP/AuthKey.p8"
+          trap 'rm -f "$KEY_PATH"' EXIT
+          echo "$ASC_API_KEY_P8" | base64 --decode > "$KEY_PATH"
+          chmod 600 "$KEY_PATH"
+
+          AUTH=(-allowProvisioningUpdates
+            -authenticationKeyPath "$KEY_PATH"
+            -authenticationKeyID "$ASC_KEY_ID"
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID")
+
+          # ビルド番号は、書き出しのときに Xcode が、App Store Connect の最後の番号の次に付け直す
+          # （manageAppVersionAndBuildNumber）。ここの値は、仮のもの
+          xcodebuild archive \
+            -project ios/App/App.xcodeproj -scheme App -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            "${AUTH[@]}" \
+            CURRENT_PROJECT_VERSION=1 DEVELOPMENT_TEAM="$APPLE_TEAM_ID"
+
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>$APPLE_TEAM_ID</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>uploadSymbols</key><true/>
+            <key>manageAppVersionAndBuildNumber</key><true/>
+          </dict>
+          </plist>
+          PLIST
+
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/export" \
+            "${AUTH[@]}"
+
+      - name: 鍵を消す
+        if: always()
+        run: rm -f "$RUNNER_TEMP/AuthKey.p8" "$RUNNER_TEMP/ExportOptions.plist"
