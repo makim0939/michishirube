@@ -91,6 +91,16 @@ async function deleteRecordsOfSkills(skillIds: string[]) {
   await markDirty('record', recordIds)
 }
 
+/** 分野を消すと一緒に消えるものの数（消す前の確認に出す） */
+export async function countDomainContents(id: string) {
+  const skillIds = (await db.skills.where('domainId').equals(id).toArray()).map((s) => s.id)
+  const [records, media] = await Promise.all([
+    db.records.where('skillId').anyOf(skillIds).count(),
+    db.media.where('skillId').anyOf(skillIds).count(),
+  ])
+  return { skills: skillIds.length, records, media }
+}
+
 export async function deleteDomain(id: string) {
   await db.transaction('rw', [db.domains, db.skills, db.records, db.media, db.outbox], async () => {
     const skillIds = (await db.skills.where('domainId').equals(id).toArray()).map((s) => s.id)
