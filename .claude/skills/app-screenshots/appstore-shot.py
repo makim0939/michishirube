@@ -104,12 +104,13 @@ def background():
     a = (np.array(BG_TOP) * (1 - g) + np.array(BG_BOTTOM) * g) * np.ones((1, W, 1))
     im = Image.fromarray(a.astype('uint8'))
     # 窓辺の光のような、ぼやけた丸（飾りは、これだけ）
-    glow = Image.new('RGBA', (W, H), (0, 0, 0, 0))
-    gd = ImageDraw.Draw(glow)
-    gd.ellipse((W - 560, -300, W + 260, 520), fill=(255, 230, 190, 90))
-    gd.ellipse((-340, 1500, 420, 2260), fill=(214, 160, 110, 45))
-    glow = glow.filter(ImageFilter.GaussianBlur(120))
-    im.paste(glow, (0, 0), glow)
+    # 丸ごとに、地をその丸の色の透明にしてからぼかす（透明な黒の地だと、縁の色が黒に寄り、灰色に濁る）
+    for box, color, alpha in (((W - 560, -300, W + 260, 520), (255, 230, 190), 90),
+                              ((-340, 1500, 420, 2260), (214, 160, 110), 45)):
+        glow = Image.new('RGBA', (W, H), color + (0,))
+        ImageDraw.Draw(glow).ellipse(box, fill=color + (alpha,))
+        glow = glow.filter(ImageFilter.GaussianBlur(120))
+        im.paste(glow, (0, 0), glow)
     return im
 
 
