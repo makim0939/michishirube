@@ -1,2 +1,2 @@
-# Cloudflare の管理された robots.txt の設定で、この前に Content Signals の文が足されて配られる
+# ここに置くと、Cloudflare が自動で出していた robots.txt（決まりのない説明の文だけ）は出なくなる
 Sitemap: https://latte.makimura.me/sitemap.xml
