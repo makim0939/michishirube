@@ -236,9 +236,16 @@ iPad も同じ並び（プレビュー動画はなし）。1.1 は、2・3・4�
 
 **上げるとき**
 
-1. 版（`MARKETING_VERSION`）を、このリリースの値にしてから（`docs/versioning.md`）、GitHub → Actions →「iOS を TestFlight にアップロード」→ Run workflow（ref の既定は `main`）。
-2. Environment の承認を押す。
-3. 終わったら、App Store Connect の TestFlight で、ビルドが処理されるのを待つ。
+GitHub → Actions →「iOS を TestFlight にアップロード」→ Run workflow。
+
+- **新しい版を出す（通常）**：「版」に `1.2.0` のように入れる（ref の既定は `main`）。CI が、版を上げるコミット（`package.json`・iOS の `MARKETING_VERSION`）を `release/1.2.0` に作り、そのコミットでビルドして、アップロードする。**成功したときだけ**、そのコミットにタグ `v1.2.0` を付け、ブランチと一緒に push し、`main` 向けの PR を作る。失敗したときは、何も push されない（再実行できる）。
+  - 止まる条件：形式が `X.Y.Z` でない、いまの版以下、タグ `v<版>` か ブランチ `release/<版>` がすでにある。
+  - 審査中に次の版を出すときは、ref に次の版のブランチ（`v1.1` など）を入れる。PR は、ref がブランチなら、そのブランチ向けになる。
+- **版を変えずに上げる**：「版」を空にする。ref をそのままビルドして、アップロードだけする（タグ・PR は無し）。
+
+流れ：実行 → Environment の承認を押す → 終わったら、実行の要約（Summary）にある PR を確認してマージし、App Store Connect の TestFlight で、ビルドの処理を待つ。PR を作れないときは、要約に、手元で作るコマンドが出る。
+
+**メモ**：CI が作った PR は、GitHub の仕様で、`ci.yml` が自動では走らない（`GITHUB_TOKEN` で作ったため）。版を上げるだけの差分なので、必要なら、手元でテストする。書き込みの権限（`contents: write`）は、アップロードのジョブだけにあり、トークンはビルド中のコードには渡さず、push のステップだけが使う。
 
 **ビルド番号**：書き出しのとき、Xcode が、App Store Connect の最後のビルド番号の次を、自動で付ける（`manageAppVersionAndBuildNumber`）。だから、CI では、リポジトリの `CURRENT_PROJECT_VERSION` を上げなくてよい（手元でアーカイブするときの手順 4 は、これまでどおり）。リポジトリの値は、仮のままでよい。
 

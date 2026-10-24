@@ -7,15 +7,20 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: 'ビルドするブランチ・タグ・コミット'
+        description: 'ビルドするブランチ・タグ・コミット（版を入れたときは、その土台。版を上げるコミットを重ねる）'
         default: main
         required: true
+      version:
+        description: '新しい版 X.Y.Z（例 1.2.0）。入れると、版を上げるコミット → ビルド → アップロード → タグ付け・PR まで行う。空なら、ref をそのまま上げるだけ'
+        required: false
+        default: ''
       runner:
         description: 'ランナー（Xcode の版は、ここで決まる）'
         type: choice
         options: [macos-latest, macos-26, macos-15]
         default: macos-latest
 
+# 既定は読むだけ。タグ・ブランチの push と PR は、アップロードのジョブだけに許す
 permissions:
   contents: read
 
@@ -29,11 +34,48 @@ jobs:
     runs-on: ${{ inputs.runner }}
     environment: testflight
     timeout-minutes: 45
+    permissions:
+      contents: write # release ブランチとタグの push（アップロードに成功したあとだけ）
+      pull-requests: write # 版を上げる PR を作る
     steps:
       # 選んだ ref の中身が、署名の秘密を持つこのジョブで動く。Environment のブランチ制限と承認が防御になる
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref }}
+          # 書き込みのトークンを、ビルドのコード（選んだ ref の中身）に渡さない。push するステップだけが使う
+          persist-credentials: false
+
+      # 版を入れたとき：何かを作る前に、入力を検査する。入力は env 経由で渡す（インジェクション対策）
+      - name: 版の検査
+        if: inputs.version != ''
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          node scripts/release-version.mjs check
+          if [ -n "$(git ls-remote --tags "https://github.com/$GITHUB_REPOSITORY.git" "refs/tags/v$VERSION")" ]; then
+            echo "::error::タグ v$VERSION は、すでにあります"; exit 1
+          fi
+          if [ -n "$(git ls-remote --heads "https://github.com/$GITHUB_REPOSITORY.git" "refs/heads/release/$VERSION")" ]; then
+            echo "::error::ブランチ release/$VERSION は、すでにあります（前回の残りなら、消してから再実行）"; exit 1
+          fi
+
+      # この時点では、手元（ランナー）のコミットだけ。アップロードが成功するまで、何も push しない
+      - name: 版を上げるコミット
+        id: bump
+        if: inputs.version != ''
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -c "release/$VERSION"
+          node scripts/release-version.mjs bump
+          git add package.json ios/App/App.xcodeproj/project.pbxproj
+          git commit -m "版を $VERSION に上げる"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -96,6 +138,53 @@ jobs:
             -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
             -exportPath "$RUNNER_TEMP/export" \
             "${AUTH[@]}"
+
+      # アップロードが成功したときだけ（前のステップが失敗すると、ここへ来ない）。ブランチとタグは、まとめて 1 回で push する
+      - name: タグとブランチを push
+        id: push
+        if: inputs.version != ''
+        env:
+          VERSION: ${{ inputs.version }}
+          BUILT_SHA: ${{ steps.bump.outputs.sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # ビルドしたコミットのまま（ビルド中に HEAD が動いていない）ことを確かめる
+          [ "$(git rev-parse HEAD)" = "$BUILT_SHA" ]
+          git tag -a "v$VERSION" "$BUILT_SHA" -m "v$VERSION"
+          AUTH="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64)"
+          echo "::add-mask::$AUTH"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $AUTH" \
+            push --atomic origin "release/$VERSION" "v$VERSION"
+
+      # PR は、作れなければ（リポジトリの設定で許可されていないなど）、要約に手順を出すだけにする。アップロードとタグは済んでいる
+      - name: 版を上げる PR
+        if: inputs.version != ''
+        env:
+          VERSION: ${{ inputs.version }}
+          REF_INPUT: ${{ inputs.ref }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          BASE=main
+          if [ -n "$(git ls-remote --heads "https://github.com/$GITHUB_REPOSITORY.git" "refs/heads/$REF_INPUT")" ]; then BASE="$REF_INPUT"; fi
+          {
+            echo "## v$VERSION をアップロードしました"
+            echo "- ビルドしたコミット：\`$(git rev-parse --short HEAD)\`（タグ \`v$VERSION\`、ブランチ \`release/$VERSION\`）"
+            echo "- 次：App Store Connect の TestFlight で、ビルドの処理を待つ"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if URL=$(gh pr create --base "$BASE" --head "release/$VERSION" \
+              --title "版を $VERSION に上げる" \
+              --body "リリース用ワークフローが、v$VERSION をビルド・アップロードしたあとに作った PR です（タグ v$VERSION は、このブランチの先頭に付いています）。マージして、記録を main に戻してください。" 2>&1); then
+            echo "- PR：$URL" >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "- PR は作れませんでした（$URL）。手元で作る："
+              echo '```'
+              echo "gh pr create --base $BASE --head release/$VERSION --title '版を $VERSION に上げる' --fill"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: 鍵を消す
         if: always()
