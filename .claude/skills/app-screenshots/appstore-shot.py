@@ -134,30 +134,30 @@ def draw_caption(im, title):
 
 
 def hero(title):
-    """最初の1枚：画面は出さず、アプリ自身の背景の写真（窓辺のカップ）と、アイコン・名前を大きく見せる。
+    """最初の1枚：画面は出さず、アプリ自身の背景の写真（窓辺のカップ）を大きく見せ、名前とサブタイトルを添える。
 
     参考にしたアプリは、最初の1枚だけ、画面の枠から出た見せ方をしていた。
     """
     root = here.parents[2]
     im = background()
     draw_caption(im, title)
-    pw, x0, y0, rad = 1040, (W - 1040) // 2, 420, 90
+    # 写真とアイコンが、ほぼ同じ絵（窓辺のロゼッタ）になるので、アイコンは出さない（ストアのページの上にも出る）。
+    # 写真を大きくして、名前とサブタイトルを添える
+    pw, x0, y0, rad = 1100, (W - 1100) // 2, 360, 90
     photo = Image.open(root / 'public/world/light/morning.webp').convert('RGB')
     photo = photo.resize((pw, round(photo.height * pw / photo.width)), Image.LANCZOS)
-    shadow = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+    shadow = Image.new('RGBA', (W, H), (90, 60, 30, 0))
     ImageDraw.Draw(shadow).rounded_rectangle((x0, y0 + 20, x0 + pw, y0 + photo.height + 20), radius=rad, fill=(90, 60, 30, 120))
     shadow = shadow.filter(ImageFilter.GaussianBlur(34))
     im.paste(shadow, (0, 0), shadow)
     mask = Image.new('L', photo.size, 0)
     ImageDraw.Draw(mask).rounded_rectangle((0, 0, photo.width - 1, photo.height - 1), radius=rad, fill=255)
     im.paste(photo, (x0, y0), mask)
-    # アイコンと名前（写真の下、中央）
-    icon = Image.open(root / 'ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png').convert('RGB').resize((280, 280), Image.LANCZOS)
-    m = Image.new('L', (280, 280), 0)
-    ImageDraw.Draw(m).rounded_rectangle((0, 0, 279, 279), radius=64, fill=255)
-    iy = y0 + photo.height + 190
-    im.paste(icon, ((W - 280) // 2, iy), m)
-    ImageDraw.Draw(im).text((W / 2, iy + 280 + 160), 'ラテ帳', font=ImageFont.truetype(HEAD, 110), fill=INK, anchor='mm')
+    # 名前とサブタイトル（写真の下の余白の、真ん中）
+    d = ImageDraw.Draw(im)
+    cy = (y0 + photo.height + H) // 2
+    d.text((W / 2, cy - 70), 'ラテ帳', font=ImageFont.truetype(HEAD, 120), fill=INK, anchor='mm')
+    d.text((W / 2, cy + 75), '動画と写真で、上達が見える練習帳', font=ImageFont.truetype('/System/Library/Fonts/ヒラギノ角ゴシック W4.ttc', 52), fill=(110, 92, 75), anchor='mm')
     return im
 
 
@@ -169,7 +169,7 @@ def compose(clean, title):
     x0, y0, rad = (W - sw) // 2, 440, 118
     shot = clean.resize((sw, sh), Image.LANCZOS)
     # 影 → 画面（下は、はみ出させる。画面の続きがあることを見せる）→ 細い線
-    shadow = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+    shadow = Image.new('RGBA', (W, H), (90, 60, 30, 0))
     ImageDraw.Draw(shadow).rounded_rectangle((x0, y0 + 20, x0 + sw, y0 + sh + 20), radius=rad, fill=(90, 60, 30, 120))
     shadow = shadow.filter(ImageFilter.GaussianBlur(34))
     im.paste(shadow, (0, 0), shadow)
