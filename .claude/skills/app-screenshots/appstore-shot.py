@@ -3,6 +3,7 @@
 #   <出力>/clean/ … 状態バーを 9:41・電波・電池満タンに差し替えて、1179×2556 にしたもの（文字なし）
 #   <出力>/store/ … clean に、説明の文字・背景・枠を足したもの（App Store に出すのは、こちら）
 # 文言・順番・どの画像を使うかは、同じ場所の appstore-captions.json で決める（file は、撮った画像の拡張子なしの名前）。
+# 最初の1枚の subtitle は、App Store のサブタイトル（docs/app-store-submission.md の 4-1）と同じにする。
 # macOS のヒラギノ・SF を使う。透明なしの PNG を書き出す。
 import json
 import sys
@@ -20,8 +21,11 @@ W, H = 1179, 2556  # iPhone 6.3 インチ（Dynamic Island の機種）の大き
 ACCENT = (168, 98, 47)
 INK, LINE = (37, 37, 40), (200, 180, 155)
 BG_TOP, BG_BOTTOM = (247, 240, 229), (231, 214, 192)
+# 影の色。ぼかす前の地（透明）にも、この色を使う（地の色が違うと、ぼかしで縁がその色に濁る）
+SHADOW = (90, 60, 30)
 
 HEAD = '/System/Library/Fonts/ヒラギノ角ゴシック W7.ttc'
+BODY = '/System/Library/Fonts/ヒラギノ角ゴシック W4.ttc'
 
 
 def find(stem):
@@ -104,12 +108,13 @@ def background():
     a = (np.array(BG_TOP) * (1 - g) + np.array(BG_BOTTOM) * g) * np.ones((1, W, 1))
     im = Image.fromarray(a.astype('uint8'))
     # 窓辺の光のような、ぼやけた丸（飾りは、これだけ）
-    glow = Image.new('RGBA', (W, H), (0, 0, 0, 0))
-    gd = ImageDraw.Draw(glow)
-    gd.ellipse((W - 560, -300, W + 260, 520), fill=(255, 230, 190, 90))
-    gd.ellipse((-340, 1500, 420, 2260), fill=(214, 160, 110, 45))
-    glow = glow.filter(ImageFilter.GaussianBlur(120))
-    im.paste(glow, (0, 0), glow)
+    # 丸ごとに、地をその丸の色の透明にしてからぼかす（透明な黒の地だと、縁の色が黒に寄り、灰色に濁る）
+    for box, color, alpha in (((W - 560, -300, W + 260, 520), (255, 230, 190), 90),
+                              ((-340, 1500, 420, 2260), (214, 160, 110), 45)):
+        glow = Image.new('RGBA', (W, H), color + (0,))
+        ImageDraw.Draw(glow).ellipse(box, fill=color + (alpha,))
+        glow = glow.filter(ImageFilter.GaussianBlur(120))
+        im.paste(glow, (0, 0), glow)
     return im
 
 
@@ -132,31 +137,33 @@ def draw_caption(im, title):
         y += 124
 
 
-def hero(title):
-    """最初の1枚：画面は出さず、アプリ自身の背景の写真（窓辺のカップ）と、アイコン・名前を大きく見せる。
+def hero(title, subtitle):
+    """最初の1枚：画面は出さず、アプリ自身の背景の写真（窓辺のカップ）を大きく見せ、名前とサブタイトルを添える。
 
     参考にしたアプリは、最初の1枚だけ、画面の枠から出た見せ方をしていた。
     """
     root = here.parents[2]
     im = background()
     draw_caption(im, title)
-    pw, x0, y0, rad = 1040, (W - 1040) // 2, 420, 90
+    # 写真とアイコンが、ほぼ同じ絵（窓辺のロゼッタ）になるので、アイコンは出さない（ストアのページの上にも出る）。
+    # 写真を大きくして、名前とサブタイトルを添える
+    pw, x0, y0, rad = 1100, (W - 1100) // 2, 360, 90
     photo = Image.open(root / 'public/world/light/morning.webp').convert('RGB')
     photo = photo.resize((pw, round(photo.height * pw / photo.width)), Image.LANCZOS)
-    shadow = Image.new('RGBA', (W, H), (0, 0, 0, 0))
-    ImageDraw.Draw(shadow).rounded_rectangle((x0, y0 + 20, x0 + pw, y0 + photo.height + 20), radius=rad, fill=(90, 60, 30, 120))
+    shadow = Image.new('RGBA', (W, H), SHADOW + (0,))
+    ImageDraw.Draw(shadow).rounded_rectangle((x0, y0 + 20, x0 + pw, y0 + photo.height + 20), radius=rad, fill=SHADOW + (120,))
     shadow = shadow.filter(ImageFilter.GaussianBlur(34))
     im.paste(shadow, (0, 0), shadow)
     mask = Image.new('L', photo.size, 0)
     ImageDraw.Draw(mask).rounded_rectangle((0, 0, photo.width - 1, photo.height - 1), radius=rad, fill=255)
     im.paste(photo, (x0, y0), mask)
-    # アイコンと名前（写真の下、中央）
-    icon = Image.open(root / 'ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png').convert('RGB').resize((280, 280), Image.LANCZOS)
-    m = Image.new('L', (280, 280), 0)
-    ImageDraw.Draw(m).rounded_rectangle((0, 0, 279, 279), radius=64, fill=255)
-    iy = y0 + photo.height + 190
-    im.paste(icon, ((W - 280) // 2, iy), m)
-    ImageDraw.Draw(im).text((W / 2, iy + 280 + 160), 'ラテ帳', font=ImageFont.truetype(HEAD, 110), fill=INK, anchor='mm')
+    # 名前とサブタイトル（写真の下の余白の、真ん中）
+    d = ImageDraw.Draw(im)
+    cy = (y0 + photo.height + H) // 2
+    d.text((W / 2, cy - 70), 'ラテ帳', font=ImageFont.truetype(HEAD, 120), fill=INK, anchor='mm')
+    small = ImageFont.truetype(BODY, 52)
+    assert d.textlength(subtitle, font=small) <= W - 120, f'サブタイトルが長すぎる：{subtitle}'
+    d.text((W / 2, cy + 75), subtitle, font=small, fill=(110, 92, 75), anchor='mm')
     return im
 
 
@@ -168,8 +175,8 @@ def compose(clean, title):
     x0, y0, rad = (W - sw) // 2, 440, 118
     shot = clean.resize((sw, sh), Image.LANCZOS)
     # 影 → 画面（下は、はみ出させる。画面の続きがあることを見せる）→ 細い線
-    shadow = Image.new('RGBA', (W, H), (0, 0, 0, 0))
-    ImageDraw.Draw(shadow).rounded_rectangle((x0, y0 + 20, x0 + sw, y0 + sh + 20), radius=rad, fill=(90, 60, 30, 120))
+    shadow = Image.new('RGBA', (W, H), SHADOW + (0,))
+    ImageDraw.Draw(shadow).rounded_rectangle((x0, y0 + 20, x0 + sw, y0 + sh + 20), radius=rad, fill=SHADOW + (120,))
     shadow = shadow.filter(ImageFilter.GaussianBlur(34))
     im.paste(shadow, (0, 0), shadow)
     mask = Image.new('L', (sw, sh), 0)
@@ -183,7 +190,7 @@ def compose(clean, title):
 (out / 'store').mkdir(parents=True, exist_ok=True)
 for i, c in enumerate(captions, 1):
     if c.get('layout') == 'hero':
-        hero(c['title']).save(out / 'store' / f'{i}-{c["name"]}.png', optimize=True)
+        hero(c['title'], c['subtitle']).save(out / 'store' / f'{i}-{c["name"]}.png', optimize=True)
         print(i, c['name'])
         continue
     raw = Image.open(find(c['file']))
