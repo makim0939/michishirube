@@ -217,7 +217,7 @@ Contact: makim0939@gmail.com
 3. `.p8` を base64 にしてクリップボードへ：`base64 -i AuthKey_XXXX.p8 | pbcopy`
 4. GitHub のリポジトリ → Settings → Environments → New environment → 名前 `testflight`。
    - 「Required reviewers」に自分を入れる（起動しても、承認するまで動かない）。
-   - 「Deployment branches and tags」は、`main` だけに限ると安全（その場合、別の ref を上げるときは、一時的に広げる）。
+   - 「Deployment branches and tags」は、**`main` だけに限る**（選んだ ref のコード・ビルド設定が、鍵を持つジョブで動くため。別のブランチを上げるときは、中身を自分で確かめたうえで、一時的に広げる）。
 5. その Environment の Secrets に、4 つ登録する：
 
    | 名前 | 中身 |

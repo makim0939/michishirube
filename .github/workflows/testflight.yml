@@ -12,8 +12,9 @@ on:
         required: true
       runner:
         description: 'ランナー（Xcode の版は、ここで決まる）'
+        type: choice
+        options: [macos-latest, macos-26, macos-15]
         default: macos-latest
-        required: true
 
 permissions:
   contents: read
@@ -29,6 +30,7 @@ jobs:
     environment: testflight
     timeout-minutes: 45
     steps:
+      # 選んだ ref の中身が、署名の秘密を持つこのジョブで動く。Environment のブランチ制限と承認が防御になる
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref }}
@@ -57,7 +59,6 @@ jobs:
           echo "::add-mask::$APPLE_TEAM_ID"
 
           KEY_PATH="$RUNNER_TEMP/AuthKey.p8"
-          trap 'rm -f "$KEY_PATH"' EXIT
           echo "$ASC_API_KEY_P8" | base64 --decode > "$KEY_PATH"
           chmod 600 "$KEY_PATH"
 
