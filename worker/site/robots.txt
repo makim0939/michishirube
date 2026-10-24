@@ -1,0 +1,2 @@
+# Cloudflare の管理された robots.txt の設定で、この前に Content Signals の文が足されて配られる
+Sitemap: https://latte.makimura.me/sitemap.xml

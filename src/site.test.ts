@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
@@ -64,6 +64,17 @@ describe('アプリのトップページ（サーバーと同じドメインで�
 
   it('トップページから、英語版のページ（/en）が見つかる', () => {
     expect(read('../worker/site/index.html')).toContain('hreflang="en" href="https://latte.makimura.me/en"')
+  })
+
+  // ページを足したのに、サイトマップに載せ忘れないように
+  it('サイトマップに、サイトのページがすべて載っていて、robots.txt から見つかる', () => {
+    const sitemap = read('../worker/site/sitemap.xml')
+    const locs = [...sitemap.matchAll(/<loc>https:\/\/latte\.makimura\.me\/([\w-]*)<\/loc>/g)].map((m) => m[1] || 'index')
+    const pages = readdirSync(new URL('../worker/site/', import.meta.url))
+      .filter((name) => name.endsWith('.html'))
+      .map((name) => name.replace(/\.html$/, ''))
+    expect(locs.sort()).toEqual(pages.sort())
+    expect(read('../worker/site/robots.txt')).toContain('Sitemap: https://latte.makimura.me/sitemap.xml')
   })
 })
 
