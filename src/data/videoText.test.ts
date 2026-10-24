@@ -58,17 +58,17 @@ describe('YouTube のタイトルと説明の書き方', () => {
     expect(v.メモ).toBeUndefined()
   })
 
-  it('通し番号は、番号が分かるときだけ入る。分からない行は、行ごと消える', () => {
-    expect(templateVars(0, undefined, undefined, 12).通し番号).toBe('12')
-    expect(templateVars(0).通し番号).toBeUndefined()
-    const t = { title: '{型}', description: 'No.{通し番号}\n{結果}' }
-    expect(buildVideoText(t, { 型: 'ハート', 通し番号: '12', 結果: 'x' }).description).toBe('No.12\nx')
+  it('番号は、番号が分かるときだけ入る。分からない行は、行ごと消える', () => {
+    expect(templateVars(0, undefined, undefined, 12).番号).toBe('12')
+    expect(templateVars(0).番号).toBeUndefined()
+    const t = { title: '{型}', description: 'No.{番号}\n{結果}' }
+    expect(buildVideoText(t, { 型: 'ハート', 番号: '12', 結果: 'x' }).description).toBe('No.12\nx')
     expect(buildVideoText(t, { 型: 'ハート', 結果: 'x' }).description).toBe('x')
   })
 
-  it('標準の書き方には、通し番号を入れない', () => {
-    expect(DEFAULT_TITLE).not.toContain('通し番号')
-    expect(DEFAULT_DESCRIPTION).not.toContain('通し番号')
+  it('標準の書き方には、番号を入れない', () => {
+    expect(DEFAULT_TITLE).not.toContain('番号')
+    expect(DEFAULT_DESCRIPTION).not.toContain('番号')
   })
 })
 
@@ -109,13 +109,13 @@ describe('書き方の保存', () => {
   })
 })
 
-describe('通し番号', () => {
+describe('番号', () => {
   it('動画のタイトルとプレビューで、全記録の中の何杯目かが同じになる', async () => {
     await db.records.bulkPut([
       { id: 'a', skillId: 's', createdAt: 100, mediaIds: [], outcome: 'meh', reason: '', nextAction: '' },
       { id: 'b', skillId: 's', createdAt: 200, mediaIds: [], outcome: 'meh', reason: '', nextAction: '' },
     ] as never)
-    await setVideoTemplate('title', 'No.{通し番号}')
+    await setVideoTemplate('title', 'No.{番号}')
     const media = { id: 'm2', recordId: 'b', skillId: 's', type: 'video/mp4', createdAt: 200 } as Media
     expect((await videoMeta(media)).title).toBe('No.2')
     expect(buildVideoText(await getVideoTemplates(), (await previewVars()).vars).title).toBe('No.2')

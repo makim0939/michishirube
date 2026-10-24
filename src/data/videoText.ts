@@ -8,7 +8,7 @@ import { cupNumbers } from './repo'
  * YouTube に付けるタイトルと説明の「書き方」（テンプレート）。
  * `{型}` のように波かっこで囲んだ項目が、動画ごとの記録の中身に置き換わる。端末ごとの設定（動画の設定と同じ）
  */
-export const TEMPLATE_FIELDS = ['型', '通し番号', '日付', '日時', '結果', 'メモ', '次の一手'] as const
+export const TEMPLATE_FIELDS = ['型', '番号', '日付', '日時', '結果', 'メモ', '次の一手'] as const
 export type TemplateField = (typeof TEMPLATE_FIELDS)[number]
 export type TemplateVars = Partial<Record<TemplateField, string>>
 
@@ -88,7 +88,7 @@ export function buildVideoText(templates: VideoTemplates, vars: TemplateVars): {
 export function templateVars(ts: number, record?: PracticeRecord, skill?: Skill, number?: number): TemplateVars {
   return {
     型: skill?.name,
-    通し番号: number ? String(number) : undefined,
+    番号: number ? String(number) : undefined,
     日付: formatDate(ts),
     日時: formatDateTime(ts),
     結果: record?.outcome ? OUTCOME_LABEL[record.outcome] : undefined,
@@ -135,7 +135,7 @@ export async function previewVars(): Promise<{ vars: TemplateVars; sample: boole
   }
   const now = Date.now()
   return {
-    vars: { 型: 'ハート', 通し番号: '12', 日付: formatDate(now), 日時: formatDateTime(now), 結果: OUTCOME_LABEL.meh, 次の一手: 'ミルクを高い位置から入れる' },
+    vars: { 型: 'ハート', 番号: '12', 日付: formatDate(now), 日時: formatDateTime(now), 結果: OUTCOME_LABEL.meh, 次の一手: 'ミルクを高い位置から入れる' },
     sample: true,
   }
 }
