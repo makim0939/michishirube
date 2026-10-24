@@ -2,11 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import {
   cameraConstraints,
   extensionFor,
+  fallBackFromRecorderType,
   focusAt,
   judgeRecording,
   keepAutoFocus,
   MAX_RECORDING_MS,
-  markRecorderTypeBroken,
   pickRecorderMimeType,
   QUALITY,
   recorderSupports,
@@ -122,6 +122,9 @@ export function Recorder({
   useEffect(() => {
     let cancelled = false
     setReady(false)
+    // 開けなかったあと、音なし・写真・画質に切り替えて開き直したときは、前の失敗を消して、もう一度試す
+    // （マイクだけ許可しなかった人が、音なし・写真に切り替えれば撮れるように）
+    setError(undefined)
     navigator.mediaDevices
       .getUserMedia({ video: cameraConstraints(quality), audio: withAudio })
       .then((s) => {
@@ -137,6 +140,8 @@ export function Recorder({
         setReady(true)
       })
       .catch((e: unknown) => {
+        // 切り替える前の開き方が、あとから失敗した。いま開いているカメラの上に、古い失敗を出さない
+        if (cancelled) return
         const denied = e instanceof DOMException && e.name === 'NotAllowedError'
         setError(
           denied
@@ -185,6 +190,18 @@ export function Recorder({
     recorder.current?.stop()
   }
 
+  /**
+   * 録画を始められなかった。「使える」と答えたのに作れない・始められない形式なら、Android では次からほかの形式で撮る
+   * （iPhone は MP4 しか使わないので、切り替えずに知らせるだけ）
+   */
+  const startFailed = (mimeType: string) => {
+    if (fallBackFromRecorderType(mimeType, audio, quality)) {
+      setNotice(t.recorder.switchedFormat)
+    } else {
+      setError(t.recorder.cannotStart)
+    }
+  }
+
   const start = () => {
     stoppedByUser.current = false
     hiddenWhileRecording.current = false
@@ -202,7 +219,7 @@ export function Recorder({
         ...(audio ? { audioBitsPerSecond: QUALITY[quality].audio } : {}),
       })
     } catch {
-      setError(t.recorder.cannotStart)
+      startFailed(mimeType)
       return
     }
     r.ondataavailable = (e) => {
@@ -225,10 +242,7 @@ export function Recorder({
       }
       if (verdict === 'broken') {
         // この形式はこの端末では撮れない。ほかの形式があれば、次からそちらで撮る
-        const container = mimeType.split(';')[0]
-        const others = !!pickRecorderMimeType((t) => recorderSupports(t) && !t.startsWith(container), audio, quality)
-        if (others) {
-          markRecorderTypeBroken(mimeType)
+        if (fallBackFromRecorderType(mimeType, audio, quality)) {
           setNotice(t.recorder.switchedFormat)
         } else {
           setError(t.recorder.failed)
@@ -242,7 +256,7 @@ export function Recorder({
     try {
       r.start(1000)
     } catch {
-      setError(t.recorder.cannotStart)
+      startFailed(mimeType)
       return
     }
     setStartedAt(Date.now())
@@ -304,6 +318,8 @@ export function Recorder({
 
   const switchMode = (next: Mode) => {
     writeStorage('local', MODE_KEY, next)
+    // カメラは開けていて、録画を始められなかっただけなら、写真には切り替えれば撮れる（開き直さないときも、失敗を消す）
+    if (ready) setError(undefined)
     setMode(next)
   }
 
@@ -368,7 +384,8 @@ export function Recorder({
               <div className="row">
                 <button
                   className="btn small"
-                  disabled={!ready}
+                  // 開けなかったときも押せる（音なしなら、マイクを使わずに開き直せる）。準備中だけ押せない
+                  disabled={!ready && !error}
                   onClick={() => {
                     writeStorage('local', AUDIO_KEY, audio ? 'off' : 'on')
                     setAudio(!audio)
@@ -386,7 +403,7 @@ export function Recorder({
                       role="radio"
                       aria-checked={quality === q}
                       className={quality === q ? 'selected' : ''}
-                      disabled={!ready}
+                      disabled={!ready && !error}
                       onClick={() => setQuality(q)}
                     >
                       {QUALITY[q].shortSide}p
@@ -437,8 +454,9 @@ export function Recorder({
         )}
       </div>
       <div className="recorder-bottom">
-        {/* 動画と写真の切り替え（iPhone のカメラと同じく、シャッターの上に） */}
-        {!recording && !error && (
+        {/* 動画と写真の切り替え（iPhone のカメラと同じく、シャッターの上に）。
+            開けなかったときも出す：写真ならマイクを使わないので、マイクだけ許可しなかった人も撮れる */}
+        {!recording && (
           <div className="recorder-modes" role="radiogroup" aria-label={t.recorder.mode}>
             {(['video', 'photo'] as const).map((m) => (
               <button

@@ -9,6 +9,7 @@ import {
   loginWithGoogle,
   logout,
   resumeWebAuth,
+  takeLoginReturn,
 } from '../data/account'
 import { db } from '../data/db'
 import { getSyncConfig, getSyncStatus, runSync } from '../data/sync'
@@ -27,6 +28,12 @@ import { t } from '../i18n'
 const loginMessage = (firstDevice: boolean) =>
   firstDevice ? t.account.loggedInFirst : t.account.loggedIn
 
+/** ログインを終えたら、ログインを始めた画面（「動画」など）へ戻す。始めた画面がなければ、アカウントの画面のまま */
+async function returnAfterLogin() {
+  const path = await takeLoginReturn()
+  if (path) replace(path)
+}
+
 /** Web 版で、Google の画面から戻ってきたら結果を受け取る（戻り先の URL に一度きりのコードが付いてくる） */
 function useWebAuthResult() {
   const toast = useToast()
@@ -41,6 +48,7 @@ function useWebAuthResult() {
       if (result.kind === 'login') {
         const { firstDevice } = await completeLogin(result)
         toast.show(loginMessage(firstDevice))
+        await returnAfterLogin()
       } else {
         await saveYoutubeKey(result.refreshToken)
         toast.show(t.youtube.connected)
@@ -61,7 +69,10 @@ function LoginSection({ legacy }: { legacy: boolean }) {
     setBusy(true)
     const result = await run(method)
     setBusy(false)
-    if (result) toast.show(loginMessage(result.firstDevice))
+    if (result) {
+      toast.show(loginMessage(result.firstDevice))
+      await returnAfterLogin()
+    }
   }
   return (
     <section className="section">

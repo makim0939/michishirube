@@ -208,6 +208,7 @@ export const en: Messages = {
     deleteThis: 'Delete this record',
     saveAndMore: 'Save and one more',
     saveShort: 'Save',
+    unreadable: "Some videos or photos couldn't be loaded. Please choose them again",
   },
   recorder: {
     denied: "Camera (or microphone) access isn't allowed. Allow it in Settings, or use the system camera.",
@@ -288,7 +289,7 @@ export const en: Messages = {
     terms2: '. Videos are uploaded as "not made for kids."',
   },
   videoText: {
-    fields: { 型: 'pattern', 日付: 'date', 日時: 'datetime', 結果: 'result', メモ: 'notes', 次の一手: 'next step' },
+    fields: { 型: 'pattern', 番号: 'number', 日付: 'date', 日時: 'datetime', 結果: 'result', メモ: 'notes', 次の一手: 'next step' },
     defaultTitle: 'Latte art | {pattern} | {datetime}',
     defaultDescription: (site) => ['{result}', 'Notes: {notes}', 'Next step: {next step}', '', 'Recorded with Latte-chō', `${site}en`].join('\n'),
     sampleSkill: 'Heart',
@@ -430,11 +431,14 @@ export const en: Messages = {
         youtube_not_configured: "Can't connect to YouTube right now",
         google_not_configured: "Can't sign in with Google right now",
         apple_unavailable: "Can't sign in with Apple right now. Please try again in a while",
+        google_unavailable: "Couldn't reach Google. Please try again in a while",
+        internal: 'Something went wrong on the server. Please try again in a while',
       })[code ?? ''] ?? `Something went wrong (${status})`,
     privateBrowsing: "You can't sign in from this window (private browsing isn't supported)",
     loginOtherWindow: "Couldn't finish signing in here. Please try again in the window where you started",
     apple: (detail) => `Sign in with Apple failed (${detail})`,
-    verifyFailed: (status, message) => `Couldn't verify (${status}${message ? `: ${message}` : ''})`,
+    // サーバーの理由の文は日本語なので、英語では番号だけ出す
+    verifyFailed: (status) => `Couldn't verify your sign-in (${status})`,
     deleteFailed: (status) => `Couldn't delete (${status})`,
     signedIn: 'Signed in',
     signedInApple: 'Signed in with Apple',
@@ -467,6 +471,8 @@ export const en: Messages = {
     stopped: "It stopped partway and couldn't finish. The original is unchanged",
     playFailedWith: (detail) => `Couldn't play (${detail})`,
     playFailed: "Couldn't play",
+    switchedFormat: 'Switched to a format that works on this device. Tap "Done" again. The original is unchanged',
+    cannotRebuild: "This device couldn't re-encode the video. The original is unchanged",
   },
   backup: {
     noData: "Couldn't read data.json",

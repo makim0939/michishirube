@@ -4,13 +4,14 @@ import { t } from '../i18n'
 import { en } from '../i18n/en'
 import { SITE_URL } from '../platform'
 import { db } from './db'
+import { cupNumbers } from './repo'
 
 /**
  * YouTube に付けるタイトルと説明の「書き方」（テンプレート）。
  * `{型}` のように波かっこで囲んだ項目が、動画ごとの記録の中身に置き換わる。端末ごとの設定（動画の設定と同じ）。
  * 項目の名前は、日本語の名前を元にする（保存したテンプレートと、中身の受け渡しで使う）
  */
-export const TEMPLATE_FIELDS = ['型', '日付', '日時', '結果', 'メモ', '次の一手'] as const
+export const TEMPLATE_FIELDS = ['型', '番号', '日付', '日時', '結果', 'メモ', '次の一手'] as const
 export type TemplateField = (typeof TEMPLATE_FIELDS)[number]
 export type TemplateVars = Partial<Record<TemplateField, string>>
 
@@ -33,17 +34,40 @@ const DESCRIPTION_KEY = 'youtubeDescriptionTemplate'
 const TITLE_MAX = 100
 const DESCRIPTION_MAX_BYTES = 4900
 
-/** UTF-8 で max バイトまでに切る（日本語は1文字3バイトなので、文字数では足りない）。文字の途中では切らない */
-function cutBytes(text: string, max: number): string {
-  const enc = new TextEncoder()
-  let bytes = 0
+/**
+ * 見た目の1文字（書記素。国旗・家族の絵文字なども1つ）ずつに分ける。Intl.Segmenter が無い古い端末では、コードポイントで分ける
+ * （String#slice のように UTF-16 の単位で切ると、絵文字の途中で切れて、壊れた文字が残るため）
+ */
+function graphemes(text: string): Iterable<string> {
+  if (typeof Intl !== 'undefined' && 'Segmenter' in Intl) {
+    return Array.from(new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text), (s) => s.segment)
+  }
+  return text
+}
+
+/** 文字の途中では切らずに、measure で測った大きさが max までに収まるよう、頭から切る */
+function cutBy(text: string, max: number, measure: (s: string) => number): string {
+  let size = 0
   let out = ''
-  for (const ch of text) {
-    bytes += enc.encode(ch).length
-    if (bytes > max) break
+  for (const ch of graphemes(text)) {
+    size += measure(ch)
+    if (size > max) break
     out += ch
   }
   return out
+}
+
+/** UTF-8 で max バイトまでに切る（日本語は1文字3バイトなので、文字数では足りない） */
+function cutBytes(text: string, max: number): string {
+  const enc = new TextEncoder()
+  return cutBy(text, max, (ch) => enc.encode(ch).length)
+}
+
+/**
+ * タイトルを max 文字までに切る。UTF-16 の長さで測る（YouTube が UTF-16 で数えても、コードポイントで数えても、上限に収まるように）
+ */
+export function cutChars(text: string, max: number): string {
+  return cutBy(text, max, (ch) => ch.length)
 }
 
 /**
@@ -92,13 +116,17 @@ export function buildVideoText(templates: VideoTemplates, vars: TemplateVars): {
       .replace(/(\s*\|\s*){2,}/g, ' | ')
       .replace(/^\s*[｜|]\s*|\s*[｜|]\s*$/g, '')
   const title = oneLine(templates.title) || oneLine(DEFAULT_TITLE) || t.settings.appName
-  return { title: title.slice(0, TITLE_MAX), description: cutBytes(clean(renderTemplate(templates.description, vars)), DESCRIPTION_MAX_BYTES) }
+  return { title: cutChars(title, TITLE_MAX), description: cutBytes(clean(renderTemplate(templates.description, vars)), DESCRIPTION_MAX_BYTES) }
 }
 
-/** 記録・型から、テンプレートに入れる中身を作る。ts は動画を撮った時刻 */
-export function templateVars(ts: number, record?: PracticeRecord, skill?: Skill): TemplateVars {
+/**
+ * 記録・型から、テンプレートに入れる中身を作る。ts は動画を撮った時刻。
+ * number は杯の通し番号（No.。型の詳細の「最新と最初」の比較と同じ数）
+ */
+export function templateVars(ts: number, record?: PracticeRecord, skill?: Skill, number?: number): TemplateVars {
   return {
     型: skill?.name,
+    番号: number ? String(number) : undefined,
     日付: formatDate(ts),
     日時: formatDateTime(ts),
     結果: record?.outcome ? OUTCOME_LABEL[record.outcome] : undefined,
@@ -140,11 +168,12 @@ export async function previewVars(): Promise<{ vars: TemplateVars; sample: boole
     const skill = await db.skills.get(record.skillId)
     // 実際のタイトルは動画を撮った時刻を使うので、プレビューも、その記録の最後の動画の時刻にそろえる
     const media = record.mediaIds.length ? await db.media.get(record.mediaIds[record.mediaIds.length - 1]) : undefined
-    return { vars: templateVars(media?.createdAt ?? record.createdAt, record, skill), sample: false }
+    const number = (await cupNumbers([record])).get(record.id)
+    return { vars: templateVars(media?.createdAt ?? record.createdAt, record, skill, number), sample: false }
   }
   const now = Date.now()
   return {
-    vars: { 型: t.videoText.sampleSkill, 日付: formatDate(now), 日時: formatDateTime(now), 結果: OUTCOME_LABEL.meh, 次の一手: t.videoText.sampleNext },
+    vars: { 型: t.videoText.sampleSkill, 番号: '12', 日付: formatDate(now), 日時: formatDateTime(now), 結果: OUTCOME_LABEL.meh, 次の一手: t.videoText.sampleNext },
     sample: true,
   }
 }

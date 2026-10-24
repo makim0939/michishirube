@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { APP_SCHEME, bearerToken, isAllowedAppScheme, isAllowedReturn, LEGACY_APP_SCHEME, PREVIOUS_APP_SCHEME, safeEqual, signState, verifyState } from './auth'
+import { APP_SCHEME, bearerToken, isAllowedAppScheme, isAllowedReturn, safeEqual, signState, verifyState } from './auth'
 import { BadRequest, parseSyncRequest } from './sync'
 
 describe('トークン', () => {
@@ -27,10 +27,10 @@ describe('OAuth の state', () => {
     expect(await verifyState(token, secret, now + 11 * 60 * 1000)).toBeNull()
   })
 
-  it('アプリの URL スキームは、今のものと、Bundle ID を変える前の2つだけ（よそのアプリへ送らない）', async () => {
+  it('アプリの URL スキームは、今のものだけ（Bundle ID を変える前のものを含め、よそのアプリへ送らない）', async () => {
     expect(isAllowedAppScheme(APP_SCHEME)).toBe(true)
-    expect(isAllowedAppScheme(PREVIOUS_APP_SCHEME)).toBe(true)
-    expect(isAllowedAppScheme(LEGACY_APP_SCHEME)).toBe(true)
+    expect(isAllowedAppScheme('me.makimura.lattecho')).toBe(false)
+    expect(isAllowedAppScheme('io.github.makim0939.lattecho')).toBe(false)
     expect(isAllowedAppScheme('evil.example.app')).toBe(false)
     expect(isAllowedAppScheme(undefined)).toBe(false)
     // state に載せて戻せる。型が違う state は通さない

@@ -16,6 +16,12 @@ export interface GoogleConfig {
 
 export class ReauthRequired extends Error {}
 
+/**
+ * Google のトークンの窓口が、JSON でない応答（障害のときの HTML など）を返した・つながらなかった。
+ * 利用者のせいでも、こちらの設定のせいでもない一時的なものとして、ほかのエラーと分けて返す
+ */
+export class GoogleUnavailable extends Error {}
+
 export function authUrl(config: GoogleConfig, redirectUri: string, state: string, kind: 'login' | 'youtube'): string {
   const params = new URLSearchParams({
     client_id: config.clientId,
@@ -44,8 +50,18 @@ async function requestToken(body: Record<string, string>): Promise<TokenResponse
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams(body),
+  }).catch((e: unknown) => {
+    throw new GoogleUnavailable(`Google のトークンの窓口につながりません: ${e instanceof Error ? e.message : String(e)}`)
   })
-  return (await res.json()) as TokenResponse
+  const text = await res.text()
+  try {
+    const json: unknown = JSON.parse(text)
+    if (typeof json === 'object' && json !== null) return json as TokenResponse
+  } catch {
+    // 下で投げる
+  }
+  // 中身はログにだけ残す（Google の応答の文を、アプリには返さない）
+  throw new GoogleUnavailable(`Google のトークンの応答が JSON ではありません（${res.status}）: ${text.slice(0, 200)}`)
 }
 
 /** 認可コードを、Google のトークンに替える（保存はしない） */

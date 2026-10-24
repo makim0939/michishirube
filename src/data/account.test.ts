@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { isAppleCancelled, isOurServer, SERVER_URL } from './account'
+import { db } from './db'
+import { isAppleCancelled, isOurServer, rememberLoginReturn, SERVER_URL, takeLoginReturn } from './account'
 
 describe('このアプリのサーバーの URL', () => {
   it('いまの URL と、独自ドメインにする前の URL は、末尾の / があっても同じサーバーとして扱う', () => {
@@ -24,5 +25,25 @@ describe('Apple の画面を閉じたときの取り消し', () => {
     expect(isAppleCancelled(null)).toBe(false)
     expect(isAppleCancelled(undefined)).toBe(false)
     expect(isAppleCancelled('1001')).toBe(false)
+  })
+})
+
+describe('ログインを終えたあとの戻り先', () => {
+  it('覚えた戻り先は、一度だけ取り出せる', async () => {
+    await rememberLoginReturn('/settings/storage')
+    expect(await takeLoginReturn()).toBe('/settings/storage')
+    expect(await takeLoginReturn()).toBeUndefined()
+  })
+
+  it('覚えていなければ、戻り先はない（アカウントの画面のまま）', async () => {
+    expect(await takeLoginReturn()).toBeUndefined()
+  })
+
+  it('古い印と、設定の外を指す印は、使わずに消す', async () => {
+    await db.meta.put({ key: 'login:return', value: { path: '/settings/storage', at: Date.now() - 11 * 60 * 1000 } })
+    expect(await takeLoginReturn()).toBeUndefined()
+    await db.meta.put({ key: 'login:return', value: { path: '/records', at: Date.now() } })
+    expect(await takeLoginReturn()).toBeUndefined()
+    expect(await db.meta.get('login:return')).toBeUndefined()
   })
 })

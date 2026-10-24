@@ -152,6 +152,16 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
   const [missing, setMissing] = useState(false)
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
+  /**
+   * 撮った・選んだのに、まだ一覧に入っていない動画・写真の数（写真の縮小や、Android でメモリに写している途中）。
+   * この間に保存すると、その動画・写真の無い記録になってしまうので、保存は入り終わるのを待つ。戻るときも、撮ったものとして確認を出す
+   */
+  const [preparing, setPreparing] = useState(0)
+  /** 入り終わるのを待っている保存（「もう1杯」か）。待っていなければ null */
+  const queuedSave = useRef<boolean | null>(null)
+  const saveRef = useRef<(more: boolean) => unknown>(undefined)
+  /** 前に入れ始めた動画・写真が一覧に入り終わる時。入れ始めた順に並べるため、後から始めたものは、これを待ってから入れる */
+  const prepChain = useRef<Promise<unknown>>(Promise.resolve())
   /** 保存せずに離れようとしたときの行き先（null なら確認を出していない） */
   const [confirmLeave, setConfirmLeave] = useState<{ back: true } | { to: string } | null>(null)
   const [recording, setRecording] = useState(false)
@@ -203,7 +213,7 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
   const hasInput =
     !!outcome || !!draft.reason?.trim() || !!draft.nextAction?.trim() || (draft.causes?.length ?? 0) > 0
   // 新しい記録は、動画・写真か入力が1つでもあれば残す価値がある（無いまま戻ると何も失わない）
-  const unsaved = editing ? dirty : items.length > 0 || hasInput
+  const unsaved = preparing > 0 || (editing ? dirty : items.length > 0 || hasInput)
 
   /** 保存前の内容があれば、黙って離れずに確認を出す（出したら true。false なら、そのまま離れてよい） */
   const askBeforeLeaving = () => {
@@ -211,6 +221,21 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
     setConfirmLeave({ back: true })
     return true
   }
+
+  // 入り終わるのを待っていた保存を、入ったあとの一覧で続ける
+  useEffect(() => {
+    if (preparing > 0 || queuedSave.current === null) return
+    const more = queuedSave.current
+    queuedSave.current = null
+    void saveRef.current?.(more)
+  }, [preparing])
+  // 画面を離れたら、待っていた保存はやめる（「保存せずに戻る」を選んだあとに、保存されてしまわないように）
+  useEffect(
+    () => () => {
+      queuedSave.current = null
+    },
+    [],
+  )
 
   // Android の「戻る」（ボタン・端からのスワイプ）も、画面の「<」と同じく確認を通す。
   // 確認が出ているときの「戻る」は、確認を閉じて続ける。カメラ・編集・型の選択は、それぞれが先に受け止める
@@ -231,7 +256,7 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
   const causeOptions: readonly string[] = SHOW_CAUSE_INPUT && patternFor(skill.name) ? LATTE_CAUSES : []
   const hasNewMedia = items.some((i) => i.kind === 'new' || (i.kind === 'existing' && i.replaced))
   // 新しい記録で、まだ何も無い（保存しても「何か入れてください」になるだけなので、押せないようにする）
-  const nothingToSave = !editing && items.length === 0 && !hasInput
+  const nothingToSave = !editing && items.length === 0 && preparing === 0 && !hasInput
 
   const change = () => setDirty(true)
 
@@ -269,23 +294,49 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
       toast.show(t.record.tooLong, 'error')
     }
     if (picked.length === 0) return
-    // 写真は縮小してから持つ（端末の容量と同期の量を抑える）。
-    // Android は、選んだファイルを少したつと読めなくなる（読む許可が切れる）ので、動画もすぐメモリに写す
-    const prepared = await Promise.all(
-      picked.map((f) => (f.type.startsWith('image/') ? compressPhoto(f) : isAndroidApp ? detach(f) : f)),
-    )
-    // 縮小した写真もメモリ上に作り直したもの
-    const added = prepared.map((file, i) => ({
-      kind: 'new' as const,
-      key: nextKey(),
-      file,
-      inMemory: inMemory || file !== picked[i],
-      // 撮った画質は、動画だけに付ける
-      ...(quality && file.type.startsWith('video/') ? { quality } : {}),
-    }))
-    setItems((prev) => [...prev, ...added])
-    change()
-    for (const a of added) if (a.file.type.startsWith('video/')) attachPoster(a.key, a.file)
+    setPreparing((n) => n + picked.length)
+    try {
+      // 写真は縮小してから持つ（端末の容量と同期の量を抑える）。
+      // Android は、選んだファイルを少したつと読めなくなる（読む許可が切れる）ので、動画もすぐメモリに写す。
+      // 1つ読めなくても、ほかの動画・写真は入れる（撮り直さずに済むように）
+      // 準備は並んで進めてよいが、一覧に入れるのは入れ始めた順（大きな動画の後に撮った写真が、先に並ばないように）
+      const work = Promise.allSettled(
+        picked.map((f) => (f.type.startsWith('image/') ? compressPhoto(f) : isAndroidApp ? detach(f) : f)),
+      )
+      const ready = prepChain.current.then(() => work)
+      prepChain.current = ready
+      const settled = await ready
+      // 縮小した写真もメモリ上に作り直したもの
+      const added = settled.flatMap((r, i) =>
+        r.status === 'fulfilled'
+          ? [
+              {
+                kind: 'new' as const,
+                key: nextKey(),
+                file: r.value,
+                inMemory: inMemory || r.value !== picked[i],
+                // 撮った画質は、動画だけに付ける
+                ...(quality && r.value.type.startsWith('video/') ? { quality } : {}),
+              },
+            ]
+          : [],
+      )
+      if (added.length > 0) {
+        setItems((prev) => [...prev, ...added])
+        change()
+      }
+      for (const a of added) if (a.file.type.startsWith('video/')) attachPoster(a.key, a.file)
+      if (added.length < picked.length) {
+        // 待っていた保存はやめる（入らなかったものに気づかないまま、欠けた記録を残さないように）
+        if (queuedSave.current !== null) {
+          queuedSave.current = null
+          setSaving(false)
+        }
+        throw new Error(t.record.unreadable)
+      }
+    } finally {
+      setPreparing((n) => n - picked.length)
+    }
   }
 
   const removeItem = (item: Item) => {
@@ -315,9 +366,14 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
     attachPoster(key, file)
   }
 
-  /** more：保存したら、続けて次の杯を撮る */
-  const save = (more = false) =>
-    run(async () => {
+  /** more：保存したら、続けて次の杯を撮る。動画・写真が入り終わる前に押したら、入るのを待ってから保存する */
+  const save = (more = false) => {
+    if (preparing > 0) {
+      queuedSave.current = more
+      setSaving(true)
+      return
+    }
+    return run(async () => {
       setSaving(true)
       try {
         const reason = draft.reason ?? ''
@@ -382,6 +438,8 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
         setSaving(false)
       }
     })
+  }
+  saveRef.current = save
 
   const trimItem = items.find((i) => i.key === trimming)
   const trimBlob = trimItem && itemBlob(trimItem)
@@ -439,8 +497,8 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
           <p>
             {editing
               ? t.record.leaveEdited
-              : items.length > 0
-                ? t.record.leaveMedia(items.length)
+              : items.length + preparing > 0
+                ? t.record.leaveMedia(items.length + preparing)
                 : t.record.leaveInput}
           </p>
           <div className="row">
@@ -449,6 +507,8 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
               onClick={() => {
                 // 「保存せずに戻る」と選んだ書きかけは、次に開いたときに現れないよう消す
                 if (!editing) clearDraft()
+                // 動画・写真が入り終わるのを待っていた保存も、やめる
+                queuedSave.current = null
                 if ('to' in confirmLeave) go(confirmLeave.to)
                 else goBack(fallback)
               }}
@@ -463,7 +523,7 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
       )}
 
       <section className="section">
-        {items.length === 0 ? (
+        {items.length === 0 && preparing === 0 ? (
           // まだ撮っていない（カメラを閉じた・アプリのカメラが使えない）
           <>
             <div className="capture-buttons">
@@ -533,6 +593,12 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
                 </li>
               )
             })}
+            {/* 入れている途中の動画・写真の場所を先に空けておく（入ったときに、並びがずれないように） */}
+            {Array.from({ length: preparing }, (_, i) => (
+              <li key={`preparing-${i}`} aria-busy="true">
+                <div className="media placeholder" />
+              </li>
+            ))}
             {/* 撮り足す（アプリのカメラ。アルバムもカメラの中から選べる） */}
             <li>
               <button type="button" className="media add-media" aria-label={t.record.addMore} onClick={openCamera}>
@@ -555,7 +621,7 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
             {...(input.capture ? { capture: 'environment' as const } : {})}
             multiple={input.multiple}
             onChange={(e) => {
-              void addFiles(e.target.files)
+              void run(() => addFiles(e.target.files))
               e.target.value = ''
             }}
           />
@@ -698,13 +764,13 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
             setRecording(false)
             // できあがりの写真も撮ったら、動画と一緒に記録に入れる（カップの絵には写真を使う）
             const files = [video, photo].filter((f): f is File => !!f)
-            void addFiles(files, true, quality)
+            void run(() => addFiles(files, true, quality))
           }}
           onClose={() => {
             setRecording(false)
             // 何も撮らず、何も付けずに閉じたら、記録をやめて戻る（結果や次の一手を付けていたら、この画面に残る）
             const blank =
-              items.length === 0 && !outcome && !draft.reason && !draft.nextAction && !(draft.causes?.length ?? 0)
+              items.length === 0 && preparing === 0 && !outcome && !draft.reason && !draft.nextAction && !(draft.causes?.length ?? 0)
             if (!editing && blank) goBack(fallback)
           }}
           onAlbum={() => {
@@ -733,7 +799,7 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
 
       <div className="sticky-actions">
         {editing ? (
-          <button className="btn primary block" disabled={saving || !dirty} onClick={() => save()}>
+          <button className="btn primary block" disabled={saving || (!dirty && preparing === 0)} onClick={() => save()}>
             {saving ? t.common.saving : t.common.save}
           </button>
         ) : (

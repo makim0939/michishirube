@@ -79,10 +79,17 @@ export function writeStatements(db: D1Database, userId: string, changes: EntityC
     ])
     return db
       .prepare(
+        // 中身は updatedAt が新しいときだけ書き換える。seq は、古くて負けたときも付け直す：
+        // 送った端末は、勝ったほうをすでに受け取った（since より前の seq）つもりでいるので、そのままだと勝ったほうが二度と届かず、
+        // 端末だけが負けた中身（時計が遅れた端末の編集・削除）のまま残る。付け直せば、この応答で勝ったほうが返る。
+        // 同じ時刻のときは付け直さない（応答が届かずに送り直したときに、全端末が同じ行を受け取り直さないように。
+        // 同じ時刻で中身が違うときは、端末が同じ時刻のものを取り込まないので、付け直しても揃わない）
         `INSERT INTO user_entities (user_id, kind, id, data, updated_at, deleted, seq) VALUES ${values}
          ON CONFLICT (user_id, kind, id) DO UPDATE SET
-           data = excluded.data, updated_at = excluded.updated_at, deleted = excluded.deleted, seq = excluded.seq
-         WHERE excluded.updated_at > user_entities.updated_at`,
+           data = CASE WHEN excluded.updated_at > user_entities.updated_at THEN excluded.data ELSE user_entities.data END,
+           deleted = CASE WHEN excluded.updated_at > user_entities.updated_at THEN excluded.deleted ELSE user_entities.deleted END,
+           updated_at = MAX(excluded.updated_at, user_entities.updated_at),
+           seq = CASE WHEN excluded.updated_at = user_entities.updated_at THEN user_entities.seq ELSE excluded.seq END`,
       )
       .bind(...params)
   })
@@ -104,6 +111,11 @@ export function writeStatements(db: D1Database, userId: string, changes: EntityC
         .bind(userId, ...ids),
     )
   }
+  // 同期の途中でアカウントが削除されていたら、書いた分を同じトランザクションの中で消す
+  // （ログインを確かめたあと、書き込むまでの間に削除が入ると、だれのものでもない行が残る）
+  statements.push(
+    db.prepare('DELETE FROM user_entities WHERE user_id = ?1 AND NOT EXISTS (SELECT 1 FROM users WHERE id = ?1)').bind(userId),
+  )
   return statements
 }
 

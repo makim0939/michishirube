@@ -41,9 +41,10 @@ export async function tidyVideos(now = Date.now()): Promise<{ count: number; byt
   )
   // 端末の動画が唯一の手元の写しになるので、YouTube 側で再生できると確かめられたものだけを消す
   // （非公開のまま・処理に失敗した動画を消すと、アプリで見られなくなる）
+  const checked = new Map(media.map((m) => [m.id, m]))
   const ids: string[] = []
   for (const id of candidates) {
-    const youtubeId = media.find((m) => m.id === id)?.youtubeId
+    const youtubeId = checked.get(id)?.youtubeId
     if (youtubeId && (await youtubePlayable(youtubeId))) ids.push(id)
   }
   // 消したあとに再生前の絵として出せるよう、先にサムネイルを作っておく。
@@ -55,20 +56,32 @@ export async function tidyVideos(now = Date.now()): Promise<{ count: number; byt
       const content = await contentBlob(m)
       if (!content) continue
       const poster = await makePoster(await inMemory(content))
-      if (poster && (poster.end || !m.poster)) await db.media.update(id, { poster: poster.blob, posterEnd: poster.end })
+      if (!poster) continue
+      // 作っているあいだに差し替えた動画に、前の動画のサムネイルを付けない
+      await db.transaction('rw', db.media, async () => {
+        const current = await db.media.get(id)
+        if (!current || current.contentAt !== m.contentAt || !(poster.end || !current.poster)) return
+        await db.media.update(id, { poster: poster.blob, posterEnd: poster.end })
+      })
     } catch {
       // 作れなくても、整理は続ける
     }
   }
   let bytes = 0
+  let count = 0
   await db.transaction('rw', db.media, async () => {
     for (const id of ids) {
       const m = await db.media.get(id)
-      bytes += m?.blob?.size ?? (m?.file ? m.size : 0)
+      // YouTube を確かめている間に、切り取って差し替えた・上げ直しになった動画は消さない
+      // （新しい中身は、まだどこにも上がっていない。確かめたのは前の動画）
+      const before = checked.get(id)
+      if (!m || !before || !hasContent(m) || m.contentAt !== before.contentAt || m.upload !== 'done' || m.youtubeId !== before.youtubeId) continue
+      bytes += m.blob?.size ?? (m.file ? m.size : 0)
+      count += 1
       // 中身はこの端末だけのものなので、同期の対象にしない（updatedAt も変えない）。
       // アプリのファイルは、行から外すと watchContentFiles が消す
       await db.media.update(id, { blob: undefined, file: undefined })
     }
   })
-  return { count: ids.length, bytes }
+  return { count, bytes }
 }

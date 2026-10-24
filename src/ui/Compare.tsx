@@ -15,7 +15,17 @@ type Slot = 0 | 1
  * 2杯を並べて、上達を目で見られるようにする。はじめは最新と最初（今日の画面と同じく、新しいほうを左に）。
  * 比較写真のアプリと同じく、入れ替えたい側の下（「最新 ▾」など）を押すと、その側に並べる杯を選べる
  */
-export function Compare({ media, numberOf }: { media: Media[]; numberOf: (m: Media) => number | undefined }) {
+export function Compare({
+  media,
+  numberOf,
+  dateOf,
+}: {
+  /** 杯の日時の古い順 */
+  media: Media[]
+  numberOf: (m: Media) => number | undefined
+  /** その動画・写真の杯の日時（間の日数に使う。入れた時刻は、あとから編集で足すと杯の日時とずれる） */
+  dateOf: (m: Media) => number
+}) {
   const videos = media.filter(isVideo)
   const images = media.filter((m) => !isVideo(m))
   // 2つ以上あって比べられる種類だけを選べるようにする。はじめは写真（左）。動画は、軽く見たいときだけ読み込まれないよう、切り替えたときに出す
@@ -40,7 +50,7 @@ export function Compare({ media, numberOf }: { media: Media[]; numberOf: (m: Med
     const n = numberOf(m)
     return n ? `No.${n}` : ''
   }
-  const span = spanLabel(daysBetween(pair[0].createdAt, pair[1].createdAt))
+  const span = spanLabel(daysBetween(dateOf(pair[0]), dateOf(pair[1])))
 
   const switchKind = (k: Kind) => {
     setPicked(k)

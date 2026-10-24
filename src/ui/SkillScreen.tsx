@@ -12,7 +12,7 @@ import {
 import { computeStates, indexById } from '../domain/logic'
 import { recentForm } from '../domain/form'
 import { formatDateTime } from '../domain/format'
-import { ConfirmButton, Empty, splitName, StateBadge } from './common'
+import { ConfirmButton, Empty, sortByRecordDate, splitName, StateBadge } from './common'
 import { Compare } from './Compare'
 import { PatternImage } from './PatternImage'
 import { FormDots, formSummary } from './FormDots'
@@ -32,23 +32,28 @@ export function SkillScreen({ id }: { id: string }) {
   const run = useAction()
   const celebrate = useCelebrate()
   const [askingAchieve, setAskingAchieve] = useState(false)
+  /** 「はい、できた」を保存している間（2回押して、お祝いが2回出たり、二重に書き込んだりしないように） */
+  const [achieving, setAchieving] = useState(false)
   const [shown, setShown] = useState(RECORDS_FIRST)
 
   const data = useLiveQuery(async () => {
     const skill = await db.skills.get(id)
     if (!skill) return { skill: undefined }
-    const [skills, domain, records, media, practicing] = await Promise.all([
+    const [skills, domain, records, allMedia, practicing] = await Promise.all([
       db.skills.where('domainId').equals(skill.domainId).toArray(),
       db.domains.get(skill.domainId),
       recordsOf(id),
-      mediaByIndex(db.media.where('skillId').equals(id)).then((list) => list.sort((a, b) => a.createdAt - b.createdAt)),
+      mediaByIndex(db.media.where('skillId').equals(id)),
       practicingSkillIds(),
     ])
+    // 「最新と最初」は、杯の日時で決める（あとから編集で足した写真が、古い杯なのに「最新」にならないように）
+    const recordAt = new Map(records.map((r) => [r.id, r.createdAt]))
+    const media = sortByRecordDate(allMedia, (recordId) => recordAt.get(recordId))
     // 杯の番号は、型に関係なく全部の記録の通し番号（No.）
     const numbers = await cupNumbers(records)
     // アップの失敗は、保存先が YouTube のときだけ知らせる
     const uploads = (await getVideoStorage()) === 'youtube'
-    return { skill, skills, domain, records, media, numbers, uploads, practicing }
+    return { skill, skills, domain, records, media, numbers, uploads, practicing, recordAt }
   }, [id])
 
   if (!data) return null
@@ -134,13 +139,19 @@ export function SkillScreen({ id }: { id: string }) {
           <div className="row">
             <button
               className="btn achieve"
-              onClick={() =>
-                run(async () => {
-                  const result = await achieveSkill(skill.id)
-                  setAskingAchieve(false)
-                  celebrate(result)
+              disabled={achieving}
+              onClick={() => {
+                setAchieving(true)
+                void run(async () => {
+                  try {
+                    const result = await achieveSkill(skill.id)
+                    setAskingAchieve(false)
+                    celebrate(result)
+                  } finally {
+                    setAchieving(false)
+                  }
                 })
-              }
+              }}
             >
               {t.skill.achieveYes}
             </button>
@@ -154,6 +165,7 @@ export function SkillScreen({ id }: { id: string }) {
       <Compare
         media={media}
         numberOf={(m) => data.numbers?.get(m.recordId)}
+        dateOf={(m) => data.recordAt.get(m.recordId) ?? m.createdAt}
       />
 
       {/* 注ぐ前に読み返したい、自分の記録から作ったコツと手本の動画 */}

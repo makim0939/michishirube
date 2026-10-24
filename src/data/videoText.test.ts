@@ -11,6 +11,7 @@ import {
   renderTemplate,
   resetVideoTemplates,
   setVideoTemplate,
+  previewVars,
   templateVars,
 } from './videoText'
 
@@ -48,6 +49,7 @@ describe('YouTube のタイトルと説明の書き方', () => {
 
   it('項目は英語の名前でも書ける（言語を切り替えても、前に書いた書き方がそのまま使える）', () => {
     expect(renderTemplate('{pattern} | {Next Step}\nNotes: {notes}', full)).toBe('ハート | 高く注ぐ\nNotes: 良かった')
+    expect(renderTemplate('No.{number}', { 番号: '12' })).toBe('No.12')
   })
 
   it('説明を空にすれば、説明なしで上がる', () => {
@@ -59,6 +61,39 @@ describe('YouTube のタイトルと説明の書き方', () => {
     expect(v.結果).toContain('惜しい')
     expect(v.次の一手).toBe('n')
     expect(v.メモ).toBeUndefined()
+  })
+
+  it('番号は、番号が分かるときだけ入る。分からない行は、行ごと消える', () => {
+    expect(templateVars(0, undefined, undefined, 12).番号).toBe('12')
+    expect(templateVars(0).番号).toBeUndefined()
+    const t = { title: '{型}', description: 'No.{番号}\n{結果}' }
+    expect(buildVideoText(t, { 型: 'ハート', 番号: '12', 結果: 'x' }).description).toBe('No.12\nx')
+    expect(buildVideoText(t, { 型: 'ハート', 結果: 'x' }).description).toBe('x')
+  })
+
+  it('標準の書き方には、番号を入れない', () => {
+    expect(DEFAULT_TITLE).not.toContain('番号')
+    expect(DEFAULT_DESCRIPTION).not.toContain('番号')
+  })
+})
+
+describe('タイトルの長さ', () => {
+  it('100文字に収め、絵文字の途中で切らない（壊れた文字を残さない）', () => {
+    // 99文字のあとに絵文字（UTF-16 で2つ分）。slice(0, 100) だと、絵文字の前半だけが残る
+    const { title } = buildVideoText({ title: `${'あ'.repeat(99)}🍵`, description: '' }, full)
+    expect(title.length).toBeLessThanOrEqual(100)
+    expect(title).toBe('あ'.repeat(99))
+    expect(title).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/)
+  })
+
+  it('国旗などの、いくつかの文字でできた絵文字も、途中で切らない', () => {
+    const { title } = buildVideoText({ title: `${'あ'.repeat(98)}🇯🇵`, description: '' }, full)
+    expect(title).toBe('あ'.repeat(98))
+  })
+
+  it('絵文字だけのタイトルも、ペアのまま切る', () => {
+    const { title } = buildVideoText({ title: '🍵'.repeat(80), description: '' }, full)
+    expect(title).toBe('🍵'.repeat(50))
   })
 })
 
@@ -96,5 +131,20 @@ describe('書き方の保存', () => {
     expect((await getVideoTemplates()).description).toBe('')
     expect((await videoMeta(media)).description).toBe('')
     await resetVideoTemplates()
+  })
+})
+
+describe('番号', () => {
+  it('動画のタイトルとプレビューで、全記録の中の何杯目かが同じになる', async () => {
+    await db.records.bulkPut([
+      { id: 'a', skillId: 's', createdAt: 100, mediaIds: [], outcome: 'meh', reason: '', nextAction: '' },
+      { id: 'b', skillId: 's', createdAt: 200, mediaIds: [], outcome: 'meh', reason: '', nextAction: '' },
+    ] as never)
+    await setVideoTemplate('title', 'No.{番号}')
+    const media = { id: 'm2', recordId: 'b', skillId: 's', type: 'video/mp4', createdAt: 200 } as Media
+    expect((await videoMeta(media)).title).toBe('No.2')
+    expect(buildVideoText(await getVideoTemplates(), (await previewVars()).vars).title).toBe('No.2')
+    await resetVideoTemplates()
+    await db.records.bulkDelete(['a', 'b'])
   })
 })

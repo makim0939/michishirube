@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import type { Media } from '../domain/types'
-import { hasCupImage, needsLocalPoster, needsRemotePoster } from './poster'
+import { db } from './db'
+import { attachPoster, hasCupImage, needsLocalPoster, needsRemotePoster } from './poster'
 
 const video = (patch: Partial<Media> = {}): Media => ({
   id: 'm',
@@ -40,5 +41,32 @@ describe('動画のサムネイル（できあがりのコマ）', () => {
     // 取ってこられるなら、サーバーに置いた印が端末の行に無くても、サーバーにあるかもしれない（取りに行く）
     expect(hasCupImage(video({ type: 'image/jpeg' }), true)).toBe(true)
     expect(hasCupImage(video({ type: 'image/jpeg', size: 3 * 1024 * 1024 }), true)).toBe(false)
+  })
+})
+
+describe('作ったサムネイルを付ける', () => {
+  beforeEach(async () => {
+    await db.media.clear()
+  })
+
+  it('作っているあいだに動画が差し替わったら、前の動画のサムネイルを付けない', async () => {
+    const before = video({ id: 'p1', contentAt: 10 })
+    await db.media.put({ ...before, contentAt: 20 })
+    expect(await attachPoster(before, blob, true)).toBe(false)
+    const row = await db.media.get('p1')
+    expect(row?.poster).toBeUndefined()
+    expect(row?.posterEnd).toBeUndefined()
+  })
+
+  it('中身が同じなら付ける（contentAt が無い行は createdAt で比べる）', async () => {
+    const m = video({ id: 'p2' })
+    await db.media.put(m)
+    expect(await attachPoster(m, blob, true)).toBe(true)
+    expect((await db.media.get('p2'))?.posterEnd).toBe(true)
+  })
+
+  it('消された動画には付けない', async () => {
+    expect(await attachPoster(video({ id: 'gone' }), blob, true)).toBe(false)
+    expect(await db.media.get('gone')).toBeUndefined()
   })
 })

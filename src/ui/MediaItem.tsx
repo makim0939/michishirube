@@ -57,7 +57,14 @@ export function MediaItem({
         // 端末のファイルを読んでいるあいだは、YouTube や「無い」表示に切り替えない（読めたらすぐ出す）
         <div className="media placeholder" role="status" aria-label={t.share.loading} />
       ) : onYoutube ? (
-        <YoutubePlayer videoId={media.youtubeId!} poster={media.poster} cacheKey={media.id} playerRef={playerRef} />
+        // 別の動画に替わったら（上げ直し）、作り直す。読み込めなかった・再生中などの状態を、前の動画から持ち越さない
+        <YoutubePlayer
+          key={media.youtubeId}
+          videoId={media.youtubeId!}
+          poster={media.poster}
+          cacheKey={media.id}
+          playerRef={playerRef}
+        />
       ) : (
         <div className="media placeholder">
           {video ? <VideoIcon size={22} /> : <PhotoIcon size={22} />}

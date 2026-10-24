@@ -87,6 +87,9 @@ describe('英語のときのサーバーのエラー', () => {
     expect(en.errors.fromServer('reauth', 'YouTube の連携をやり直してください', 409)).toContain('Reconnect')
     expect(en.errors.fromServer('busy', '混み合っています', 429)).toContain('busy')
     expect(en.errors.fromServer('forbidden', undefined, 403)).toBe('Something went wrong (403)')
+    // サーバーの思わぬエラー・Google につながらないとき（決まった日本語の文が来る）
+    expect(en.errors.fromServer('internal', 'サーバーでエラーが起きました', 500)).toContain('server')
+    expect(en.errors.fromServer('google_unavailable', 'Google につながりませんでした', 502)).toContain('Google')
   })
 
   it('日本語は、サーバーの文をそのまま出し、文が無ければ番号を出す（エラーの名前は出さない）', async () => {

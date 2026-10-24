@@ -73,6 +73,15 @@ describe('記録の写しから戻す', () => {
     expect(skill).not.toHaveProperty('sources')
   })
 
+  it('送っていなかった削除の印も戻す（消した時刻のまま。消したものがサーバーから戻ってこないように）', async () => {
+    const snapshot = JSON.parse(snapshotText())
+    const outbox = [{ kind: 'record', id: 'r-gone', at: 3 }]
+    files.texts = new Map([['snapshot.json', JSON.stringify({ ...snapshot, outbox })]])
+    expect(await restoreSnapshotIfEmpty()).toBe(true)
+    expect(await db.outbox.get(['record', 'r-gone'])).toEqual({ kind: 'record', id: 'r-gone', at: 3 })
+    expect(await db.outbox.get(['record', 'r1'])).toBeDefined()
+  })
+
   it('入れ替えの途中で止まっていたら、一時ファイルから戻す', async () => {
     files.texts = new Map([['snapshot.json.tmp', snapshotText()]])
     expect(await restoreSnapshotIfEmpty()).toBe(true)

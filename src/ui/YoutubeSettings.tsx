@@ -1,6 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useCallback, useEffect, useState } from 'react'
-import { isLoggedIn } from '../data/account'
+import { isLoggedIn, rememberLoginReturn } from '../data/account'
 import { db } from '../data/db'
 import { getSyncConfig } from '../data/sync'
 import { getVideoStorage } from '../data/videoStorage'
@@ -9,7 +9,7 @@ import { YOUTUBE_TERMS_URL } from '../platform'
 import { ConfirmButton } from './common'
 import { useAction, useToast } from './feedback'
 import { AlertIcon, CheckIcon } from './icons'
-import { href } from './router'
+import { go } from './router'
 import { t } from '../i18n'
 
 /**
@@ -27,9 +27,17 @@ export function YoutubeSettings() {
           <AlertIcon size={16} />
           {t.youtube.needLogin}
         </p>
-        <a className="btn small" href={href('/settings/sync')}>
+        {/* ログインは「アカウント」の画面で行う。終わったら、ここ（動画）へ戻して、続けて YouTube とつなげるようにする */}
+        <button
+          className="btn small"
+          onClick={async () => {
+            // 覚えられなくても、ログインには進める（戻り先が無いだけ）
+            await rememberLoginReturn('/settings/storage').catch(() => {})
+            go('/settings/sync')
+          }}
+        >
           {t.youtube.login}
-        </a>
+        </button>
       </div>
     )
   }
