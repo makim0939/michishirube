@@ -87,7 +87,6 @@ function StorageStatus() {
   )
 }
 
-
 const TITLES: Record<SettingsSection, string> = {
   storage: t.settings.video,
   sync: t.settings.account,

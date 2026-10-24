@@ -31,6 +31,8 @@ export function RoadmapSettings() {
     return { domains, skills, records }
   })
   if (!data) return null
+  // 分野が1つもないときは、型の画面の「ロードマップを入れる」からここへ来るので、入れ直せるようにする
+  const full = FULL_ROADMAP_MANAGEMENT || data.domains.length === 0
 
   const onImport = async (file: File | undefined) => {
     if (!file) return
@@ -68,7 +70,7 @@ export function RoadmapSettings() {
             )
           })}
         </ul>
-        {FULL_ROADMAP_MANAGEMENT &&
+        {full &&
           (addingDomain ? (
             <NewDomainForm onDone={() => setAddingDomain(false)} />
           ) : (
@@ -79,7 +81,7 @@ export function RoadmapSettings() {
           ))}
       </section>
 
-      {FULL_ROADMAP_MANAGEMENT && (
+      {full && (
         <>
           <section className="section">
             <h2>{t.roadmap.bundled}</h2>
@@ -131,7 +133,7 @@ export function RoadmapSettings() {
   )
 }
 
-/** 分野1つ。押すと、名前を変える・ファイルに書き出す・消す */
+/** 分野1つ。押すと、名前を変える・消す（ファイルへの書き出しは FULL_ROADMAP_MANAGEMENT のとき） */
 function DomainRow({
   domain,
   skillCount,
