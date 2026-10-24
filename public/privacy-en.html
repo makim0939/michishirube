@@ -31,7 +31,7 @@
   </head>
   <body>
     <h1>Latte-chō (ラテ帳) Privacy Policy</h1>
-    <p class="muted">Last updated: October 20, 2026 ・ <a href="https://latte.makimura.me/privacy">日本語</a></p>
+    <p class="muted">Last updated: October 24, 2026 ・ <a href="https://latte.makimura.me/privacy">日本語</a></p>
 
     <p>
       Latte-chō (ラテ帳, formerly "Laterie" and "Michishirube"; "the app") is a personal practice journal for latte art. This page explains what information the app handles and where it is stored.
@@ -43,14 +43,17 @@
         <strong>Practice records, roadmap, photos and videos</strong>: stored on your device (in the browser's IndexedDB for the web version, and in the app's own files for the iPhone and Android apps). They are not sent anywhere unless you sign in (except when you send feedback, described below).
       </li>
       <li>
-        <strong>If you sign in with Google</strong>: so that you can use the same records on other devices, the following is stored on the app's server (Cloudflare Workers and D1, operated by the developer).
+        <strong>If you sign in with Google or Apple</strong>: so that you can use the same records on other devices, the following is stored on the app's server (Cloudflare Workers and D1, operated by the developer).
         <ul>
           <li>Practice records (date, result, notes, next step), skills and domains (the roadmap), and settings</li>
           <li>Information about videos and photos (type, size, date taken, YouTube video ID)</li>
           <li>Downsized photos and video thumbnails (one frame of the finished cup)</li>
           <li>An identifier of your Google account (the Google "sub") and a value that identifies your signed-in devices (stored only as a hash)</li>
+          <li>
+            If you sign in with Apple: an identifier of your Apple account (the Apple "sub"), and a value used to tell Apple, when you delete your account, that your sign-in to this app is revoked (your Apple refresh token). Your Apple email address and name are not stored on the server as records; they are only passed back to your device at sign-in.
+          </li>
         </ul>
-        <strong>The content of your videos, your Google email address, name and password, and your YouTube authorization are not stored on the server as records.</strong>
+        <strong>The content of your videos, your Google and Apple email addresses, names and passwords, and your YouTube authorization are not stored on the server as records.</strong>
         The only exception is a short hold during sign-in or YouTube linking: the result (your email address, or your YouTube authorization) is kept temporarily in the server's database until your device receives it, and is deleted the moment it is received. A result that is never received becomes unusable after 10 minutes and is deleted the next time anyone starts signing in.
         Data is sent over encrypted connections and can be read and written only from your signed-in devices. The developer does not look at users' data except when necessary for operations such as investigating a failure.
       </li>
@@ -106,6 +109,7 @@
     <h2>4. Retention, signing out, unlinking and deleting data</h2>
     <ul>
       <li>Data stored on the server is kept until you delete your account. When you delete your account, it is deleted from the server immediately.</li>
+      <li>If the account you delete was signed in with Apple, the server also tells Apple that your sign-in to this app is revoked (it communicates with Apple's servers). You can also revoke it yourself at any time in iPhone "Settings" → your name → "Sign-In &amp; Security" → "Sign in with Apple".</li>
       <li>"Settings → Account → Sign out" ends sign-in on that device (records on the device and on the server remain).</li>
       <li>
         "Settings → Account → Delete account" immediately deletes your account and all data stored on the server (records on your device and videos uploaded to YouTube remain).
