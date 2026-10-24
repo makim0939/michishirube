@@ -7,15 +7,19 @@
 # 最初の1枚の subtitle は、App Store のサブタイトル（docs/app-store-submission.md の 4-1）と同じにする。
 # 撮った画像ごとの手直し（明るさ・彩度、写り込みを消す）は、撮った画像のフォルダの retouch.json に書く（SKILL.md の D）。
 # macOS のヒラギノ・SF を使う。透明なしの PNG を書き出す。
+import argparse
 import json
-import sys
 from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
-src, out = Path(sys.argv[1]), Path(sys.argv[2])
-device = sys.argv[sys.argv.index('--device') + 1] if '--device' in sys.argv else 'iphone'
+ap = argparse.ArgumentParser(description='撮った画面を、App Store の画面写真にする')
+ap.add_argument('src', type=Path, help='撮った画像のフォルダ')
+ap.add_argument('out', type=Path, help='出力フォルダ')
+ap.add_argument('--device', choices=('iphone', 'ipad'), default='iphone')
+args = ap.parse_args()
+src, out, device = args.src, args.out, args.device
 here = Path(__file__).parent
 captions = json.loads((here / 'appstore-captions.json').read_text())
 retouch_file = src / 'retouch.json'
@@ -26,6 +30,7 @@ retouches = json.loads(retouch_file.read_text()).get(device, {}) if retouch_file
 DEVICES = {
     'iphone': dict(
         size=(1179, 2556),     # iPhone 6.3 インチ（Dynamic Island の機種）の大きさ
+        aspect=1170 / 2532,    # 撮った画面の、幅÷高さ（機種の取り違えを見つけるため）
         base_w=1170,           # 状態バーの位置の基準にする、撮った画面の幅（iPhone 12 など）
         caption=(92, 150, 124),  # 見出しの字の大きさ・1 行目の位置・行の間隔
         shot=(1000, 440, 118),   # 画面の幅・上の位置・角の丸み
@@ -34,6 +39,7 @@ DEVICES = {
     ),
     'ipad': dict(
         size=(2048, 2732),     # iPad 13 インチ用
+        aspect=1640 / 2360,
         base_w=1640,           # iPad Air 第4世代（11 インチの機種も同じ幅）
         caption=(118, 190, 160),
         shot=(1700, 470, 64),  # iPad の画面は横に広いので、角の丸みは小さめ
@@ -41,8 +47,6 @@ DEVICES = {
         glow=1.6,
     ),
 }
-if device not in DEVICES:
-    raise SystemExit(f'--device は {"・".join(DEVICES)} のどれか：{device}')
 D = DEVICES[device]
 W, H = D['size']
 # 背景は、明るい生成り色（濃い色は、アプリの雰囲気と合わない）。画面より少し深い色にして、ふちを出す
@@ -87,17 +91,17 @@ def retouch(im, ops):
         (kind, p), = op.items()
         x0, y0, x1, y1 = p['box']
         if kind == 'tone':
-            b = 255 * (a / 255) ** p.get('gamma', 1.0)
+            sub = a[y0:y1, x0:x1]  # box の中だけ計算する（画像全体は重い）
+            b = 255 * (sub / 255) ** p.get('gamma', 1.0)
             lum = np.dot(b, [.299, .587, .114])[..., None]
             b = (lum + (b - lum) * p.get('saturation', 1.0)).clip(0, 255)
-            mask = np.zeros(a.shape[:2], bool)
-            mask[y0:y1, x0:x1] = True
+            mask = np.ones(sub.shape[:2], bool)
             if 'keep_color' in p:
-                ky = y1 - p.get('keep_rows', y1 - y0)
-                near = np.abs(a - np.array(p['keep_color'])).sum(2) <= p.get('keep_tol', 25)
-                near[:ky] = False
+                ky = sub.shape[0] - p.get('keep_rows', sub.shape[0])
+                near = np.abs(sub - np.array(p['keep_color'])).sum(2) <= p.get('keep_tol', 25)
+                near[:max(ky, 0)] = False
                 mask &= ~near
-            a[mask] = b[mask]
+            sub[mask] = b[mask]
         elif kind == 'fill':
             a[y0:y1, x0:x1] = p['color']
         else:
@@ -105,7 +109,7 @@ def retouch(im, ops):
     return Image.fromarray(a.round().astype('uint8'))
 
 
-def cover_bar(im, k, bar, regions, y0, y1):
+def cover_bar(im, k, regions, y0, y1):
     """状態バーの文字のある左右だけ、すぐ隣（同じ高さ）の模様をずらして重ね、ふちをぼかして隠す。"""
     for x0, x1 in regions:
         x0, x1, t, b = round(x0 * k), round(x1 * k), round(y0 * k), round(y1 * k)
@@ -133,7 +137,7 @@ def fix_status_bar_iphone(im):
         a[:bar] = a[:bar, 3:4]
         im = Image.fromarray(a)
     else:  # 写真：文字のある左右だけ、すぐ隣（同じ高さ）の木目をずらして重ね、ふちをぼかす
-        im = cover_bar(Image.fromarray(a), k, bar, ((40, 300), (860, 1150)), 15, 125)
+        im = cover_bar(Image.fromarray(a), k, ((40, 300), (860, 1150)), 15, 125)
 
     lum = np.asarray(im.crop((60, round(40 * k), 260, round(110 * k)))).mean()
     fg = (255, 255, 255) if lum < 120 else (20, 20, 22)
@@ -231,11 +235,15 @@ def clear_resize_grip(im):
     """iPadOS 26 の、ウインドウの大きさを変えるつまみ（右下の角の、曲がった線）を消す。
 
     アプリの画面ではないので、撮った画面に残さない。下のタブバーの地の色（行ごとに、すぐ左の色）で塗る。
+    つまみが無い（iPadOS 26 より前・角に別の表示がある）ときは、何もしない。
     """
     k = im.width / D['base_w']
     a = np.asarray(im).copy()
     x0, y0 = round(1590 * k), im.height - round(50 * k)
-    a[y0:, x0:] = a[y0:, x0 - round(5 * k)][:, None]
+    left = a[y0:, x0 - round(5 * k)].astype(int)
+    if np.abs(a[y0:, x0:].astype(int) - left[:, None]).sum(2).max() < 60:
+        return im
+    a[y0:, x0:] = left[:, None]
     return Image.fromarray(a)
 
 
@@ -359,10 +367,14 @@ for c in captions:
         continue
     path = find(c['file'])
     if path is None:
+        if device == 'iphone':  # iPhone は、全部そろえて出す。名前の打ち間違いで、黙って 1 枚減らさない
+            raise SystemExit(f'撮った画像が見つからない：{c["file"]}（{src}）')
         print(f'-  {c["name"]}：撮った画像がないので飛ばす（{src / c["file"]}.png）')
         continue
     i += 1
     raw = Image.open(path)
+    if abs(raw.width / raw.height - D['aspect']) > 0.03:
+        raise SystemExit(f'{path.name} は {raw.width}×{raw.height}。--device {device} の画面ではない（機種の指定を確かめる）')
     if c['file'] in retouches:
         raw = retouch(raw, retouches[c['file']])
     clean = fit(fix_status_bar(raw))
