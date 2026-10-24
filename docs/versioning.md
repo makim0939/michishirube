@@ -14,7 +14,7 @@ Android の `versionName` は、`-PversionName` を渡さなければ `package.j
 
 - **ストアに出さない変更（紹介サイト・サーバーだけ、など）では、版を上げない。**
 - 版を上げるのは、リリースの準備のとき（ストアに出す前）。ふだんの PR では触らない。
-- 上げたら、`package.json` と iOS を同じ PR で変える（Android は自動）。
+- 上げたら、`package.json` と iOS を同じコミットで変える（Android は自動）。CI の「版」の入力が、これを行う。
 
 ## ビルド番号（iOS の `CURRENT_PROJECT_VERSION`・Android の `versionCode`）
 
@@ -26,9 +26,14 @@ Android の `versionName` は、`-PversionName` を渡さなければ `package.j
 ## リリースの流れ
 
 1. 上の表で、次の版を決める。
-2. `package.json`・iOS の版と、ビルド番号を上げる PR を出して、マージする。
-3. 提出手順（`docs/app-store-submission.md`）に進む。
-4. ストアに出したら、`git tag v<版>`（例 `v1.1.0`）を、審査に出したコミットに付けて push する。
+2. GitHub → Actions →「iOS を TestFlight にアップロード」→ Run workflow で、**版**（例 `1.2.0`）を入れて実行し、Environment の承認を押す。CI が、次を行う（`docs/app-store-submission.md` の「CI から上げる」）。
+   - 検査：形式 `X.Y.Z`、いまの版より大きい、タグ `v<版>`・ブランチ `release/<版>` がまだ無い。
+   - `release/<版>` で、`package.json`・iOS の版を上げるコミットを作り、そのコミットをビルドして TestFlight にアップロードする。
+   - **アップロードが成功したときだけ**、そのコミットにタグ `v<版>` を付けて、ブランチと一緒に push し、`main` 向けの PR を作る。
+3. PR をマージする（ビルド番号の記録を足すなら、この PR に積む）。
+4. 提出手順（`docs/app-store-submission.md`）に進む。タグは、審査に出したビルドのコミットを指している。
+
+手で上げるとき（CI を使わない）は、`package.json`・iOS の版と、ビルド番号を上げる PR を出してマージし、ストアに出したあと、`git tag v<版>` を、審査に出したコミットに付けて push する。
 
 ### 1.0 のタグ
 1.0 は、審査に出したコミットの `package.json` が 0.2.0 だったので、`v1.0.0` は付けず、`v1.0-build2`（注釈付き。ビルド番号 2 で提出）にしている。`v<版>` の方式は、1.1.0 以降に使う。
