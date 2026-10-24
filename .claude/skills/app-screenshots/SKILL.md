@@ -68,14 +68,33 @@ def to_appstore(src, target):  # target = (幅, 高さ)。例：(1179, 2556)、(
 実機（またはシミュレーター）で撮った画面を、フォルダに入れて、1コマンドで仕上げる：
 
 ```
-python3 -I .claude/skills/app-screenshots/appstore-shot.py <撮った画像のフォルダ> <出力フォルダ>
+python3 -I .claude/skills/app-screenshots/appstore-shot.py <撮った画像のフォルダ> <出力フォルダ>               # iPhone
+python3 -I .claude/skills/app-screenshots/appstore-shot.py <撮った画像のフォルダ> <出力フォルダ> --device ipad  # iPad
 ```
 
-- `<出力>/clean/`：状態バーを、9:41・電波4本・電池満タンに差し替えた、文字なしの画像（1179×2556）。
+- `<出力>/clean/`：状態バーを差し替えた、文字なしの画像。iPhone は 9:41・電波4本・電池満タン（1179×2556）、iPad は 9:41・1月9日(火)・電池満タン（2048×2732）。
 - `<出力>/store/`：clean に、見出し・背景・枠を足した、App Store に出す画像。
-- 見出し・順番・使う画像は、`appstore-captions.json`（`file` が撮った画像の名前。見出しの `{ }` で囲んだ字は茶色）。見出しは2行まで。文言を変えるときは、紹介サイトの言い方に合わせる。
+- 見出し・順番・使う画像は、`appstore-captions.json`（`file` が撮った画像の名前。見出しの `{ }` で囲んだ字は茶色）。見出しは2行まで。文言を変えるときは、紹介サイトの言い方に合わせる。iPhone と iPad で同じものを使う。撮っていない画面は、飛ばして番号を詰める（iPad は 1 枚から出せる）。
 - 最初の1枚（`"layout": "hero"`）だけは、撮った画面を使わず、アプリ自身の背景の写真（`public/world/light/morning.webp`）を大きく見せ、名前とサブタイトルを添える（参考にした他のアプリも、最初の1枚だけ別の見せ方だった）。アイコンは、写真とほぼ同じ絵（窓辺のロゼッタ）なので、出さない。2枚目以降は、上に見出し・下に画面の1パターン。
-- 状態バーの差し替えは、幅 1170 の画面（iPhone 12 など Dynamic Island のない機種）を前提にした位置。別の機種で撮ったら、`clean/` を見て、位置を確かめる。
+- 状態バーの差し替えは、iPhone は幅 1170 の画面（iPhone 12 など Dynamic Island のない機種）、iPad は幅 1640 の画面（iPad Air 第4世代・11 インチの機種）を前提にした位置。別の機種で撮ったら、`clean/` を見て、位置を確かめる。
+- iPad で撮った画面の、次のものは、自動で消える：TestFlight から開いたときの「◀ TestFlight」、電池の残量の数字、右下のウインドウのつまみ（iPadOS 26）。状態バーの下が写真（今日の画面）のときは、すぐ下の写真を上下に折り返して埋める。
+- 撮った画像ごとの手直しは、撮った画像のフォルダに `retouch.json` を置いて書く（スクリプトは、撮った画像そのものは書き換えない）。座標は、撮った画像のピクセル。機種ごとに分けて書く：
+
+  ```json
+  {
+    "iphone": {
+      "home": [{"tone": {"box": [0, 0, 1170, 1171], "gamma": 0.8, "saturation": 1.3,
+                         "keep_color": [250, 247, 242], "keep_rows": 90, "keep_tol": 25}}],
+      "pattern": [{"fill": {"box": [362, 345, 690, 480], "color": [250, 247, 242]}}]
+    },
+    "ipad": {"home": [{"tone": {"box": [140, 0, 1500, 834], "gamma": 0.8, "saturation": 1.3,
+                                "keep_color": [250, 247, 242], "keep_rows": 90, "keep_tol": 25}}]}
+  }
+  ```
+
+  - `tone`：`box` の中を明るく（`gamma` が 1 より小さいほど明るい）・鮮やかに（`saturation` 倍）する。夜に撮った、暗いホームの写真に使った。明るくすると鮮やかさが落ちるので、元より少し鮮やかになるくらいに `saturation` を上げる。`keep_rows` があれば、`box` の下の端からその行数の中だけ、`keep_color` に近い色（写真に重なるシートの角）は変えない。
+  - `fill`：`box` の中を一色で塗る。データの都合で出た、実際には出ない表示（重複した分野のタブなど）を消すときに使う。
+- 仕上げた画像と、撮った画像・`retouch.json` は、版ごとに `references/appstore-screenshots/` に残す（1.1 は `raw-1.1`・`raw-1.1-ipad` → `v8`・`v8-ipad`）。同じコマンドで、作り直せる。
 - シミュレーターで撮るなら、撮る前に `xcrun simctl status_bar booted override --time 9:41 --batteryState charged --batteryLevel 100 --cellularBars 4 --wifiBars 3`、終わったら `xcrun simctl status_bar booted clear`。
 - 出力は `references/`（git に入れない）に置く。
 
