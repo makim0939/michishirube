@@ -6,6 +6,7 @@ import type { Media } from '../domain/types'
 import { saveFile } from './common'
 import { useToast } from './feedback'
 import { ShareIcon } from './icons'
+import { t } from '../i18n'
 
 function fileNameFor(media: Media, type: string): string {
   const ext = type.includes('mp4')
@@ -86,21 +87,21 @@ export function ShareMediaButton({ media, blob }: { media: Media; blob: Blob }) 
       try {
         const b = await inMemory(blob)
         setReady({ key, file: new File([b], name, { type }) })
-        toast.show('準備できました。もう一度押してください')
+        toast.show(t.share.ready)
       } catch {
-        toast.show('共有できませんでした', 'error')
+        toast.show(t.share.failed, 'error')
       } finally {
         setWaiting(false)
       }
       return
     }
-    if (!(await shareFile(file))) toast.show('共有できませんでした', 'error')
+    if (!(await shareFile(file))) toast.show(t.share.failed, 'error')
   }
 
   return (
     <button type="button" className="tool-button" disabled={waiting} onClick={() => void share()}>
       <ShareIcon size={17} />
-      {waiting ? '準備中…' : '保存・共有'}
+      {waiting ? t.share.preparing : t.share.share}
     </button>
   )
 }
@@ -116,21 +117,21 @@ export function ShareLinkButton({ youtubeId }: { youtubeId: string }) {
         await navigator.share({ url })
       } catch (e) {
         if (e instanceof DOMException && e.name === 'AbortError') return
-        toast.show('共有できませんでした', 'error')
+        toast.show(t.share.failed, 'error')
       }
       return
     }
     try {
       await navigator.clipboard.writeText(url)
-      toast.show('リンクを写しました')
+      toast.show(t.share.copied)
     } catch {
-      toast.show('リンクを写せませんでした', 'error')
+      toast.show(t.share.copyFailed, 'error')
     }
   }
   return (
     <button type="button" className="tool-button" onClick={() => void share()}>
       <ShareIcon size={17} />
-      リンクを共有
+      {t.share.shareLink}
     </button>
   )
 }

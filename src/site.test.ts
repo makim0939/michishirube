@@ -4,8 +4,9 @@ import { describe, expect, it } from 'vitest'
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
 
 describe('アプリのトップページ（サーバーと同じドメインで配る）', () => {
-  it('プライバシーポリシーは、アプリの中のものと同じ（コピーがずれないように）', () => {
+  it('プライバシーポリシー（日本語・英語）は、アプリの中のものと同じ（コピーがずれないように）', () => {
     expect(read('../worker/site/privacy.html')).toBe(read('../public/privacy.html'))
+    expect(read('../worker/site/privacy-en.html')).toBe(read('../public/privacy-en.html'))
   })
 
   it('トップページに、アプリ名とプライバシーポリシーへのリンクがある（Google の審査で見られる）', () => {
@@ -40,6 +41,13 @@ describe('アプリのトップページ（サーバーと同じドメインで�
     const html = read('../worker/site/privacy.html')
     expect(html).toContain('<a href="https://latte.makimura.me/">ラテ帳のホームページ</a>')
     expect(html).not.toContain('ラテ帳を開く')
+  })
+
+  // Web 版（GitHub Pages のサブパス）でも開くので、サイトの中を / で始まるリンクにしない
+  it('英語のプライバシーポリシーのリンクは、Web 版の中で開いても、ラテ帳のサイトに届く', () => {
+    const html = read('../worker/site/privacy-en.html')
+    expect(html).not.toMatch(/href="\//)
+    expect(html).toContain('<a href="https://latte.makimura.me/en">Latte-chō home page</a>')
   })
 
   it('トップページのフッターの「お問い合わせ」は、makimura.me のお問い合わせページへ', () => {

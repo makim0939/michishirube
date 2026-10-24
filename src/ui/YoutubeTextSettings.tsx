@@ -9,11 +9,13 @@ import {
   previewVars,
   resetVideoTemplates,
   setVideoTemplate,
+  TEMPLATE_FIELD_LABEL,
   TEMPLATE_FIELDS,
   type VideoTemplates,
 } from '../data/videoText'
 import { ConfirmButton } from './common'
 import { useAction } from './feedback'
+import { t } from '../i18n'
 
 type Kind = 'title' | 'description'
 
@@ -65,7 +67,7 @@ export function YoutubeTextSettings() {
       <section className="section">
         <div className="stack yt-fields">
           <label className="field">
-            <span>タイトル</span>
+            <span>{t.videoText.title}</span>
             <input
               ref={(el) => {
                 fields.current.title = el
@@ -77,7 +79,7 @@ export function YoutubeTextSettings() {
             />
           </label>
           <label className="field">
-            <span>説明</span>
+            <span>{t.videoText.description}</span>
             <textarea
               ref={(el) => {
                 fields.current.description = el
@@ -88,10 +90,10 @@ export function YoutubeTextSettings() {
               onChange={(e) => edit('description', e.target.value)}
             />
           </label>
-          <div className="suggest-chips" role="group" aria-label="入れられる項目（押すと、カーソルの位置に入ります）">
+          <div className="suggest-chips" role="group" aria-label={t.videoText.fieldsLabel}>
             {TEMPLATE_FIELDS.map((name) => (
-              <button key={name} type="button" onClick={() => insert(name)}>
-                {name}
+              <button key={name} type="button" onClick={() => insert(TEMPLATE_FIELD_LABEL[name])}>
+                {TEMPLATE_FIELD_LABEL[name]}
               </button>
             ))}
           </div>
@@ -99,22 +101,22 @@ export function YoutubeTextSettings() {
       </section>
 
       <section className="section">
-        <h2>プレビュー</h2>
+        <h2>{t.videoText.preview}</h2>
         <div className="yt-preview">
           <strong>{shown.title}</strong>
           {shown.description && <p>{shown.description}</p>}
         </div>
         <p className="muted small">
-          {preview.sample ? '見本です。' : 'いちばん新しい記録の場合です。'}
-          上げ済みの動画は変わりません。
+          {preview.sample ? t.videoText.sample : t.videoText.latest}
+          {t.videoText.uploadedUnchanged}
         </p>
       </section>
 
       {changed && (
         <ConfirmButton
           className="btn small ghost"
-          confirmLabel="もどす"
-          message="タイトルと説明を、標準の書き方にもどします。"
+          confirmLabel={t.videoText.resetConfirm}
+          message={t.videoText.resetMessage}
           onConfirm={() =>
             run(async () => {
               await resetVideoTemplates()
@@ -122,7 +124,7 @@ export function YoutubeTextSettings() {
             })
           }
         >
-          標準にもどす
+          {t.videoText.reset}
         </ConfirmButton>
       )}
     </>

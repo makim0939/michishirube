@@ -1,5 +1,14 @@
 import { dlog, traceVideo } from '../debug'
 import { extensionFor, fallBackFromRecorderType, pickRecorderMimeType, QUALITY, recorderSupports } from './mediaPrep'
+import { t } from '../i18n'
+
+/** 切り取りを、利用者がやめた（エラーとしては出さない。文言で見分けないよう、専用のエラーにする） */
+export class TrimCancelled extends Error {
+  constructor() {
+    super(t.trim.cancelled)
+    this.name = 'TrimCancelled'
+  }
+}
 
 /**
  * 動画を切り取る・音を消す。指定した範囲を再生しながら、映像はキャンバス、音声は Web Audio 経由で録り直す
@@ -59,7 +68,7 @@ export function startTrim(
   const preset = QUALITY[quality]
   const mimeType = pickRecorderMimeType(recorderSupports, !muted, quality)
   if (!mimeType) {
-    return { done: Promise.reject(new Error('この端末では動画を作り直せません')), cancel: () => {} }
+    return { done: Promise.reject(new Error(t.trim.unsupported)), cancel: () => {} }
   }
 
   const scale = Math.min(1, preset.shortSide / Math.min(video.videoWidth, video.videoHeight))
@@ -104,8 +113,8 @@ export function startTrim(
     stream?.getTracks().forEach((t) => t.stop())
     // 「使える」と答えたのに作れない形式なら、Android では次からほかの形式で作り直す（iPhone は MP4 のまま）
     const message = fallBackFromRecorderType(mimeType, !muted, quality)
-      ? 'この端末に合う形式に切り替えました。もう一度「完了」を押してください。元の動画はそのままです'
-      : 'この端末では動画を作り直せませんでした。元の動画はそのままです'
+      ? t.trim.switchedFormat
+      : t.trim.cannotRebuild
     return { done: Promise.reject(new Error(message)), cancel: () => {} }
   }
   video.muted = muted
@@ -139,7 +148,7 @@ export function startTrim(
   recorder.onerror = (e: Event) => {
     const err = (e as Event & { error?: DOMException }).error
     dlog('recorder error', err?.message)
-    failed = err?.message || 'エンコードに失敗しました'
+    failed = err?.message || t.trim.encodeFailed
     finish()
   }
   const v = video as VideoWithFrameCallback
@@ -197,7 +206,7 @@ export function startTrim(
   const failure = (message: string, byEncoder: boolean) => {
     if (byEncoder && !hidden && document.visibilityState !== 'hidden' && fallBackFromRecorderType(mimeType, !muted, quality)) {
       dlog('trim: mark broken', mimeType)
-      return new Error('この端末に合う形式に切り替えました。もう一度「完了」を押してください。元の動画はそのままです')
+      return new Error(t.trim.switchedFormat)
     }
     return new Error(message)
   }
@@ -228,8 +237,8 @@ export function startTrim(
     cleanup()
     rejectDone(
       failed
-        ? failure(`動画を作り直せませんでした（${failed}）。元の動画はそのままです`, true)
-        : new Error('動画を作り直せませんでした。もう一度試してください。元の動画はそのままです'),
+        ? failure(t.trim.failedWith(failed), true)
+        : new Error(t.trim.failed),
     )
   }
 
@@ -241,11 +250,11 @@ export function startTrim(
     stopped = true
     cleanup()
     if (cancelled) {
-      rejectDone(new Error('キャンセルしました'))
+      rejectDone(new TrimCancelled())
       return
     }
     if (failed) {
-      rejectDone(failure(`動画を作り直せませんでした（${failed}）。元の動画はそのままです`, true))
+      rejectDone(failure(t.trim.failedWith(failed), true))
       return
     }
     const type = (recorder.mimeType || mimeType).split(';')[0]
@@ -255,7 +264,7 @@ export function startTrim(
       rejectDone(
         // 空でも、2秒より短い範囲なら形式のせいにしない（録画と同じ。始めてすぐ止めると空になることがある）
         failure(
-          '途中で止まり、最後まで作り直せませんでした。元の動画はそのままです',
+          t.trim.stopped,
           stoppedItself || (blob.size === 0 && range.end - range.start >= 2),
         ),
       )
@@ -280,7 +289,7 @@ export function startTrim(
           dlog('recorder start failed', e instanceof Error ? `${e.name}: ${e.message}` : String(e))
           stopped = true
           cleanup()
-          rejectDone(failure('この端末では動画を作り直せませんでした。元の動画はそのままです', true))
+          rejectDone(failure(t.trim.cannotRebuild, true))
           return
         }
         frame(mediaTime)
@@ -290,7 +299,7 @@ export function startTrim(
       dlog('playing rejected', e instanceof Error ? `${e.name}: ${e.message}` : String(e))
       stopped = true
       cleanup()
-      rejectDone(new Error(e instanceof Error ? `再生できませんでした（${e.message}）` : '再生できませんでした'))
+      rejectDone(new Error(e instanceof Error ? t.trim.playFailedWith(e.message) : t.trim.playFailed))
     })
 
   return {
@@ -301,7 +310,7 @@ export function startTrim(
         // まだ録り始めていない、または録画がすでに止まっている
         stopped = true
         cleanup()
-        rejectDone(new Error('キャンセルしました'))
+        rejectDone(new TrimCancelled())
         return
       }
       finish()

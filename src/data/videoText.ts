@@ -1,20 +1,31 @@
 import { formatDate, formatDateTime, OUTCOME_LABEL } from '../domain/format'
 import type { PracticeRecord, Skill } from '../domain/types'
+import { t } from '../i18n'
+import { en } from '../i18n/en'
 import { SITE_URL } from '../platform'
 import { db } from './db'
 import { cupNumbers } from './repo'
 
 /**
  * YouTube に付けるタイトルと説明の「書き方」（テンプレート）。
- * `{型}` のように波かっこで囲んだ項目が、動画ごとの記録の中身に置き換わる。端末ごとの設定（動画の設定と同じ）
+ * `{型}` のように波かっこで囲んだ項目が、動画ごとの記録の中身に置き換わる。端末ごとの設定（動画の設定と同じ）。
+ * 項目の名前は、日本語の名前を元にする（保存したテンプレートと、中身の受け渡しで使う）
  */
 export const TEMPLATE_FIELDS = ['型', '番号', '日付', '日時', '結果', 'メモ', '次の一手'] as const
 export type TemplateField = (typeof TEMPLATE_FIELDS)[number]
 export type TemplateVars = Partial<Record<TemplateField, string>>
 
-export const DEFAULT_TITLE = 'ラテアート｜{型}｜{日時}'
+/** 画面に出す項目の名前（いまの言語）。英語では `{pattern}` のように書く */
+export const TEMPLATE_FIELD_LABEL: Record<TemplateField, string> = t.videoText.fields
+
+/** 英語の項目名 → 元の名前。言語を変えても、前に書いたテンプレートがそのまま使えるよう、どちらの名前も受け付ける */
+const EN_FIELD: Record<string, TemplateField> = Object.fromEntries(
+  Object.entries(en.videoText.fields).map(([field, name]) => [name.toLowerCase(), field as TemplateField]),
+)
+
+export const DEFAULT_TITLE = t.videoText.defaultTitle
 /** 最後の2行は、説明欄のリンクから、アプリの紹介ページに来てもらうため */
-export const DEFAULT_DESCRIPTION = ['{結果}', 'メモ：{メモ}', '次の一手：{次の一手}', '', 'ラテ帳で記録', SITE_URL].join('\n')
+export const DEFAULT_DESCRIPTION = t.videoText.defaultDescription(SITE_URL)
 
 const TITLE_KEY = 'youtubeTitleTemplate'
 const DESCRIPTION_KEY = 'youtubeDescriptionTemplate'
@@ -66,14 +77,17 @@ export function cutChars(text: string, max: number): string {
  */
 export function renderTemplate(template: string, vars: TemplateVars): string {
   const known: readonly string[] = TEMPLATE_FIELDS
+  const fieldOf = (name: string): TemplateField | undefined =>
+    known.includes(name) ? (name as TemplateField) : EN_FIELD[name.toLowerCase()]
   const out: string[] = []
   for (const line of template.split(/\r?\n/)) {
     let hasField = false
     let filled = false
     const text = line.replace(/\{([^{}]+)\}/g, (whole, name: string) => {
-      if (!known.includes(name)) return whole
+      const field = fieldOf(name)
+      if (!field) return whole
       hasField = true
-      const value = vars[name as TemplateField] ?? ''
+      const value = vars[field] ?? ''
       if (value) filled = true
       return value
     })
@@ -94,13 +108,14 @@ export interface VideoTemplates {
 
 /** 保存したテンプレートから、YouTube に付けるタイトルと説明を作る */
 export function buildVideoText(templates: VideoTemplates, vars: TemplateVars): { title: string; description: string } {
-  // タイトルは1行。項目が空で「｜」が続いたら、1つにまとめる
-  const oneLine = (t: string) =>
-    clean(renderTemplate(t, vars))
+  // タイトルは1行。項目が空で「｜」（英語は「|」）が続いたら、1つにまとめる
+  const oneLine = (text: string) =>
+    clean(renderTemplate(text, vars))
       .replace(/\s*\n+\s*/g, ' ')
       .replace(/(\s*｜\s*){2,}/g, '｜')
-      .replace(/^\s*｜\s*|\s*｜\s*$/g, '')
-  const title = oneLine(templates.title) || oneLine(DEFAULT_TITLE) || 'ラテ帳'
+      .replace(/(\s*\|\s*){2,}/g, ' | ')
+      .replace(/^\s*[｜|]\s*|\s*[｜|]\s*$/g, '')
+  const title = oneLine(templates.title) || oneLine(DEFAULT_TITLE) || t.settings.appName
   return { title: cutChars(title, TITLE_MAX), description: cutBytes(clean(renderTemplate(templates.description, vars)), DESCRIPTION_MAX_BYTES) }
 }
 
@@ -158,7 +173,7 @@ export async function previewVars(): Promise<{ vars: TemplateVars; sample: boole
   }
   const now = Date.now()
   return {
-    vars: { 型: 'ハート', 番号: '12', 日付: formatDate(now), 日時: formatDateTime(now), 結果: OUTCOME_LABEL.meh, 次の一手: 'ミルクを高い位置から入れる' },
+    vars: { 型: t.videoText.sampleSkill, 番号: '12', 日付: formatDate(now), 日時: formatDateTime(now), 結果: OUTCOME_LABEL.meh, 次の一手: t.videoText.sampleNext },
     sample: true,
   }
 }

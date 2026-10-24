@@ -22,6 +22,7 @@ import { recordBackAction } from './recordBack'
 import { useBackHandler } from './useBackHandler'
 import { patternFor } from './world'
 import { BackIcon, CameraIcon, ChevronDownIcon, PhotoIcon, PlusIcon, ScissorsIcon, VideoIcon } from './icons'
+import { t } from '../i18n'
 
 const OUTCOMES: { value: Outcome; label: string }[] = (['good', 'meh', 'bad'] as const).map((value) => ({
   value,
@@ -53,12 +54,12 @@ function useDraft(key: string, enabled: boolean) {
 /** 編集で、端末に中身が無い動画・写真。写真はサーバーから取り、YouTube にある動画はその絵と、編集できないことを出す */
 function NotOnDevice({ media }: { media: Media }) {
   const url = useCupImageUrl(media, 'edit')
-  if (!url) return <div className="media placeholder">この端末にはありません</div>
+  if (!url) return <div className="media placeholder">{t.common.notOnDevice}</div>
   if (!isVideo(media)) return <img className="media" src={url} alt="" />
   return (
     <div className="media placeholder with-poster" style={{ backgroundImage: `url(${url})` }}>
-      {media.youtubeId ? 'YouTube にあります' : 'この端末にはありません'}
-      <small>端末に無いので、切り取りなどの編集はできません</small>
+      {media.youtubeId ? t.record.onYoutube : t.common.notOnDevice}
+      <small>{t.record.cannotEdit}</small>
     </div>
   )
 }
@@ -245,9 +246,9 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
     return action !== 'leave'
   })
 
-  if (!data || !loaded) return missing ? <Empty>記録が見つかりません。</Empty> : null
+  if (!data || !loaded) return missing ? <Empty>{t.common.recordNotFound}</Empty> : null
   const { next, count } = data
-  if (!skill) return <Empty>型が見つかりません。</Empty>
+  if (!skill) return <Empty>{t.common.skillNotFound}</Empty>
 
   const fallback = editing ? `/skill/${skillId}` : '/'
   // 原因のタグは、いまは出さない（記録の画面がごちゃつく・あまり使われないため）。
@@ -290,7 +291,7 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
     // Android はメモリに写すので、大きすぎる動画は入れない（アプリが落ちないように）
     if (isAndroidApp && picked.some((f) => f.type.startsWith('video/') && f.size > ANDROID_MAX_PICK_BYTES)) {
       picked = picked.filter((f) => !(f.type.startsWith('video/') && f.size > ANDROID_MAX_PICK_BYTES))
-      toast.show('長すぎる動画は入れられません。写真アプリで短く切り取ってから選んでください', 'error')
+      toast.show(t.record.tooLong, 'error')
     }
     if (picked.length === 0) return
     setPreparing((n) => n + picked.length)
@@ -331,7 +332,7 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
           queuedSave.current = null
           setSaving(false)
         }
-        throw new Error('読み込めなかった動画・写真があります。もう一度選んでください')
+        throw new Error(t.record.unreadable)
       }
     } finally {
       setPreparing((n) => n - picked.length)
@@ -350,7 +351,7 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
     const next: YoutubePrivacy = (item.privacy ?? videoSettings?.youtubePrivacy) === 'public' ? 'unlisted' : 'public'
     setItems((prev) => prev.map((i) => (i.key === item.key && i.kind === 'new' ? { ...i, privacy: next } : i)))
     change()
-    toast.show(next === 'public' ? 'この動画は、だれでも見られるように YouTube に上げます' : 'この動画は、リンクを知っている人だけが見られるように YouTube に上げます')
+    toast.show(next === 'public' ? t.record.toastPublic : t.record.toastUnlisted)
   }
 
   const onTrimmed = (key: string, file: File) => {
@@ -411,14 +412,14 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
             removeMediaIds: removed,
             replace,
           })
-          toast.show(skillId === (originalSkillId.current ?? routeSkillId) ? '記録を保存しました' : `「${splitName(skill.name).main}」に移して保存しました`)
+          toast.show(skillId === (originalSkillId.current ?? routeSkillId) ? t.record.saved : t.record.movedAndSaved(splitName(skill.name).main))
         } else {
           await addRecord({ skillId, outcome, reason, causes, nextAction, files: added })
           clearDraft()
           const total = await db.records.count()
           if (more) {
             // 続けて淹れる：この画面のまま中身を空にして、すぐカメラを開く
-            toast.show(`No.${total} を記録しました`)
+            toast.show(t.record.recorded(total))
             setItems([])
             setOutcome(undefined)
             // 型を変えて描き直したなら、続けて同じ型で撮ることが多いので、型は残す
@@ -429,7 +430,7 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
             if (hasNewMedia) void requestPersist()
             return
           }
-          toast.show(`No.${total} を記録しました`, 'ok', { label: 'もう1杯', onClick: () => go(`/record/${skillId}`) })
+          toast.show(t.record.recorded(total), 'ok', { label: t.record.oneMore, onClick: () => go(`/record/${skillId}`) })
         }
         if (hasNewMedia) void requestPersist()
         goBack(fallback)
@@ -445,7 +446,7 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
 
   // 次の一手の候補：前回と同じ、選んだ原因の直し方（押すだけで入る）
   const suggestions = [
-    ...(next && !editing ? [{ prefix: '前回', text: next.text }] : []),
+    ...(next && !editing ? [{ prefix: t.record.lastTime, text: next.text }] : []),
     ...(draft.causes ?? []).flatMap((c) => {
       const tip = causeTip(c)
       return tip ? [{ prefix: c, text: tip }] : []
@@ -465,19 +466,19 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
             if (askBeforeLeaving()) e.preventDefault()
             else backHandler(fallback)(e)
           }}
-          aria-label="戻る"
+          aria-label={t.common.back}
         >
           <BackIcon size={26} />
         </a>
         <div className="title-block">
-          {editing ? <span className="muted">記録を編集</span> : <span className="muted">{count + 1}杯目</span>}
+          {editing ? <span className="muted">{t.record.editTitle}</span> : <span className="muted">{t.record.nth(count + 1)}</span>}
           <h1>
             {/* 同じ分野に別の型があるときは、名前を押して選び直せる（ボタンを足さずに、見出しに寄せる） */}
             {skills && skills.length > 1 ? (
               <button
                 type="button"
                 className="title-switch"
-                aria-label={`${splitName(skill.name).main}：型を変える`}
+                aria-label={t.record.changeSkill(splitName(skill.name).main)}
                 aria-haspopup="dialog"
                 onClick={() => setPickingSkill(true)}
               >
@@ -495,10 +496,10 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
         <div className="confirm">
           <p>
             {editing
-              ? '編集した内容が保存されていません。保存せずに戻りますか？'
+              ? t.record.leaveEdited
               : items.length + preparing > 0
-                ? `撮った動画・写真が ${items.length + preparing} 件あります。保存せずに戻ると消えます。`
-                : '入力した内容が保存されていません。保存せずに戻ると消えます。'}
+                ? t.record.leaveMedia(items.length + preparing)
+                : t.record.leaveInput}
           </p>
           <div className="row">
             <button
@@ -512,10 +513,10 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
                 else goBack(fallback)
               }}
             >
-              {'to' in confirmLeave ? '保存せずに移動' : '保存せずに戻る'}
+              {'to' in confirmLeave ? t.record.leaveMove : t.record.leaveBack}
             </button>
             <button className="btn" onClick={() => setConfirmLeave(null)}>
-              {editing ? '編集を続ける' : '記録を続ける'}
+              {editing ? t.record.keepEditing : t.record.keepRecording}
             </button>
           </div>
         </div>
@@ -528,20 +529,20 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
             <div className="capture-buttons">
               <button type="button" className="btn capture" onClick={openCamera}>
                 <VideoIcon size={28} />
-                動画を撮る
+                {t.record.shootVideo}
               </button>
               <button type="button" className="btn capture" onClick={() => photoInput.current?.click()}>
                 <CameraIcon size={28} />
-                写真を撮る
+                {t.record.shootPhoto}
               </button>
               <button type="button" className="btn capture" onClick={() => libraryInput.current?.click()}>
                 <PhotoIcon size={28} />
-                アルバム
+                {t.record.album}
               </button>
             </div>
             {next && !editing && (
               <p className="next-line">
-                <span className="next-label">今回</span>
+                <span className="next-label">{t.record.thisTime}</span>
                 <span className="next-text">{next.text}</span>
               </p>
             )}
@@ -552,7 +553,7 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
               const blob = itemBlob(item)
               const type = itemType(item)
               const poster = item.kind === 'new' ? item.poster?.blob : (item.replaced?.poster?.blob ?? item.media.poster)
-              const privacyLabel = (item.kind === 'new' ? (item.privacy ?? videoSettings?.youtubePrivacy) : undefined) === 'public' ? 'だれでも' : 'リンクのみ'
+              const privacyLabel = (item.kind === 'new' ? (item.privacy ?? videoSettings?.youtubePrivacy) : undefined) === 'public' ? t.common.anyone : t.common.linkOnly
               return (
                 <li key={item.key}>
                   {blob ? (
@@ -566,7 +567,7 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
                   ) : (
                     item.kind === 'existing' && <NotOnDevice media={item.media} />
                   )}
-                  <button type="button" className="remove" aria-label="外す" onClick={() => removeItem(item)}>
+                  <button type="button" className="remove" aria-label={t.record.remove} onClick={() => removeItem(item)}>
                     ×
                   </button>
                   <div className="preview-actions">
@@ -574,7 +575,7 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
                     {blob && isVideo({ type }) && (
                       <button type="button" className="btn small" onClick={() => setTrimming(item.key)}>
                         <ScissorsIcon size={16} />
-                        編集
+                        {t.common.edit}
                       </button>
                     )}
                     {/* 保存先が YouTube のとき、この動画の公開範囲（押すたびに切り替わる）。上げたあとの動画は変えられない */}
@@ -582,7 +583,7 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
                       <button
                         type="button"
                         className="btn small"
-                        aria-label={`YouTube の公開範囲：${privacyLabel}（押すと切り替わります）`}
+                        aria-label={t.record.privacyToggle(privacyLabel)}
                         onClick={() => togglePrivacy(item)}
                       >
                         {privacyLabel}
@@ -600,7 +601,7 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
             ))}
             {/* 撮り足す（アプリのカメラ。アルバムもカメラの中から選べる） */}
             <li>
-              <button type="button" className="media add-media" aria-label="撮り足す" onClick={openCamera}>
+              <button type="button" className="media add-media" aria-label={t.record.addMore} onClick={openCamera}>
                 <PlusIcon size={26} />
               </button>
             </li>
@@ -627,13 +628,13 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
         ))}
         {editing && storage === 'youtube' && items.some((i) => i.kind === 'existing' && i.replaced && i.media.youtubeId) && (
           <p className="muted small">
-            切り取った動画は YouTube に上げ直します。前の動画は YouTube に残るので、不要なら YouTube アプリで削除してください。
+            {t.record.reupload}
           </p>
         )}
       </section>
 
       <section className="section reflect">
-        <div className="segmented outcome-picker" role="radiogroup" aria-label="結果">
+        <div className="segmented outcome-picker" role="radiogroup" aria-label={t.outcome.label}>
           {OUTCOMES.map((o) => (
             <button
               key={o.value}
@@ -656,7 +657,7 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
 
         {/* うまくいかなかったときだけ、よくある原因をワンタップで選べる（書かなくて済むように） */}
         {causeOptions.length > 0 && (outcome === 'meh' || outcome === 'bad') && (
-          <div className="cause-chips" role="group" aria-label="原因（あてはまるもの）">
+          <div className="cause-chips" role="group" aria-label={t.record.causes}>
             {causeOptions.map((c) => {
               const on = draft.causes?.includes(c) ?? false
               return (
@@ -680,7 +681,7 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
         )}
 
         <div className="field">
-          <label htmlFor="next-action">次の一手</label>
+          <label htmlFor="next-action">{t.record.nextAction}</label>
           {/* 押すだけで入る候補。前回と同じことを続けるときや、選んだ原因の直し方 */}
           {suggestions.length > 0 && (
             <div className="suggest-chips">
@@ -707,13 +708,13 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
               setDraft((d) => ({ ...d, nextAction: e.target.value }))
               change()
             }}
-            placeholder="次の杯で試すこと（次に記録するとき、カメラの上に出ます）"
+            placeholder={t.record.nextActionPlaceholder}
           />
         </div>
 
         {showMemo ? (
           <label className="field">
-            <span>メモ</span>
+            <span>{t.record.memo}</span>
             <textarea
               rows={2}
               autoFocus={memoOpen && !draft.reason}
@@ -722,12 +723,12 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
                 setDraft((d) => ({ ...d, reason: e.target.value }))
                 change()
               }}
-              placeholder="気づいたこと・うまくいった理由など（キーボードのマイクで音声入力できます）"
+              placeholder={t.record.memoPlaceholder}
             />
           </label>
         ) : (
           <button type="button" className="quiet-button memo-toggle" onClick={() => setMemoOpen(true)}>
-            ＋ メモを足す
+            {t.record.addMemo}
           </button>
         )}
       </section>
@@ -736,20 +737,20 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
         <section className="section danger-zone">
           <ConfirmButton
             className="btn ghost"
-            confirmLabel="削除する"
-            message="この記録と動画・写真を削除します。元に戻せません。YouTube に上げた動画は残ります。"
+            confirmLabel={t.common.delete}
+            message={t.record.deleteConfirm}
             onConfirm={async () => {
               const ok = await run(async () => {
                 await deleteRecord(recordId)
                 return true
               })
               if (ok) {
-                toast.show('記録を削除しました')
+                toast.show(t.record.deleted)
                 goBack(fallback)
               }
             }}
           >
-            この記録を削除
+            {t.record.deleteThis}
           </ConfirmButton>
         </section>
       )}
@@ -799,16 +800,16 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
       <div className="sticky-actions">
         {editing ? (
           <button className="btn primary block" disabled={saving || (!dirty && preparing === 0)} onClick={() => save()}>
-            {saving ? '保存中…' : '保存する'}
+            {saving ? t.common.saving : t.common.save}
           </button>
         ) : (
           // 続けて淹れるときは「もう1杯」（保存してすぐカメラへ）。終わるときは「保存」
           <div className="save-pair">
             <button className="btn" disabled={saving || nothingToSave} onClick={() => save(true)}>
-              保存してもう1杯
+              {t.record.saveAndMore}
             </button>
             <button className="btn primary" disabled={saving || nothingToSave} onClick={() => save()}>
-              {saving ? '保存中…' : '保存'}
+              {saving ? t.common.saving : t.record.saveShort}
             </button>
           </div>
         )}

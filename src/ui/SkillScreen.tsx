@@ -22,6 +22,7 @@ import { useAction, useCelebrate } from './feedback'
 import { backHandler, href } from './router'
 import { BackIcon } from './icons'
 import { AboutSkill, SkillTips } from './SkillTips'
+import { t } from '../i18n'
 
 /** 記録は写真の格子で、まず新しいものを数段だけ出し、少しずつ足す（3列なので3の倍数） */
 const RECORDS_FIRST = 9
@@ -56,7 +57,7 @@ export function SkillScreen({ id }: { id: string }) {
   }, [id])
 
   if (!data) return null
-  if (!data.skill) return <Empty>型が見つかりません。</Empty>
+  if (!data.skill) return <Empty>{t.common.skillNotFound}</Empty>
   const { skill, skills, domain, records, media } = data
   const states = computeStates(skills, data.practicing)
   const state = states.get(skill.id)!
@@ -74,13 +75,13 @@ export function SkillScreen({ id }: { id: string }) {
           className="back"
           href={href(`/map/${skill.domainId}`)}
           onClick={backHandler(`/map/${skill.domainId}`)}
-          aria-label="戻る"
+          aria-label={t.common.back}
         >
           <BackIcon size={26} />
         </a>
         <span className="title-block muted small">{domain?.name}</span>
         <a className="btn small ghost" href={href(`/skill/${skill.id}/edit`)}>
-          編集
+          {t.common.edit}
         </a>
       </header>
 
@@ -91,14 +92,14 @@ export function SkillScreen({ id }: { id: string }) {
           {sub && <span className="muted small">{sub}</span>}
           <div className="row wrap">
             <StateBadge state={state} />
-            {skill.achievedAt && <span className="muted small">{formatDateTime(skill.achievedAt)} にできた</span>}
+            {skill.achievedAt && <span className="muted small">{t.skill.achievedAt(formatDateTime(skill.achievedAt))}</span>}
           </div>
         </div>
       </div>
 
       {/* 決められた合格基準ではなく、最近の調子を見て「できた」を自分で決める */}
       <section className="form-box">
-        <h2>最近の調子</h2>
+        <h2>{t.skill.form}</h2>
         <FormDots form={form} />
         <p className="muted small">{formSummary(form)}</p>
       </section>
@@ -106,12 +107,12 @@ export function SkillScreen({ id }: { id: string }) {
       {/* どの型でも、すぐ記録できる（最近記録した型が「練習中」になり、今日の画面に出る） */}
       <div className="actions">
         <a className="btn primary" href={href(`/record/${skill.id}`)}>
-          記録する
+          {t.common.record}
         </a>
         {/* 「できた」は、このアプリでいちばんうれしい瞬間のボタンなので、金色で並べて見せる */}
         {state !== 'done' && !askingAchieve && (
           <button className="btn achieve" onClick={() => setAskingAchieve(true)}>
-            できた
+            {t.state.done}
           </button>
         )}
       </div>
@@ -121,20 +122,20 @@ export function SkillScreen({ id }: { id: string }) {
       {state === 'done' && (
         <ConfirmButton
           className="btn small ghost"
-          confirmLabel="取り消す"
-          message="「できた」を取り消します。撮った記録や、ほかの型の練習はそのままです。"
+          confirmLabel={t.skill.revertConfirm}
+          message={t.skill.revertMessage}
           onConfirm={() => run(() => revertAchievement(skill.id))}
         >
-          「できた」を取り消す
+          {t.skill.revert}
         </ConfirmButton>
       )}
 
       {askingAchieve && (
         <div className="confirm achieve-confirm">
           <p>
-            <strong>この型を「できた」にしますか？</strong>
+            <strong>{t.skill.achieveAsk}</strong>
           </p>
-          <p className="muted small">最近の調子：{formSummary(form)}。自分で納得できたら「できた」にしてください。</p>
+          <p className="muted small">{t.skill.achieveHint(formSummary(form))}</p>
           <div className="row">
             <button
               className="btn achieve"
@@ -152,10 +153,10 @@ export function SkillScreen({ id }: { id: string }) {
                 })
               }}
             >
-              はい、できた
+              {t.skill.achieveYes}
             </button>
             <button className="btn ghost" onClick={() => setAskingAchieve(false)}>
-              まだ
+              {t.skill.achieveNo}
             </button>
           </div>
         </div>
@@ -172,10 +173,10 @@ export function SkillScreen({ id }: { id: string }) {
 
       <section className="section">
         <div className="section-head">
-          <h2>記録（{records.length}杯）</h2>
+          <h2>{t.skill.records(records.length)}</h2>
         </div>
         {records.length === 0 ? (
-          <p className="muted">まだ記録がありません。</p>
+          <p className="muted">{t.common.noRecordsYet}</p>
         ) : (
           <CupGrid
             cups={records.slice(0, shown).map((r) => ({
@@ -189,7 +190,7 @@ export function SkillScreen({ id }: { id: string }) {
         )}
         {records.length > shown && (
           <button className="btn" onClick={() => setShown((n) => n + RECORDS_PAGE)}>
-            さらに表示（残り {records.length - shown}杯）
+            {t.skill.showMore(records.length - shown)}
           </button>
         )}
       </section>

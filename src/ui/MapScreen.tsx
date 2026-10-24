@@ -11,6 +11,7 @@ import { PatternImage } from './PatternImage'
 import { href } from './router'
 import { laterLabel, recommendLabel } from './skillLabels'
 import { readStorage, writeStorage } from './storage'
+import { t } from '../i18n'
 
 const LAST_DOMAIN_KEY = 'michishirube:last-domain'
 const VIEW_KEY = 'michishirube:types-view'
@@ -71,16 +72,16 @@ export function MapScreen({ domainId }: { domainId?: string }) {
   return (
     <div className="screen types">
       <header className="screen-header">
-        <h1>型</h1>
+        <h1>{t.app.tabSkills}</h1>
         {skills.length > 0 && (
           <span className="muted small">
-            できた {done.length} / {skills.length}
+            {t.map.doneCount(done.length, skills.length)}
           </span>
         )}
       </header>
 
       {domains.length > 1 && (
-        <div className="domain-tabs" role="tablist" aria-label="分野">
+        <div className="domain-tabs" role="tablist" aria-label={t.map.domains}>
           {domains.map((d) => (
             <a
               key={d.id}
@@ -96,14 +97,14 @@ export function MapScreen({ domainId }: { domainId?: string }) {
       )}
 
       {skills.length > 0 && (
-        <div className="segmented small view-switch" role="group" aria-label="表示">
+        <div className="segmented small view-switch" role="group" aria-label={t.map.view}>
           <button
             type="button"
             className={view === 'list' ? 'selected' : ''}
             aria-pressed={view === 'list'}
             onClick={() => changeView('list')}
           >
-            一覧
+            {t.map.list}
           </button>
           <button
             type="button"
@@ -111,7 +112,7 @@ export function MapScreen({ domainId }: { domainId?: string }) {
             aria-pressed={view === 'roadmap'}
             onClick={() => changeView('roadmap')}
           >
-            ロードマップ
+            {t.map.roadmap}
           </button>
         </div>
       )}
@@ -121,31 +122,31 @@ export function MapScreen({ domainId }: { domainId?: string }) {
           <Suspense fallback={<div className="graph" aria-busy="true" />}>
             <RoadmapGraph key={current.id} skills={skills} practicing={practicing} />
           </Suspense>
-          <p className="muted small">型を押すと、記録とコツが見られます。指で動かしたり、広げたりできます。</p>
+          <p className="muted small">{t.map.graphHint}</p>
         </>
       )}
 
       {current && skills.length === 0 && (
         <div className="empty">
-          <p>まだ型がありません。</p>
+          <p>{t.map.noSkills}</p>
           <a className="btn primary" href={href(`/domain/${current.id}/new-skill`)}>
             <PlusIcon size={18} />
-            型を追加
+            {t.map.addSkill}
           </a>
         </div>
       )}
       {!current && (
         <div className="empty">
-          <p>ロードマップがありません。</p>
+          <p>{t.map.noRoadmap}</p>
           <a className="btn primary" href={href('/settings/roadmaps')}>
-            ロードマップを入れる
+            {t.map.addRoadmap}
           </a>
         </div>
       )}
 
       {view === 'list' && active.length > 0 && (
         <section className="section">
-          <h2>練習中</h2>
+          <h2>{t.state.active}</h2>
           <ul className="type-cards">
             {active.map((s) => {
               const st = stats.get(s.id)
@@ -157,7 +158,8 @@ export function MapScreen({ domainId }: { domainId?: string }) {
                       <span className="type-name">{splitName(s.name).main}</span>
                       {st && <FormDots form={st.form} />}
                       <span className="muted small">
-                        {st?.count ?? 0}杯{st && st.count > 0 ? `・最後に練習 ${formatAgo(st.last)}` : ''}
+                        {t.common.cups(st?.count ?? 0)}
+                        {st && st.count > 0 ? t.map.lastPractice(formatAgo(st.last)) : ''}
                       </span>
                     </span>
                   </a>
@@ -171,7 +173,7 @@ export function MapScreen({ domainId }: { domainId?: string }) {
       {/* 次に練習するとよい型（押して型の画面から記録すると、練習中になる） */}
       {view === 'list' && available.length > 0 && (
         <section className="section">
-          <h2>次のおすすめ</h2>
+          <h2>{t.state.available}</h2>
           <ul className="type-rows">
             {available.map((s) => (
               <li key={s.id} className="type-row">
@@ -191,7 +193,7 @@ export function MapScreen({ domainId }: { domainId?: string }) {
       {/* その先の型も、押して型の画面から記録できる */}
       {view === 'list' && locked.length > 0 && (
         <section className="section">
-          <h2>その先</h2>
+          <h2>{t.state.locked}</h2>
           <ul className="type-rows">
             {locked.map((s) => (
               <li key={s.id} className="type-row">
@@ -210,7 +212,7 @@ export function MapScreen({ domainId }: { domainId?: string }) {
 
       {view === 'list' && done.length > 0 && (
         <section className="section done-section">
-          <h2>できた</h2>
+          <h2>{t.state.done}</h2>
           <ul className="done-grid">
             {done.map((s) => (
               <li key={s.id}>
@@ -228,7 +230,7 @@ export function MapScreen({ domainId }: { domainId?: string }) {
       {current && skills.length > 0 && (
         <a className="add-type" href={href(`/domain/${current.id}/new-skill`)}>
           <PlusIcon size={16} />
-          {current.name}に型を追加
+          {t.map.addSkillTo(current.name)}
         </a>
       )}
     </div>

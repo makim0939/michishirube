@@ -5,6 +5,7 @@ import { isNativeApp } from '../platform'
 import { sha256Hex } from '../../shared/hash'
 import { db } from './db'
 import { connectWithConfig, disconnectSync, getSyncConfig, SyncError, type SyncConfig } from './sync'
+import { t } from '../i18n'
 
 /**
  * Google でログインして、記録・写真をサーバーに置く（ほかの端末でも同じ記録を使える）。
@@ -59,12 +60,15 @@ async function post(path: string, body: unknown, session?: string): Promise<Reco
       body: JSON.stringify(body),
     })
   } catch {
-    throw new SyncError('つながりません。電波を確認してください')
+    throw new SyncError(t.errors.offline)
   }
   const json = (await res.json().catch(() => ({}))) as Record<string, unknown>
   if (!res.ok) {
-    if (res.status === 401) throw new SyncError('ログインし直してください', 401)
-    throw new SyncError(typeof json.message === 'string' ? json.message : `エラーが起きました（${res.status}）`, res.status)
+    if (res.status === 401) throw new SyncError(t.errors.relogin, 401)
+    throw new SyncError(
+      t.errors.fromServer(typeof json.error === 'string' ? json.error : undefined, typeof json.message === 'string' ? json.message : undefined, res.status),
+      res.status,
+    )
   }
   return json
 }
@@ -123,7 +127,7 @@ export async function authorizeWithGoogle(kind: AuthKind, session?: string): Pro
     try {
       localStorage.setItem(PENDING_KEY, JSON.stringify({ id, verifier }))
     } catch {
-      throw new SyncError('この画面ではログインできません（プライベートブラウズでは使えません）')
+      throw new SyncError(t.errors.privateBrowsing)
     }
     window.location.href = url
     return new Promise(() => {})
@@ -169,7 +173,7 @@ export async function resumeWebAuth(): Promise<AuthResult | null> {
     // 読めなければ、受け取れない
   }
   if (!pending || pending.id !== back.id) {
-    throw new SyncError('この画面ではログインを終えられませんでした。ログインを始めた画面でもう一度試してください')
+    throw new SyncError(t.errors.loginOtherWindow)
   }
   if (back.status !== 'done' || !back.code) return null
   const res = await finish(pending.id, pending.verifier, back.code)
@@ -270,7 +274,7 @@ export async function loginWithApple(): Promise<{ firstDevice: boolean } | null>
     // 途中で閉じたときは、エラーにしない（Apple の画面の取り消し。エラーの番号は 1001）
     if (isAppleCancelled(e)) return null
     // どこで失敗したかが分かるよう、Apple の認証の段階の理由をそのまま出す
-    throw new SyncError(`Apple の認証でエラーになりました（${e instanceof Error ? e.message : String(e)}）`)
+    throw new SyncError(t.errors.apple(e instanceof Error ? e.message : String(e)))
   }
   let res: Response
   try {
@@ -280,12 +284,12 @@ export async function loginWithApple(): Promise<{ firstDevice: boolean } | null>
       body: JSON.stringify({ identityToken, nonce, ...(authorizationCode ? { authorizationCode } : {}) }),
     })
   } catch {
-    throw new SyncError('つながりません。電波を確認してください')
+    throw new SyncError(t.errors.offline)
   }
   if (!res.ok) {
     // サーバーが確かめられなかった理由（トークンの不正・Apple の鍵の取得失敗など）を出す
     const body = (await res.json().catch(() => ({}))) as { message?: string }
-    throw new SyncError(`確かめられませんでした（${res.status}${body.message ? `：${body.message}` : ''}）`, res.status)
+    throw new SyncError(t.errors.verifyFailed(res.status, body.message), res.status)
   }
   const { session, email } = (await res.json()) as { session: string; email?: string }
   return completeLogin({ kind: 'login', session, email: email ?? appleEmail ?? undefined })
@@ -327,9 +331,9 @@ export async function deleteAccount(): Promise<boolean> {
   try {
     res = await fetch(`${serverOf(config)}/api/account`, { method: 'DELETE', headers: { Authorization: `Bearer ${config.token}` } })
   } catch {
-    throw new SyncError('つながりません。電波を確認してください')
+    throw new SyncError(t.errors.offline)
   }
-  if (!res.ok && res.status !== 401) throw new SyncError(`削除できませんでした（${res.status}）`, res.status)
+  if (!res.ok && res.status !== 401) throw new SyncError(t.errors.deleteFailed(res.status), res.status)
   await forgetConnection()
   if (!res.ok) return false
   // サーバーの写真は消えたので、置いた印も消す（消せたか分からないときは残す。同じアカウントに戻れば、そのまま取ってこられる）

@@ -2,11 +2,16 @@ import { newlyUnlocked, practicingFrom, PRACTICING_DAYS, wouldCreateCycle } from
 import { isWebUrl, parseTemplate, templateToEntities, type RoadmapTemplate } from '../domain/template'
 import type { Media, Outcome, PracticeRecord, Reference, Skill } from '../domain/types'
 import latteArt from '../roadmaps/latte-art.json'
+import latteArtEn from '../roadmaps/latte-art.en.json'
 import { moveContentsToFiles, optimizeVideos } from './content'
 import { db, markDirty, newId } from './db'
 import type { VideoQuality, YoutubePrivacy } from './videoStorage'
+import { lang, t } from '../i18n'
 
-export const BUNDLED_TEMPLATES: RoadmapTemplate[] = [parseTemplate(latteArt)]
+/**
+ * 同梱の型。最初に入れるのは、そのときの言語のもの（入れたあとは、言語を変えても入れ直さない。名前は自分で変えられる）
+ */
+export const BUNDLED_TEMPLATES: RoadmapTemplate[] = [parseTemplate(lang === 'en' ? latteArtEn : latteArt)]
 
 export class RepoError extends Error {}
 
@@ -53,7 +58,7 @@ async function addTemplate(t: RoadmapTemplate, updatedAt: number): Promise<strin
 
 export async function createDomain(name: string): Promise<string> {
   const trimmed = name.trim()
-  if (!trimmed) throw new RepoError('分野の名前を入れてください')
+  if (!trimmed) throw new RepoError(t.repo.domainName)
   const id = newId()
   await db.transaction('rw', db.domains, db.outbox, async () => {
     const now = Date.now()
@@ -65,7 +70,7 @@ export async function createDomain(name: string): Promise<string> {
 
 export async function renameDomain(id: string, name: string) {
   const trimmed = name.trim()
-  if (!trimmed) throw new RepoError('分野の名前を入れてください')
+  if (!trimmed) throw new RepoError(t.repo.domainName)
   await db.transaction('rw', db.domains, db.outbox, async () => {
     await db.domains.update(id, { name: trimmed, updatedAt: Date.now() })
     await markDirty('domain', [id])
@@ -105,7 +110,7 @@ export interface SkillInput {
 
 function cleanInput(input: SkillInput): SkillInput {
   const name = input.name.trim()
-  if (!name) throw new RepoError('型の名前を入れてください')
+  if (!name) throw new RepoError(t.repo.skillName)
   return {
     name,
     description: input.description.trim(),
@@ -129,7 +134,7 @@ export async function updateSkill(id: string, input: SkillInput) {
   await db.transaction('rw', db.skills, db.outbox, async () => {
     const skills = await db.skills.toArray()
     if (clean.prereqIds.includes(id) || wouldCreateCycle(id, clean.prereqIds, skills)) {
-      throw new RepoError('前提が循環してしまいます')
+      throw new RepoError(t.repo.cycle)
     }
     await db.skills.update(id, (s) => void Object.assign(s, clean, { updatedAt: Date.now() }))
     await markDirty('skill', [id])
@@ -157,7 +162,7 @@ export async function deleteSkill(id: string) {
 
 export async function addReference(skillId: string, input: { url: string; title?: string; note?: string }) {
   const url = input.url.trim()
-  if (!isWebUrl(url)) throw new RepoError('URL は http:// か https:// で始めてください')
+  if (!isWebUrl(url)) throw new RepoError(t.repo.url)
   const reference: Reference = {
     id: newId(),
     url,
@@ -166,7 +171,7 @@ export async function addReference(skillId: string, input: { url: string; title?
   }
   await db.transaction('rw', db.skills, db.outbox, async () => {
     const skill = await db.skills.get(skillId)
-    if (!skill) throw new RepoError('型が見つかりません')
+    if (!skill) throw new RepoError(t.repo.skillNotFound)
     await db.skills.update(skillId, { references: [...skill.references, reference], updatedAt: Date.now() })
     await markDirty('skill', [skillId])
   })
@@ -187,8 +192,8 @@ export async function removeReference(skillId: string, referenceId: string) {
 /** タイトルを書かなかったときの名前。YouTube などはサービス名、それ以外はドメイン名 */
 function defaultReferenceTitle(url: string): string {
   const host = new URL(url).hostname.replace(/^www\.|^m\./, '')
-  if (host === 'youtu.be' || host.endsWith('youtube.com')) return 'YouTube の動画'
-  if (host.endsWith('instagram.com')) return 'Instagram の投稿'
+  if (host === 'youtu.be' || host.endsWith('youtube.com')) return t.repo.youtubeVideo
+  if (host.endsWith('instagram.com')) return t.repo.instagramPost
   return host
 }
 
@@ -223,9 +228,9 @@ export async function achieveSkill(id: string): Promise<{ skill: Skill; unlocked
   return db.transaction('rw', db.skills, db.outbox, async () => {
     const skills = await db.skills.toArray()
     const skill = skills.find((s) => s.id === id)
-    if (!skill) throw new RepoError('型が見つかりません')
+    if (!skill) throw new RepoError(t.repo.skillNotFound)
     // 前提はおすすめの順なので、前提がまだでも「できた」にできる
-    if (skill.status === 'done') throw new RepoError('すでにできています')
+    if (skill.status === 'done') throw new RepoError(t.repo.alreadyDone)
     const unlocked = newlyUnlocked(id, skills)
     await setSkill(id, { status: 'done', achievedAt: Date.now(), activatedAt: undefined })
     return { skill: { ...skill, status: 'done' as const }, unlocked }
@@ -309,7 +314,7 @@ export async function addRecord(input: RecordInput): Promise<string> {
   const nextAction = input.nextAction.trim()
   const causes = input.causes ?? []
   if (!reason && !nextAction && causes.length === 0 && input.files.length === 0 && !input.outcome) {
-    throw new RepoError('動画・写真か、メモを1つ以上入れてください')
+    throw new RepoError(t.repo.empty)
   }
   const now = Date.now()
   const recordId = newId()
@@ -364,16 +369,16 @@ export async function updateRecord(input: RecordUpdate) {
   let changed: string[] = []
   await db.transaction('rw', db.records, db.media, db.skills, db.outbox, async () => {
     const record = await db.records.get(input.recordId)
-    if (!record) throw new RepoError('記録が見つかりません')
+    if (!record) throw new RepoError(t.repo.recordNotFound)
     const now = Date.now()
     const skillId = input.skillId ?? record.skillId
-    if (skillId !== record.skillId && !(await db.skills.get(skillId))) throw new RepoError('型が見つかりません')
+    if (skillId !== record.skillId && !(await db.skills.get(skillId))) throw new RepoError(t.repo.skillNotFound)
     const removed = new Set(input.removeMediaIds)
     const kept = record.mediaIds.filter((id) => !removed.has(id))
     const added = newMediaRows(record.id, skillId, input.addFiles, now)
     const causes = input.causes ?? []
     if (!reason && !nextAction && causes.length === 0 && !input.outcome && kept.length + added.length === 0) {
-      throw new RepoError('動画・写真か、メモを1つ以上入れてください')
+      throw new RepoError(t.repo.empty)
     }
     await db.media.bulkDelete([...removed])
     await db.media.bulkAdd(added)

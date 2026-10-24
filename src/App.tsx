@@ -19,6 +19,7 @@ import { href, useRoute, type Route } from './ui/router'
 import { SettingsScreen } from './ui/SettingsScreen'
 import { SkillScreen } from './ui/SkillScreen'
 import { TodayScreen } from './ui/TodayScreen'
+import { t } from './i18n'
 
 function Screen({ route }: { route: Route }) {
   switch (route.name) {
@@ -58,7 +59,7 @@ function Background() {
     tidyVideos()
       .then(({ count, bytes }) => {
         if (count > 0) {
-          toast.show(`YouTube に上げた動画 ${count} 本を端末から消しました（${formatBytes(bytes)}）。アプリではこれまでどおり見られます`)
+          toast.show(t.app.tidied(count, formatBytes(bytes)))
         }
       })
       .catch(() => {
@@ -73,15 +74,15 @@ function Background() {
 }
 
 const TABS = [
-  { path: '/', label: '今日', Icon: CupIcon, match: (r: Route) => ['today', 'record', 'cup'].includes(r.name) },
-  { path: '/records', label: 'ラテ帳', Icon: NotebookIcon, match: (r: Route) => r.name === 'records' },
+  { path: '/', label: t.app.tabToday, Icon: CupIcon, match: (r: Route) => ['today', 'record', 'cup'].includes(r.name) },
+  { path: '/records', label: t.app.tabRecords, Icon: NotebookIcon, match: (r: Route) => r.name === 'records' },
   {
     path: '/map',
-    label: '型',
+    label: t.app.tabSkills,
     Icon: LeafIcon,
     match: (r: Route) => ['map', 'skill', 'edit', 'new'].includes(r.name),
   },
-  { path: '/settings', label: '設定', Icon: SlidersIcon, match: (r: Route) => r.name === 'settings' },
+  { path: '/settings', label: t.app.tabSettings, Icon: SlidersIcon, match: (r: Route) => r.name === 'settings' },
 ]
 
 export function App() {
@@ -110,9 +111,9 @@ export function App() {
   if (error) {
     return (
       <div className="screen">
-        <h1>データベースを開けませんでした</h1>
+        <h1>{t.app.dbOpenFailed}</h1>
         <p>{error}</p>
-        <p className="muted">プライベートブラウズでは保存できないことがあります。通常のウィンドウで開いてください。</p>
+        <p className="muted">{t.app.dbOpenHint}</p>
       </div>
     )
   }

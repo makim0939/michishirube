@@ -4,6 +4,7 @@ import { splitName } from './common'
 import { CheckIcon } from './icons'
 import { PatternImage } from './PatternImage'
 import { useBackHandler } from './useBackHandler'
+import { t } from '../i18n'
 
 /**
  * 記録の型を選び直すシート（画面の下から出す）。
@@ -46,13 +47,13 @@ export function SkillPicker({
         className="picker-sheet"
         role="dialog"
         aria-modal="true"
-        aria-label="型を選ぶ"
+        aria-label={t.today.chooseSkill}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="picker-head">
-          <h2>型を選ぶ</h2>
+          <h2>{t.today.chooseSkill}</h2>
           <button type="button" className="btn small" autoFocus onClick={onClose}>
-            閉じる
+            {t.common.close}
           </button>
         </div>
         <ul className="skill-pick-list">

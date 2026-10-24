@@ -1,5 +1,6 @@
 import { App } from '@capacitor/app'
 import { Capacitor } from '@capacitor/core'
+import { lang } from './i18n'
 
 /**
  * iOS・Android のアプリ（Capacitor）として動いているか。
@@ -68,7 +69,11 @@ export const SITE_URL = 'https://latte.makimura.me/'
  * プライバシーポリシー。アプリの中では、公開しているページを Safari で開く
  * （アプリに入れたファイルを別の窓で開くと、アプリの画面が置き換わってしまうため）
  */
-export const PRIVACY_URL = isNativeApp ? `${SITE_URL}privacy` : `${import.meta.env.BASE_URL}privacy.html`
+export const PRIVACY_URL = (() => {
+  // 英語で使っている人には、英語のポリシーを開く
+  const page = lang === 'en' ? 'privacy-en' : 'privacy'
+  return isNativeApp ? `${SITE_URL}${page}` : `${import.meta.env.BASE_URL}${page}.html`
+})()
 
 /**
  * App Store のページ・評価の画面。数字は App Store Connect の Apple ID（ストアの URL に出る公開の値。チーム ID とは別）。

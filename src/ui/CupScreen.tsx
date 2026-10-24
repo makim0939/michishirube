@@ -8,6 +8,7 @@ import { BackIcon, ForwardIcon } from './icons'
 import { MediaItem } from './MediaItem'
 import { PatternImage } from './PatternImage'
 import { backHandler, goBack, href, replace } from './router'
+import { t } from '../i18n'
 
 /** 1杯（記録1件）の詳細。今日の「最近の杯」から開き、動画・写真と理由・次の一手を見返す */
 export function CupScreen({ recordId }: { recordId: string }) {
@@ -46,12 +47,12 @@ export function CupScreen({ recordId }: { recordId: string }) {
   return (
     <div className="screen cup">
       <header className="screen-header">
-        <a className="back" href={href('/')} onClick={backHandler('/')} aria-label="戻る">
+        <a className="back" href={href('/')} onClick={backHandler('/')} aria-label={t.common.back}>
           <BackIcon size={26} />
         </a>
         <span className="title-block muted small">{formatDateTime(record.createdAt)}</span>
         <a className="btn small ghost" href={href(`/record/${record.skillId}/edit/${record.id}`)}>
-          編集
+          {t.common.edit}
         </a>
       </header>
 
@@ -75,7 +76,7 @@ export function CupScreen({ recordId }: { recordId: string }) {
           ))}
         </div>
       ) : (
-        <p className="muted">動画・写真はありません。</p>
+        <p className="muted">{t.cup.noMedia}</p>
       )}
 
       {/* 書いたものだけを出す（メモは書きたいときだけ書くので、無くても「まだ」とは言わない） */}
@@ -83,7 +84,7 @@ export function CupScreen({ recordId }: { recordId: string }) {
         <section className="cup-notes">
           {(record.causes?.length ?? 0) > 0 && (
             <div>
-              <h2>原因</h2>
+              <h2>{t.cup.causes}</h2>
               <ul className="cause-tags">
                 {record.causes!.map((c) => (
                   <li key={c}>{c}</li>
@@ -93,13 +94,13 @@ export function CupScreen({ recordId }: { recordId: string }) {
           )}
           {record.reason && (
             <div>
-              <h2>メモ</h2>
+              <h2>{t.record.memo}</h2>
               <p>{record.reason}</p>
             </div>
           )}
           {record.nextAction && (
             <div>
-              <h2>次の一手</h2>
+              <h2>{t.record.nextAction}</h2>
               <p>{record.nextAction}</p>
             </div>
           )}
@@ -107,7 +108,7 @@ export function CupScreen({ recordId }: { recordId: string }) {
       )}
 
       {/* 前後の杯へ（戻るで何杯もさかのぼらないよう、履歴は積まない） */}
-      <nav className="cup-nav" aria-label="前後の杯">
+      <nav className="cup-nav" aria-label={t.cup.nav}>
         {prevId ? (
           <button type="button" className="btn small cup-nav-button" onClick={() => replace(`/cup/${prevId}`)}>
             <BackIcon size={18} />
@@ -128,7 +129,7 @@ export function CupScreen({ recordId }: { recordId: string }) {
 
       {skill && (
         <a className="sub-link" href={href(`/skill/${skill.id}`)}>
-          「{name}」の記録とコツを見る
+          {t.cup.seeSkill(name)}
         </a>
       )}
     </div>

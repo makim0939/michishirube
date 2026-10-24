@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import { inMemory, probeDuration } from '../data/mediaPrep'
-import { clampRange, startTrim, waitUntilSeekable, type TrimJob, type TrimRange } from '../data/trim'
+import { clampRange, startTrim, TrimCancelled, waitUntilSeekable, type TrimJob, type TrimRange } from '../data/trim'
 import { traceVideo } from '../debug'
 import { PauseIcon, PlayIcon, SpeakerIcon } from './icons'
 import { useBackHandler } from './useBackHandler'
+import { t } from '../i18n'
 
 /** フィルムの1コマあたりの数（写真アプリのように、横いっぱいに並べる） */
 const FRAMES = 9
@@ -101,7 +102,7 @@ export function Trimmer({
         u = URL.createObjectURL(b)
         setUrl(u)
       })
-      .catch(() => setError('動画を読み込めませんでした'))
+      .catch(() => setError(t.common.videoLoadFailed))
     return () => {
       revoked = true
       if (u) URL.revokeObjectURL(u)
@@ -128,7 +129,7 @@ export function Trimmer({
         const film = await makeFilmstrip(url, d, FRAMES, () => cancelled).catch(() => [])
         if (!cancelled) setFrames(film)
       })
-      .catch(() => setError('動画の長さを読み取れませんでした'))
+      .catch(() => setError(t.editor.durationFailed))
     return () => {
       cancelled = true
       untrace()
@@ -265,7 +266,7 @@ export function Trimmer({
       j = startTrim(v, audio.current, range, name, { muted })
     } catch (e) {
       // 準備の途中で投げても、押したのに何も起きない、にしない
-      setError(e instanceof Error ? `動画を作り直せませんでした（${e.message}）。元の動画はそのままです` : String(e))
+      setError(e instanceof Error ? t.trim.failedWith(e.message) : String(e))
       return
     }
     job.current = j
@@ -276,8 +277,8 @@ export function Trimmer({
       .catch((e: unknown) => {
         if (job.current !== j) return
         if (interrupted.current) {
-          setError('途中で止まりました。この画面を開いたまま、もう一度「完了」を押してください。')
-        } else if (!(e instanceof Error && e.message === 'キャンセルしました')) {
+          setError(t.editor.interrupted)
+        } else if (!(e instanceof TrimCancelled)) {
           setError(e instanceof Error ? e.message : String(e))
         }
       })
@@ -290,19 +291,19 @@ export function Trimmer({
   }
 
   const ready = duration > 0
-  const pct = (t: number) => `${(duration > 0 ? t / duration : 0) * 100}%`
+  const pct = (time: number) => `${(duration > 0 ? time / duration : 0) * 100}%`
   const length = range.end - range.start
   const progress = processing && length > 0 ? Math.min(1, Math.max(0, (current - range.start) / length)) : 0
 
   return (
-    <div className="recorder editor" role="dialog" aria-modal="true" aria-label="動画を編集">
+    <div className="recorder editor" role="dialog" aria-modal="true" aria-label={t.editor.title}>
       <div className="editor-top">
         <button className="editor-text-button" onClick={onClose} disabled={processing}>
-          キャンセル
+          {t.editor.cancel}
         </button>
         <span className="editor-title">{ready ? `${formatTime(length)}` : ''}</span>
         <button className="editor-text-button primary" onClick={done} disabled={!ready || processing}>
-          完了
+          {t.editor.done}
         </button>
       </div>
 
@@ -319,7 +320,7 @@ export function Trimmer({
           onClick={processing ? undefined : togglePlay}
         />
         {ready && !playing && !processing && (
-          <button className="editor-play" aria-label="範囲を再生" onClick={togglePlay}>
+          <button className="editor-play" aria-label={t.editor.playRange} onClick={togglePlay}>
             <PlayIcon size={30} />
           </button>
         )}
@@ -327,13 +328,13 @@ export function Trimmer({
 
       <div className="editor-panel">
         {error && <p className="trimmer-error">{error}</p>}
-        {!ready && !error && <p className="editor-status">読み込んでいます…</p>}
+        {!ready && !error && <p className="editor-status">{t.editor.loading}</p>}
         {ready && !processing && (
           <div className="editor-tools">
             <button
               className={`editor-sound${muted ? ' off' : ''}`}
               aria-pressed={muted}
-              aria-label={muted ? '音なし（押すと音あり）' : '音あり（押すと音なし）'}
+              aria-label={muted ? t.editor.mutedLabel : t.editor.soundLabel}
               onClick={() => {
                 const next = !muted
                 setMuted(next)
@@ -344,7 +345,7 @@ export function Trimmer({
             </button>
             <button
               className="editor-play-small"
-              aria-label={playing ? '一時停止' : '範囲を再生'}
+              aria-label={playing ? t.player.pause : t.editor.playRange}
               onClick={togglePlay}
             >
               {playing ? <PauseIcon size={20} /> : <PlayIcon size={20} />}
@@ -368,7 +369,7 @@ export function Trimmer({
                 <span
                   className="filmstrip-handle start"
                   role="slider"
-                  aria-label="始め"
+                  aria-label={t.editor.start}
                   aria-valuemin={0}
                   aria-valuemax={duration}
                   aria-valuenow={range.start}
@@ -383,7 +384,7 @@ export function Trimmer({
                 <span
                   className="filmstrip-handle end"
                   role="slider"
-                  aria-label="終わり"
+                  aria-label={t.editor.end}
                   aria-valuemin={0}
                   aria-valuemax={duration}
                   aria-valuenow={range.end}
@@ -403,18 +404,18 @@ export function Trimmer({
         {ready && !processing && (
           <p className="editor-note">
             {changed
-              ? `「完了」で作り直します（${Math.ceil(length)}秒ほど。終わるまでこの画面を開いたままに）`
-              : '黄色の枠の両端を動かして切り取り、スピーカーで音を消せます'}
+              ? t.editor.willRebuild(Math.ceil(length))
+              : t.editor.hint}
           </p>
         )}
         {processing && (
           <div className="editor-progress">
-            <p>書き出しています…（{Math.round(progress * 100)}%）</p>
+            <p>{t.editor.exporting(Math.round(progress * 100))}</p>
             <div className="progress" aria-hidden="true">
               <span style={{ width: `${progress * 100}%` }} />
             </div>
             <button className="editor-text-button" onClick={() => job.current?.cancel()}>
-              キャンセル
+              {t.editor.cancel}
             </button>
           </div>
         )}

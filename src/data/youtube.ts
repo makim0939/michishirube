@@ -8,6 +8,7 @@ import { api, getSyncConfig, postJson, SyncError, type SyncConfig } from './sync
 import { cupNumbers } from './repo'
 import { buildVideoText, getVideoTemplates, templateVars } from './videoText'
 import { getVideoSettings, getVideoStorage, uploadBacklog, type YoutubePrivacy } from './videoStorage'
+import { t } from '../i18n'
 
 /**
  * 動画を YouTube に上げる（公開範囲は設定から。はじめは限定公開）。上げるのは、動画の保存先が YouTube の端末だけ。
@@ -78,7 +79,7 @@ export async function disconnectYoutube() {
 
 async function requireConfig(): Promise<SyncConfig> {
   const config = await getSyncConfig()
-  if (!config) throw new SyncError('先に Google でログインしてください')
+  if (!config) throw new SyncError(t.errors.loginFirst)
   return config
 }
 
@@ -90,7 +91,7 @@ let token: { value: string; expiresAt: number; refresh: string } | undefined
 /** アップロード用の access token。この端末の鍵をサーバーに渡し、1時間だけ使えるものに替えてもらう */
 async function accessToken(config: SyncConfig): Promise<string> {
   const refresh = await refreshToken()
-  if (!refresh) throw new SyncError('YouTube とつながっていません', 409)
+  if (!refresh) throw new SyncError(t.errors.ytNotConnected, 409)
   if (token && token.refresh === refresh && token.expiresAt - Date.now() > 60_000) return token.value
   let res: { accessToken: string; expiresAt: number }
   try {
@@ -141,10 +142,10 @@ export class YoutubeApiError extends Error {
 /** YouTube のエラーの番号から、利用者に分かる文を作る（原因を決めつけず、分かっている事実と、次にすることだけ言う） */
 export function youtubeErrorMessage(status: number, reason?: string): string {
   // 権限が足りないときは、チャンネルではなく、つなぎ直しで直る
-  if (status === 401 || reason === 'insufficientPermissions') return 'YouTube とのつながりが切れました。設定の「動画」で、つなぎ直してください'
-  if (status === 403) return 'YouTube に断られました。YouTube で、チャンネルの状態（動画を上げられるか）を確かめてください'
-  if (status >= 500) return 'YouTube 側でエラーが起きています。しばらくしてからもう一度試してください'
-  return `YouTube が動画を受け付けませんでした（${status}）`
+  if (status === 401 || reason === 'insufficientPermissions') return t.errors.ytDisconnected
+  if (status === 403) return t.errors.ytRefused
+  if (status >= 500) return t.errors.ytServer
+  return t.errors.ytRejected(status)
 }
 
 /**
@@ -152,16 +153,16 @@ export function youtubeErrorMessage(status: number, reason?: string): string {
  * 通信の失敗は、端末がオフラインと分かるときだけ「通信」と言う（YouTube 側のエラーを「電波」のせいにしない）
  */
 export function uploadStopReason(e: unknown, online: boolean): string {
-  const retry = 'しばらくしてからもう一度試してください'
+  const retry = t.errors.retryLater
   if (e instanceof QuotaExceeded || e instanceof YoutubeApiError) return e.message
   // ログイン切れ・つなぎ直しは、サーバーが言う次にすることをそのまま出す
   if (e instanceof SyncError && (e.status === 401 || e.status === 409)) return e.message
-  if (e instanceof SyncError && e.status !== undefined) return `YouTube とのつながりを確かめられませんでした（${e.status}）。${retry}`
+  if (e instanceof SyncError && e.status !== undefined) return t.errors.ytCheckFailed(e.status, retry)
   // 番号の無い SyncError は、このアップの経路では、通信そのものの失敗（fetch が返らなかった）だけ
   if (e instanceof SyncError || e instanceof TypeError) {
-    return online ? `YouTube に送れませんでした。${retry}` : '通信できません。電波や Wi-Fi を確かめてください'
+    return online ? t.errors.ytSendFailed(retry) : t.errors.noNetwork
   }
-  return e instanceof Error ? e.message : `YouTube に上げられませんでした。${retry}`
+  return e instanceof Error ? e.message : t.errors.ytUploadFailed(retry)
 }
 
 /**
@@ -211,7 +212,7 @@ export async function uploadVideo(
   }
   await throwIfFailed(done)
   const video = (await done.json()) as { id?: string }
-  if (!video.id) throw new Error('YouTube から動画 ID を受け取れませんでした')
+  if (!video.id) throw new Error(t.errors.ytNoId)
   return video.id
 }
 
@@ -222,7 +223,7 @@ async function throwIfFailed(res: Response) {
   }
   const reason = body.error?.errors?.[0]?.reason
   if (res.status === 403 && (reason === 'quotaExceeded' || reason === 'uploadLimitExceeded')) {
-    throw new QuotaExceeded('今日アップロードできる上限に達しました')
+    throw new QuotaExceeded(t.errors.ytQuota)
   }
   if (res.status === 401) token = undefined
   // YouTube の英語の文（body.error.message）は、画面に出さない。番号と理由から、日本語の文を作る
@@ -296,8 +297,8 @@ async function doUploads() {
             ...(m.upload === 'uploading' ? { upload: 'pending' as const } : {}),
             uploadError:
               e.status === 409
-                ? 'YouTube とつながっていません。設定の「動画」で、つないでください'
-                : 'いまは YouTube に上げられません。しばらくしてからもう一度試してください',
+                ? t.errors.ytConnectInSettings
+                : t.errors.ytUnavailable,
           })
           return
         }

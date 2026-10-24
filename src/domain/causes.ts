@@ -1,24 +1,20 @@
+import { t } from '../i18n'
+import { en } from '../i18n/en'
+import { ja } from '../i18n/ja'
+
 /**
  * ラテアートでうまくいかなかったときの、よくある原因。記録のときにワンタップで選べるようにする（書かなくて済むように）。
- * 記録には文字列のまま保存して集計するので、名前を変えると過去の記録と別の原因になる（変えずに足す）
+ * 記録には文字列のまま保存して集計するので、名前を変えると過去の記録と別の原因になる（変えずに足す）。
+ * 言語ごとに別の言葉で保存する（日本語で付けた原因は、英語に切り替えても日本語のまま残る）
  */
-export const LATTE_CAUSES = ['泡が粗い', '熱すぎた', '注ぐ高さ', '流量', '中心がずれた', '振り', '切り', '層が混ざった'] as const
+export const LATTE_CAUSES: readonly string[] = t.causes.list.map((c) => c.cause)
 
 /**
  * 原因ごとの「次の一手」の候補。記録のときに押すだけで次の一手に入る（書かなくて済むように）。
- * 一般的な直し方なので、自分の言葉に書き換えてもよい
+ * 一般的な直し方なので、自分の言葉に書き換えてもよい。
+ * 原因の並びは、どの言語でも同じ。別の言語で付けた原因にも、いまの言語の直し方を出す
  */
-const CAUSE_TIPS: Record<(typeof LATTE_CAUSES)[number], string> = {
-  泡が粗い: '空気を入れるのは最初の数秒だけにする',
-  熱すぎた: '60℃前後で止める',
-  注ぐ高さ: '注ぎ始めは高く、広げるときはカップに近づける',
-  流量: '流れの太さを一定に保つ',
-  中心がずれた: 'カップの中心を狙って注ぎ始める',
-  振り: '振りは手首だけで小さく、一定のリズムで',
-  切り: '切る前にピッチャーを少し上げ、細く切る',
-  層が混ざった: '段ごとに一度注ぎを止めてから重ねる',
-}
-
 export function causeTip(cause: string): string | undefined {
-  return (CAUSE_TIPS as Record<string, string>)[cause]
+  const i = [ja, en].map((m) => m.causes.list.findIndex((c) => c.cause === cause)).find((i) => i >= 0)
+  return i === undefined ? undefined : t.causes.list[i]?.tip
 }

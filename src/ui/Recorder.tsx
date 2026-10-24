@@ -18,6 +18,7 @@ import type { Reference } from '../domain/types'
 import { readStorage, writeStorage } from './storage'
 import { MicIcon, PhotoIcon } from './icons'
 import { useBackHandler } from './useBackHandler'
+import { t } from '../i18n'
 
 const AUDIO_KEY = 'michishirube:recorder-audio'
 const MODE_KEY = 'michishirube:recorder-mode'
@@ -144,8 +145,8 @@ export function Recorder({
         const denied = e instanceof DOMException && e.name === 'NotAllowedError'
         setError(
           denied
-            ? 'カメラ（またはマイク）の使用が許可されていません。設定で許可するか、標準のカメラを使ってください。'
-            : 'カメラを開けませんでした。標準のカメラを使ってください。',
+            ? t.recorder.denied
+            : t.recorder.openFailed,
         )
       })
     return () => {
@@ -195,9 +196,9 @@ export function Recorder({
    */
   const startFailed = (mimeType: string) => {
     if (fallBackFromRecorderType(mimeType, audio, quality)) {
-      setNotice('この端末に合う録画の形式に切り替えました。もう一度撮ってください')
+      setNotice(t.recorder.switchedFormat)
     } else {
-      setError('この端末では録画を始められませんでした。標準のカメラを使ってください。')
+      setError(t.recorder.cannotStart)
     }
   }
 
@@ -231,20 +232,20 @@ export function Recorder({
       const verdict = judgeRecording(blob.size, Date.now() - began, stoppedByUser.current)
       if (verdict === 'too-short') {
         // 押してすぐ止めたなど、短すぎる録画が空なのは、形式のせいではない（もう一度撮れば撮れる）
-        setNotice('短すぎて録画できませんでした。もう一度撮ってください')
+        setNotice(t.recorder.tooShort)
         return
       }
       if (verdict === 'broken' && (hiddenWhileRecording.current || document.visibilityState === 'hidden')) {
         // 電話・アプリの切り替えで止まった。形式のせいではない
-        setNotice('録画が中断されました。もう一度撮ってください')
+        setNotice(t.recorder.interrupted)
         return
       }
       if (verdict === 'broken') {
         // この形式はこの端末では撮れない。ほかの形式があれば、次からそちらで撮る
         if (fallBackFromRecorderType(mimeType, audio, quality)) {
-          setNotice('この端末に合う録画の形式に切り替えました。もう一度撮ってください')
+          setNotice(t.recorder.switchedFormat)
         } else {
-          setError('録画できませんでした。もう一度試すか、標準のカメラを使ってください。')
+          setError(t.recorder.failed)
         }
         return
       }
@@ -324,24 +325,24 @@ export function Recorder({
 
   if (finished) {
     return (
-      <div className="recorder" role="dialog" aria-modal="true" aria-label="できあがりを撮る">
+      <div className="recorder" role="dialog" aria-modal="true" aria-label={t.recorder.shootFinish}>
         <video ref={preview} className="recorder-preview" autoPlay playsInline muted onClick={(e) => void tapToFocus(e)} />
         {focusRing && <span key={focusRing.id} className="focus-ring" style={{ left: focusRing.x, top: focusRing.y }} aria-hidden="true" />}
         <div className="finish-guide" ref={guide} aria-hidden="true" />
-        <p className="finish-hint">できあがりのカップを、枠の中に入れて1枚</p>
+        <p className="finish-hint">{t.recorder.finishHint}</p>
         <div className="recorder-bottom">
           {/* 録画がうまくいかなかったとき、動画を捨てて録画からやり直せる（シャッターから離し、うっかり押さない位置に） */}
           <button className="btn small ghost recorder-retake" disabled={shooting} onClick={() => setFinished(undefined)}>
-            撮り直す
+            {t.recorder.retake}
           </button>
           <button
             className="shutter-button"
-            aria-label="できあがりを撮る"
+            aria-label={t.recorder.shootFinish}
             disabled={shooting}
             onClick={() => void shoot()}
           />
           <button className="btn small ghost recorder-native" disabled={shooting} onClick={() => onDone(finished, undefined, quality)}>
-            スキップ
+            {t.recorder.skip}
           </button>
         </div>
       </div>
@@ -351,12 +352,12 @@ export function Recorder({
   const photoMode = mode === 'photo'
 
   return (
-    <div className="recorder" role="dialog" aria-modal="true" aria-label={photoMode ? '写真を撮る' : '録画'}>
+    <div className="recorder" role="dialog" aria-modal="true" aria-label={photoMode ? t.record.shootPhoto : t.recorder.recording}>
       <video ref={preview} className="recorder-preview" autoPlay playsInline muted onClick={(e) => void tapToFocus(e)} />
       {focusRing && <span key={focusRing.id} className="focus-ring" style={{ left: focusRing.x, top: focusRing.y }} aria-hidden="true" />}
       {/* 写真だけのときは、できあがりと同じ枠の中を撮る */}
       {photoMode && <div className="finish-guide" ref={guide} aria-hidden="true" />}
-      {!ready && !error && <p className="recorder-status">カメラを準備しています…</p>}
+      {!ready && !error && <p className="recorder-status">{t.recorder.preparing}</p>}
       {ready && !error && notice && (
         <p className="recorder-status" role="status">
           {notice}
@@ -366,14 +367,14 @@ export function Recorder({
         <div className="recorder-error">
           <p>{error}</p>
           <button className="btn primary" onClick={() => onFallback(mode)}>
-            標準のカメラで撮る
+            {t.recorder.useNative}
           </button>
         </div>
       )}
       <div className="recorder-top">
         <div className="recorder-top-row">
           <button className="btn small" onClick={onClose} disabled={recording}>
-            閉じる
+            {t.common.close}
           </button>
           {recording ? (
             <span className="recorder-time">● {formatElapsed(now - startedAt)}</span>
@@ -391,10 +392,10 @@ export function Recorder({
                   }}
                 >
                   <MicIcon size={18} off={!audio} />
-                  {audio ? '音あり' : '音なし'}
+                  {audio ? t.recorder.soundOn : t.recorder.soundOff}
                 </button>
                 {/* 画質は、選べるものを両方見せる（撮り直すと、設定の画質に戻る） */}
-                <div className="recorder-modes small" role="radiogroup" aria-label="画質">
+                <div className="recorder-modes small" role="radiogroup" aria-label={t.settings.quality}>
                   {(['standard', 'high'] as const).map((q) => (
                     <button
                       key={q}
@@ -424,12 +425,12 @@ export function Recorder({
                 disabled={recording}
                 onClick={() => setShowRefs(!showRefs)}
               >
-                手本
+                {t.recorder.references}
               </button>
             )}
             {focus && (
               <p className="recorder-focus">
-                <span>今回</span>
+                <span>{t.record.thisTime}</span>
                 {focus}
               </p>
             )}
@@ -456,7 +457,7 @@ export function Recorder({
         {/* 動画と写真の切り替え（iPhone のカメラと同じく、シャッターの上に）。
             開けなかったときも出す：写真ならマイクを使わないので、マイクだけ許可しなかった人も撮れる */}
         {!recording && (
-          <div className="recorder-modes" role="radiogroup" aria-label="撮るもの">
+          <div className="recorder-modes" role="radiogroup" aria-label={t.recorder.mode}>
             {(['video', 'photo'] as const).map((m) => (
               <button
                 key={m}
@@ -466,14 +467,14 @@ export function Recorder({
                 className={mode === m ? 'selected' : ''}
                 onClick={() => switchMode(m)}
               >
-                {m === 'video' ? '動画' : '写真'}
+                {m === 'video' ? t.recorder.video : t.recorder.photo}
               </button>
             ))}
           </div>
         )}
         <div className="recorder-controls">
           {!recording && onAlbum ? (
-            <button type="button" className="recorder-side" aria-label="アルバムから選ぶ" onClick={onAlbum}>
+            <button type="button" className="recorder-side" aria-label={t.recorder.fromAlbum} onClick={onAlbum}>
               <PhotoIcon size={24} />
             </button>
           ) : (
@@ -482,7 +483,7 @@ export function Recorder({
           {photoMode ? (
             <button
               className="shutter-button"
-              aria-label="写真を撮る"
+              aria-label={t.record.shootPhoto}
               disabled={!ready || shooting}
               onClick={() => void shoot()}
             />
@@ -490,15 +491,15 @@ export function Recorder({
             <button
               className={`record-button ${recording ? 'recording' : ''}`}
               disabled={!ready}
-              aria-label={recording ? '録画を止める' : '録画を始める'}
+              aria-label={recording ? t.recorder.stop : t.recorder.start}
               onClick={() => (recording ? stopRecording() : start())}
             />
           )}
           {!recording && !error ? (
             <button type="button" className="recorder-side text" onClick={() => onFallback(mode)}>
-              標準の
+              {t.recorder.native1}
               <br />
-              カメラ
+              {t.recorder.native2}
             </button>
           ) : (
             <span className="recorder-side" aria-hidden="true" />

@@ -4,13 +4,10 @@ import { isAndroidApp } from '../platform'
 import { daysBetween } from '../domain/format'
 import type { Media, SkillState } from '../domain/types'
 import { PlayIcon } from './icons'
+import { formatDate } from '../domain/format'
+import { t } from '../i18n'
 
-export const STATE_LABEL: Record<SkillState, string> = {
-  locked: 'その先',
-  available: '次のおすすめ',
-  active: '練習中',
-  done: 'できた',
-}
+export const STATE_LABEL: Record<SkillState, string> = t.state
 
 /** 「ミルクのスチーム（マイクロフォーム）」→ 大きく出す名前と、小さく添える補足 */
 export function splitName(name: string): { main: string; sub?: string } {
@@ -36,11 +33,10 @@ function daysAgo(ts: number, now: number): number {
 
 export function formatAgo(ts: number, now = Date.now()): string {
   const days = daysAgo(ts, now)
-  if (days === 0) return '今日'
-  if (days === 1) return '昨日'
-  if (days < 30) return `${days}日前`
-  const d = new Date(ts)
-  return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`
+  if (days === 0) return t.common.today
+  if (days === 1) return t.common.yesterday
+  if (days < 30) return t.common.daysAgo(days)
+  return formatDate(ts)
 }
 
 /**
@@ -150,7 +146,7 @@ function VideoView({
   }, [url, playOnLoad])
 
   if (failed) {
-    return <div className={`media placeholder ${className ?? ''}`}>動画を読み込めませんでした</div>
+    return <div className={`media placeholder ${className ?? ''}`}>{t.common.videoLoadFailed}</div>
   }
   if (!url) {
     return (
@@ -158,7 +154,7 @@ function VideoView({
         type="button"
         className={`media video-thumb ${className ?? ''}`}
         style={posterUrl ? { backgroundImage: `url(${posterUrl})` } : undefined}
-        aria-label="動画を再生"
+        aria-label={t.common.playVideo}
         onClick={() => {
           setPlayOnLoad(true)
           setRequested(true)
@@ -289,7 +285,7 @@ export function ConfirmButton({
           {confirmLabel}
         </button>
         <button type="button" className="btn ghost" onClick={() => setAsking(false)}>
-          やめる
+          {t.common.cancel}
         </button>
       </div>
     </div>

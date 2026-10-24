@@ -2,6 +2,7 @@ import { Capacitor, registerPlugin } from '@capacitor/core'
 import { Directory, Encoding, Filesystem } from '@capacitor/filesystem'
 import { Share } from '@capacitor/share'
 import { isNativeApp } from '../platform'
+import { t } from '../i18n'
 
 /**
  * アプリ（iOS・Android）の中のファイル。動画・写真の中身と、記録の写し（snapshot.json）を置く。
@@ -32,7 +33,7 @@ function fullPath(path: string) {
 
 /** 画面（WebView）から読むための URL */
 function fileUrl(path: string): string {
-  if (!baseUri) throw new Error('ファイルの準備ができていません')
+  if (!baseUri) throw new Error(t.errors.filesNotReady)
   return Capacitor.convertFileSrc(`${baseUri}/${path}`)
 }
 
@@ -92,7 +93,7 @@ export async function shareFileNative(file: File) {
  */
 export class ContentUnavailableError extends Error {
   constructor() {
-    super('端末に動画・写真のファイルがありません')
+    super(t.errors.noContentFile)
     this.name = 'ContentUnavailableError'
   }
 }

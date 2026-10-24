@@ -8,12 +8,9 @@ import { useAction } from './feedback'
 import { ShareLinkButton, ShareMediaButton } from './ShareMedia'
 import { ExternalIcon, PhotoIcon, VideoIcon } from './icons'
 import { YoutubePlayer } from './YoutubePlayer'
+import { t } from '../i18n'
 
-const UPLOAD_LABEL = {
-  pending: 'YouTube へのアップ待ち',
-  uploading: 'YouTube へアップ中…',
-  failed: 'YouTube へのアップに失敗',
-} as const
+const UPLOAD_LABEL = t.share.upload
 
 /**
  * 記録の動画・写真1つ。端末に中身があれば再生し、無ければ YouTube（アプリの中で再生）やサーバーから見る。
@@ -58,7 +55,7 @@ export function MediaItem({
         />
       ) : loading ? (
         // 端末のファイルを読んでいるあいだは、YouTube や「無い」表示に切り替えない（読めたらすぐ出す）
-        <div className="media placeholder" role="status" aria-label="読み込み中" />
+        <div className="media placeholder" role="status" aria-label={t.share.loading} />
       ) : onYoutube ? (
         // 別の動画に替わったら（上げ直し）、作り直す。読み込めなかった・再生中などの状態を、前の動画から持ち越さない
         <YoutubePlayer
@@ -71,7 +68,7 @@ export function MediaItem({
       ) : (
         <div className="media placeholder">
           {video ? <VideoIcon size={22} /> : <PhotoIcon size={22} />}
-          この端末にはありません
+          {t.common.notOnDevice}
         </div>
       )}
       {/* この動画・写真への操作は、すぐ下に付けたバーにまとめる（どれへの操作か分かるように） */}
@@ -85,7 +82,7 @@ export function MediaItem({
                 title={media.uploadError}
                 onClick={() => run(() => retryUpload(media.id))}
               >
-                ↻ アップを再試行
+                {t.share.retry}
               </button>
             ) : uploadState ? (
               <span className={`upload upload-${uploadState}`} title={media.uploadError}>
@@ -94,7 +91,7 @@ export function MediaItem({
             ) : onYoutube ? (
               <a className="tool-button" href={youtubeUrl(media.youtubeId!)} target="_blank" rel="noopener noreferrer">
                 YouTube
-                <ExternalIcon size={15} label="（別の画面で開く）" />
+                <ExternalIcon size={15} label={t.share.external} />
               </a>
             ) : null}
           </span>

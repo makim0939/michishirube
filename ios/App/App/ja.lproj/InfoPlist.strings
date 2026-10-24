@@ -1,0 +1,6 @@
+/* アプリ名と、iOS が出す許可の文（日本語）。Info.plist の値を、言語ごとに置き換える */
+"CFBundleDisplayName" = "ラテ帳";
+"NSCameraUsageDescription" = "ラテアートを注ぐところと、できあがりのカップを撮るために使います。";
+"NSMicrophoneUsageDescription" = "注ぐところの動画に音を入れるために使います（音なしでも撮れます）。";
+"NSPhotoLibraryAddUsageDescription" = "撮った動画・写真を写真アプリに保存するために使います。";
+"NSPhotoLibraryUsageDescription" = "アルバムの写真・動画を記録に入れるために使います。";
