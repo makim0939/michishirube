@@ -545,6 +545,7 @@ export const en: Messages = {
     imported: 'Roadmap imported',
     addDomain: 'Add a category (piano, etc.)',
     bundled: 'Included roadmaps',
+    domainSub: (skills, records) => `${skills} pattern${skills === 1 ? '' : 's'} · ${records} record${records === 1 ? '' : 's'}`,
     skillCount: (n) => `${n} pattern${n === 1 ? '' : 's'}`,
     addedAgain: (name) => `Added another "${name}"`,
     added: (name) => `Added "${name}"`,
@@ -553,7 +554,9 @@ export const en: Messages = {
     importFile: 'Import a roadmap file',
     rename: 'Rename',
     export: 'Export to file',
-    deleteMessage: (name) => `Deletes all patterns, records, videos, and photos in "${name}". This can't be undone.`,
+    deleteMessage: (name) => `Deletes "${name}" and its patterns.`,
+    deleteWithRecords: (name, records, media) =>
+      `Deletes "${name}", its patterns, ${records} record${records === 1 ? '' : 's'}, and ${media} video${media === 1 ? '' : 's'}/photo${media === 1 ? '' : 's'}. This can't be undone.`,
     domainPlaceholder: 'Category name (e.g. Piano)',
     create: 'Create',
     graphControls: 'View controls',

@@ -543,6 +543,7 @@ export const ja = {
     addDomain: '分野を追加（ピアノなど）',
     bundled: '用意されているロードマップ',
     skillCount: (n: number) => `型 ${n}`,
+    domainSub: (skills: number, records: number) => `型 ${skills}・記録 ${records}`,
     addedAgain: (name: string) => `「${name}」をもう1つ追加しました`,
     added: (name: string) => `「${name}」を追加しました`,
     add: '追加',
@@ -550,7 +551,9 @@ export const ja = {
     importFile: 'ロードマップのファイルを読み込む',
     rename: '名前を変える',
     export: 'ファイルに書き出す',
-    deleteMessage: (name: string) => `「${name}」の型と、記録・動画・写真をすべて削除します。元に戻せません。`,
+    deleteMessage: (name: string) => `「${name}」の型を削除します。`,
+    deleteWithRecords: (name: string, records: number, media: number) =>
+      `「${name}」の型と、記録 ${records} 件、動画・写真 ${media} 件を削除します。元に戻せません。`,
     domainPlaceholder: '分野の名前（例：ピアノ）',
     create: '作る',
     graphControls: '表示の操作',

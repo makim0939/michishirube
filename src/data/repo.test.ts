@@ -8,6 +8,7 @@ import {
   addReference,
   createDomain,
   createSkill,
+  countDomainContents,
   cupNumbers,
   deleteDomain,
   deleteRecord,
@@ -423,5 +424,17 @@ describe('原因', () => {
       replace: [],
     })
     expect((await db.records.get(id))?.causes).toEqual(['熱すぎた', '切り'])
+  })
+})
+
+describe('分野の件数（消す前の確認）', () => {
+  it('分野を消すと一緒に消える型・記録・動画/写真の数を数える', async () => {
+    const { domainId, a } = await chain()
+    expect(await countDomainContents(domainId)).toEqual({ skills: 3, records: 0, media: 0 })
+    await addRecord({ skillId: a, outcome: 'good', reason: '', nextAction: '', files: [] })
+    await addRecord({ skillId: a, reason: 'x', nextAction: '', files: [new Blob(['v'], { type: 'video/mp4' })] })
+    expect(await countDomainContents(domainId)).toEqual({ skills: 3, records: 2, media: 1 })
+    await deleteDomain(domainId)
+    expect(await countDomainContents(domainId)).toEqual({ skills: 0, records: 0, media: 0 })
   })
 })

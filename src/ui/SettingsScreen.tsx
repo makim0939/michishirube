@@ -87,8 +87,6 @@ function StorageStatus() {
   )
 }
 
-const SHOW_ROADMAP_SETTINGS = false
-
 const TITLES: Record<SettingsSection, string> = {
   storage: t.settings.video,
   sync: t.settings.account,
@@ -171,8 +169,8 @@ function SettingsHome() {
         </ul>
       </section>
 
-      {/* ラテアート専用の間は隠す（実装は残し、別の練習も扱うようにするとき、この行を出す）。画面そのもの（/settings/roadmaps）は開ける */}
-      {SHOW_ROADMAP_SETTINGS && (
+      {/* ラテアート専用の間は、分野が重複したとき（2つ以上）だけ出す。重複した分野を消すための入口 */}
+      {data.domains >= 2 && (
         <section className="section">
           <h2>{t.app.tabSkills}</h2>
           <ul className="settings-list">
