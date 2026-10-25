@@ -168,14 +168,17 @@
       .hero .scroller {
         margin-top: 20px;
       }
-      /* ヒーローの動画は、枠なしで、高さをそろえる（幅は動画の縦横比で決まる） */
+      /* ヒーローの画像と動画は、枠なしで、高さをそろえる（幅は縦横比で決まる） */
       .demo-item {
         margin: 0;
       }
+      .demo-item img,
       .demo-item video {
         display: block;
         height: 520px;
         width: auto;
+      }
+      .demo-item video {
         border-radius: 14px;
       }
 
@@ -332,13 +335,13 @@
           <a class="store" href="https://apps.apple.com/jp/app/%E3%83%A9%E3%83%86%E5%B8%B3-%E3%83%A9%E3%83%86%E3%82%A2%E3%83%BC%E3%83%88%E3%81%AE%E7%B7%B4%E7%BF%92%E8%A8%98%E9%8C%B2/id6823908010"><img src="/img/app-store-badge-ja.svg" height="44" alt="App Store でダウンロード" /></a>
           <p class="web-link">Androidの方は<a href="https://makim0939.github.io/michishirube/">Web版</a>をお使いいただけます。</p>
 
-          <!-- 記録のしかた（動画）と、ホームの動画。高さをそろえて、横に動かして見る -->
+          <!-- 「今日」の画面と、記録のしかた（動画）。高さをそろえて、横に動かして見る -->
           <div class="scroller" role="region" aria-label="ラテ帳の画面" tabindex="0">
             <figure class="demo-item">
-              <video src="/img/howto.mp4" poster="/img/howto-poster.webp" width="540" height="1170" muted playsinline loop autoplay preload="metadata" aria-label="記録のしかた。ホームから撮影、注ぐところを動画で、できあがりを写真で撮り、次の一手をメモして保存する"></video>
+              <img src="/img/today.webp" width="780" height="1272" alt="ラテ帳の「今日」の画面。最新の1杯の写真と、練習中の型、次の一手、「記録する」ボタン" />
             </figure>
             <figure class="demo-item">
-              <video src="/img/home.mp4" poster="/img/home-poster.webp" width="540" height="882" muted playsinline loop autoplay preload="metadata" aria-label="ホームの画面。撮ってきた1杯を、横にめくって見返す"></video>
+              <video src="/img/howto.mp4" poster="/img/howto-poster.webp" width="540" height="1170" muted playsinline loop autoplay preload="metadata" aria-label="記録のしかた。ホームから撮影、注ぐところを動画で、できあがりを写真で撮り、次の一手をメモして保存する"></video>
             </figure>
           </div>
         </div>
@@ -348,9 +351,14 @@
           <p class="section-text">ラテアートって一瞬の出来事で、うまくできなかった原因を見つけるのがとても難しいですよね。</p>
           <p class="section-text">なので、動画を撮ってあとから見返せるようにしました。野球で素振りのフォームを撮るようなものですね。</p>
           <p class="section-text">気づいたことは「次の一手」としてメモすると、次に動画を撮るときに表示されます。</p>
-          <figure class="shot">
-            <img src="/img/review.webp" width="780" height="922" alt="撮影の画面。注ぐところを動画で撮るあいだ、前回の「次の一手」が画面に出る" loading="lazy" decoding="async" />
-          </figure>
+          <div class="scroller" role="region" aria-label="ラテ帳の画面" tabindex="0">
+            <figure class="shot">
+              <img src="/img/review.webp" width="780" height="778" alt="撮影の画面。注ぐところを動画で撮るあいだ、前回の「次の一手」が画面に出る" loading="lazy" decoding="async" />
+            </figure>
+            <figure class="shot">
+              <img src="/img/record.webp" width="780" height="778" alt="記録の画面。成功・惜しい・失敗の選択と、次の一手の入力欄。前回の次の一手が上に出る" loading="lazy" decoding="async" />
+            </figure>
+          </div>
         </section>
 
         <section class="section">
@@ -373,7 +381,7 @@
               <img src="/img/compare.webp" width="780" height="1272" alt="型の画面。直近の結果の点と、最新と最初のラテアートの写真が並ぶ" loading="lazy" decoding="async" />
             </figure>
             <figure class="shot">
-              <img src="/img/today.webp" width="780" height="1272" alt="ラテ帳の「今日」の画面。最新の1杯の写真と、練習中の型、次の一手、「記録する」ボタン" loading="lazy" decoding="async" />
+              <video src="/img/home.mp4" poster="/img/home-poster.webp" width="540" height="882" muted playsinline loop autoplay preload="metadata" aria-label="ホームの画面。撮ってきた1杯を、横にめくって見返す"></video>
             </figure>
           </div>
         </section>
