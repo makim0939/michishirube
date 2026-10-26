@@ -122,7 +122,7 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
     undoToast.current = null
   }
   // 画面を離れるとき、押しても効かなくなる「元に戻す」のトーストを消す
-  useEffect(() => () => hideUndoToast(), []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => hideUndoToast(), [])
   // トーストが消える頃に、積みも捨てる。積みが変わるたび（外す・戻す）に、測り直す
   useEffect(() => {
     if (undo.stack.length === 0) return
