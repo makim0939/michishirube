@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { undoLast, type Removed } from './removedStack'
+import { expireUndo, undoAll, undoLast, type Removed } from './removedStack'
 
 const a = { key: 'a' }
 const b = { key: 'b' }
@@ -40,5 +40,33 @@ describe('外した物を、外した順の逆に戻す', () => {
     const r = undoLast(list, [])
     expect(r.list).toBe(list)
     expect(r.restored).toBeUndefined()
+  })
+})
+
+describe('「元に戻す」の時間切れ', () => {
+  const state = { stack: [{ item: a, index: 0 }], at: 1000 }
+  it('時間内なら、積みを残す', () => {
+    expect(expireUndo(state, 1000 + 4999, 5000)).toBe(state)
+  })
+  it('時間を過ぎたら、積みを捨てる（あとの「元に戻す」に出てこない）', () => {
+    expect(expireUndo(state, 1000 + 5000, 5000).stack).toEqual([])
+  })
+  it('積みが空なら、何もしない', () => {
+    const empty = { stack: [], at: 0 }
+    expect(expireUndo(empty, 99999, 5000)).toBe(empty)
+  })
+})
+
+describe('保存に失敗したとき、外した物をすべて戻す', () => {
+  it('外した順の逆に、元の位置へ戻る', () => {
+    const stack: Removed<{ key: string }>[] = [
+      { item: b, index: 1 },
+      { item: a, index: 0 },
+    ]
+    expect(undoAll([c], stack)).toEqual([a, b, c])
+  })
+  it('積みが空なら、そのまま', () => {
+    const list = [a]
+    expect(undoAll(list, [])).toBe(list)
   })
 })

@@ -12,10 +12,10 @@ import { sortByDepth } from '../domain/logic'
 import type { Media, Outcome } from '../domain/types'
 import { ConfirmButton, Empty, formatBytes, isVideo, MediaView, requestPersist, splitName } from './common'
 import { useCupImageUrl } from './cupImage'
-import { useAction, useToast } from './feedback'
+import { toastDuration, useAction, useToast } from './feedback'
 import { canRecordInApp, Recorder } from './Recorder'
 import { backHandler, go, goBack, href } from './router'
-import { undoLast, type Removed } from './removedStack'
+import { expireUndo, undoAll, undoLast, type UndoState } from './removedStack'
 import { readStorage, removeStorage, writeStorage } from './storage'
 import { SkillPicker } from './SkillPicker'
 import { Trimmer } from './Trimmer'
@@ -103,23 +103,32 @@ const nextKey = () => `item-${++keySeq}`
 /**
  * 記録する画面。recordId があれば、保存した記録を編集する
  */
-/** 「元に戻す」のトーストが出ている長さの目安（toastDuration の上限） */
-const UNDO_MS = 6000
+/** 「元に戻す」のトーストが出ている長さ。積みを捨てる時間も、これに合わせる */
+const UNDO_MS = toastDuration(t.record.removed, 'ok', true)
 
 export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: string; recordId?: string }) {
   const editing = !!recordId
   const run = useAction()
   const toast = useToast()
-  /** 外した動画・写真（外した順）と、いま出ている「元に戻す」のトーストの key */
-  const undo = useRef<{ stack: Removed<Item>[]; toastKey: number | null; at: number }>({ stack: [], toastKey: null, at: 0 })
-  /** 積んだ物を捨て、効かなくなる「元に戻す」のトーストを消す（保存を始めたとき・画面を離れるとき） */
-  const dropUndo = () => {
-    if (undo.current.toastKey !== null) toast.hide(undo.current.toastKey)
-    undo.current = { stack: [], toastKey: null, at: 0 }
+  /** 外した動画・写真（外した順）。保存に成功するか、時間が切れるまで持つ */
+  const [undo, setUndo] = useState<UndoState<Item>>({ stack: [], at: 0 })
+  /** 押された時・保存に失敗した時に、最新の積みと保存中かを読むための写し */
+  const undoRef = useRef(undo)
+  undoRef.current = undo
+  /** いま出ている「元に戻す」のトーストの key */
+  const undoToast = useRef<number | null>(null)
+  const hideUndoToast = () => {
+    if (undoToast.current !== null) toast.hide(undoToast.current)
+    undoToast.current = null
   }
-  const dropUndoRef = useRef(dropUndo)
-  dropUndoRef.current = dropUndo
-  useEffect(() => () => dropUndoRef.current(), [])
+  // 画面を離れるとき、押しても効かなくなる「元に戻す」のトーストを消す
+  useEffect(() => () => hideUndoToast(), []) // eslint-disable-line react-hooks/exhaustive-deps
+  // トーストが消える頃に、積みも捨てる。積みが変わるたび（外す・戻す）に、測り直す
+  useEffect(() => {
+    if (undo.stack.length === 0) return
+    const timer = setTimeout(() => setUndo((cur) => expireUndo(cur, Date.now(), UNDO_MS)), UNDO_MS + 50)
+    return () => clearTimeout(timer)
+  }, [undo])
   const videoSettings = useLiveQuery(getVideoSettings)
   const storage = videoSettings?.storage
   // 型は、同じ分野の中から選び直せる（練習の途中で、描く型を変えることがある）
@@ -166,6 +175,8 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
   const [missing, setMissing] = useState(false)
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
+  const savingRef = useRef(false)
+  savingRef.current = saving
   /**
    * 撮った・選んだのに、まだ一覧に入っていない動画・写真の数（写真の縮小や、Android でメモリに写している途中）。
    * この間に保存すると、その動画・写真の無い記録になってしまうので、保存は入り終わるのを待つ。戻るときも、撮ったものとして確認を出す
@@ -227,7 +238,9 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
   const hasInput =
     !!outcome || !!draft.reason?.trim() || !!draft.nextAction?.trim() || (draft.causes?.length ?? 0) > 0
   // 新しい記録は、動画・写真か入力が1つでもあれば残す価値がある（無いまま戻ると何も失わない）
-  const unsaved = preparing > 0 || (editing ? dirty : items.length > 0 || hasInput)
+  // 外して、まだ「元に戻す」で戻せる新しい動画・写真（外しただけで、画面を離れると、戻せなくなる）
+  const removedNew = undo.stack.filter((r) => r.item.kind === 'new').length
+  const unsaved = preparing > 0 || (editing ? dirty : items.length > 0 || hasInput || removedNew > 0)
 
   /** 保存前の内容があれば、黙って離れずに確認を出す（出したら true。false なら、そのまま離れてよい） */
   const askBeforeLeaving = () => {
@@ -362,30 +375,44 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
     setItems((prev) => prev.filter((i) => i.key !== item.key))
     if (item.kind === 'existing') setRemoved((prev) => [...prev, item.media.id])
     change()
-    // トーストが消えて（約6秒）戻せなくなった物は、次に外したときの「元に戻す」で急に出てこないよう、捨てる
-    if (Date.now() - undo.current.at > UNDO_MS) undo.current.stack = []
-    undo.current.at = Date.now()
-    undo.current.stack.push({ item, index })
+    // 時間が切れて戻せなくなった物は、次の「元に戻す」で急に出てこないよう、捨ててから積む
+    const cur = expireUndo(undoRef.current, Date.now(), UNDO_MS)
+    const next = { stack: [...cur.stack, { item, index }], at: Date.now() }
+    undoRef.current = next
+    setUndo(next)
     showUndo()
   }
 
   const showUndo = () => {
-    undo.current.toastKey = toast.show(t.record.removed, 'ok', {
+    undoToast.current = toast.show(t.record.removed, 'ok', {
       label: t.record.undoRemove,
       onClick: () => {
-        const last = undo.current.stack.pop()
-        undo.current.toastKey = null
-        if (!last) return
-        setItems((prev) => undoLast(prev, [last]).list)
+        undoToast.current = null
+        const cur = undoRef.current
+        const last = cur.stack[cur.stack.length - 1]
+        // 保存の最中は戻さない（保存する内容と、画面の並びが、ずれないように）
+        if (!last || savingRef.current) return
         const { item } = last
+        setItems((prev) => undoLast(prev, [last]).list)
         if (item.kind === 'existing') setRemoved((prev) => prev.filter((id) => id !== item.media.id))
+        const rest = { stack: cur.stack.slice(0, -1), at: Date.now() }
+        undoRef.current = rest
+        setUndo(rest)
         // まだ外した物が残っていれば、続けて戻せるように、トーストを出し直す
-        if (undo.current.stack.length > 0) {
-          undo.current.at = Date.now()
-          showUndo()
-        }
+        if (rest.stack.length > 0) showUndo()
       },
     })
+  }
+
+  /** 保存に失敗したとき：外した物をすべて戻す（外したまま、保存もできずに、失わないように） */
+  const restoreRemoved = () => {
+    const { stack } = undoRef.current
+    if (stack.length === 0) return
+    setItems((prev) => undoAll(prev, stack))
+    const ids = stack.flatMap((r) => (r.item.kind === 'existing' ? [r.item.media.id] : []))
+    if (ids.length > 0) setRemoved((prev) => prev.filter((id) => !ids.includes(id)))
+    undoRef.current = { stack: [], at: 0 }
+    setUndo(undoRef.current)
   }
 
   /** この動画だけ、YouTube に上げる公開範囲を切り替える（初めは設定のとおり） */
@@ -411,14 +438,14 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
 
   /** more：保存したら、続けて次の杯を撮る。動画・写真が入り終わる前に押したら、入るのを待ってから保存する */
   const save = (more = false) => {
-    // 保存を始めたら、外した物は戻せない（保存する内容と、画面の並びが、ずれないように）
-    dropUndo()
     if (preparing > 0) {
       queuedSave.current = more
       setSaving(true)
       return
     }
-    return run(async () => {
+    // 保存が済んだか。済まないまま終わったら（失敗）、外した物を戻す
+    let saved = false
+    const done = run(async () => {
       setSaving(true)
       try {
         const reason = draft.reason ?? ''
@@ -457,9 +484,13 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
             removeMediaIds: removed,
             replace,
           })
+          saved = true
+          hideUndoToast()
           toast.show(skillId === (originalSkillId.current ?? routeSkillId) ? t.record.saved : t.record.movedAndSaved(splitName(skill.name).main))
         } else {
           await addRecord({ skillId, outcome, reason, causes, nextAction, files: added })
+          saved = true
+          hideUndoToast()
           clearDraft()
           const total = await db.records.count()
           if (more) {
@@ -483,6 +514,10 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
         setSaving(false)
       }
     })
+    void done.then(() => {
+      if (!saved) restoreRemoved()
+    })
+    return done
   }
   saveRef.current = save
 
@@ -542,8 +577,8 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
           <p>
             {editing
               ? t.record.leaveEdited
-              : items.length + preparing > 0
-                ? t.record.leaveMedia(items.length + preparing)
+              : items.length + preparing + removedNew > 0
+                ? t.record.leaveMedia(items.length + preparing + removedNew)
                 : t.record.leaveInput}
           </p>
           <div className="row">

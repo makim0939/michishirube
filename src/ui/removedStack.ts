@@ -18,3 +18,26 @@ export function undoLast<T extends { key: string }>(
   next.splice(Math.min(Math.max(last.index, 0), next.length), 0, last.item)
   return { list: next, stack: rest, restored: last.item }
 }
+
+/** 外した物の積みと、最後に「元に戻す」を出した時刻 */
+export interface UndoState<T> {
+  stack: Removed<T>[]
+  at: number
+}
+
+/** 「元に戻す」のトーストが消える時間を過ぎていたら、積みを捨てる（もう戻せない物を、あとから出さない） */
+export function expireUndo<T>(state: UndoState<T>, now: number, ms: number): UndoState<T> {
+  return state.stack.length > 0 && now - state.at >= ms ? { stack: [], at: state.at } : state
+}
+
+/** 積んである物を、すべて元に戻す（保存に失敗したとき、外した物を失わないように） */
+export function undoAll<T extends { key: string }>(list: T[], stack: Removed<T>[]): T[] {
+  let cur = list
+  let rest = stack
+  while (rest.length > 0) {
+    const r = undoLast(cur, rest)
+    cur = r.list
+    rest = r.stack
+  }
+  return cur
+}
