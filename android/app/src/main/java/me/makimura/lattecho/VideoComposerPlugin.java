@@ -1,5 +1,6 @@
 package me.makimura.lattecho;
 
+import android.media.MediaMetadataRetriever;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
@@ -49,12 +50,14 @@ public class VideoComposerPlugin extends Plugin {
         File dir = getContext().getFilesDir();
         File out = new File(dir, output);
 
+        // 小さい動画を大きくはしない（iOS と同じ。大きさは最初の区間を基準にする）
+        int targetShortSide = maxShortSide;
         ImmutableList.Builder<EditedMediaItem> items = new ImmutableList.Builder<>();
-        double totalSeconds = 0;
         try {
             for (int i = 0; i < clips.length(); i++) {
                 JSONObject clip = clips.getJSONObject(i);
                 File in = new File(dir, clip.getString("input"));
+                if (i == 0) targetShortSide = Math.min(maxShortSide, shortSideOf(in, maxShortSide));
                 double start = clip.optDouble("start", 0);
                 // end が無ければ、動画の終わりまで
                 double end = clip.optDouble("end", -1);
@@ -66,7 +69,6 @@ public class VideoComposerPlugin extends Plugin {
                         return;
                     }
                     clipping.setEndPositionMs(Math.round(end * 1000));
-                    totalSeconds += end - start;
                 }
                 MediaItem mediaItem = new MediaItem.Builder()
                     .setUri(Uri.fromFile(in))
@@ -78,8 +80,8 @@ public class VideoComposerPlugin extends Plugin {
             call.reject("clips が読めません: " + e.getMessage(), e);
             return;
         }
-        final double expectedSeconds = totalSeconds;
 
+        final int shortSide = targetShortSide;
         //noinspection ResultOfMethodCallIgnored
         out.delete();
         File parent = out.getParentFile();
@@ -122,7 +124,7 @@ public class VideoComposerPlugin extends Plugin {
                     .build();
                 // 大きさは、つないだ全体でそろえる（区間ごとに向き・大きさが違っても、枠に収める）
                 Composition composition = new Composition.Builder(sequence)
-                    .setEffects(new Effects(ImmutableList.of(), ImmutableList.of(Presentation.createForShortSide(maxShortSide))))
+                    .setEffects(new Effects(ImmutableList.of(), ImmutableList.of(Presentation.createForShortSide(shortSide))))
                     // HDR（標準のカメラの 10bit 動画）は、SDR に変換する（H.264 の HDR を作れない端末が多いため）
                     .setHdrMode(Composition.HDR_MODE_TONE_MAP_HDR_TO_SDR_USING_OPEN_GL)
                     .build();
@@ -133,5 +135,32 @@ public class VideoComposerPlugin extends Plugin {
                 call.reject("動画をつなげませんでした: " + e.getMessage(), e);
             }
         });
+    }
+
+    /** 動画の短い辺（向きに関わらず同じ）。読めなければ fallback */
+    private static int shortSideOf(File file, int fallback) {
+        MediaMetadataRetriever probe = new MediaMetadataRetriever();
+        try {
+            probe.setDataSource(file.getAbsolutePath());
+            int width = parse(probe.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH));
+            int height = parse(probe.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT));
+            int side = Math.min(width, height);
+            return side > 0 ? side : fallback;
+        } catch (Exception e) {
+            return fallback;
+        } finally {
+            try {
+                probe.release();
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    private static int parse(String value) {
+        try {
+            return value == null ? 0 : Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 }

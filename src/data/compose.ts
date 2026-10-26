@@ -1,4 +1,4 @@
-import { composeVideoFiles, deleteFile, readBlobFile, usesFiles, writeBlobFile } from './files'
+import { composeVideoFiles, deleteDir, deleteFile, readBlobFile, usesFiles, writeBlobFile } from './files'
 import { QUALITY } from './mediaPrep'
 import type { VideoQuality } from './videoStorage'
 import { t } from '../i18n'
@@ -22,6 +22,8 @@ export interface ComposeClip {
 
 /** 区間の最小の長さ（秒）。trim.ts の clampRange と同じ */
 export const MIN_CLIP_SECONDS = 0.3
+/** 5.3 - 5 のような引き算の誤差（0.2999…）で、ちょうど最小の範囲を弾かないための余裕 */
+const EPSILON = 1e-6
 
 export function canCompose(): boolean {
   return usesFiles
@@ -32,18 +34,18 @@ export function checkClips(clips: ComposeClip[]) {
   if (clips.length === 0) throw new Error(t.compose.noClips)
   for (const c of clips) {
     if (!(c.start >= 0)) throw new Error(t.compose.badRange)
-    if (c.end !== undefined && !(c.end - c.start >= MIN_CLIP_SECONDS)) throw new Error(t.compose.badRange)
+    if (c.end !== undefined && !(c.end - c.start >= MIN_CLIP_SECONDS - EPSILON)) throw new Error(t.compose.badRange)
   }
 }
 
 /**
- * 区間をつないだ動画（MP4）を作る。画質は、元の動画の短い辺が大きければ高画質、そうでなければ標準
- * （切り取りと同じ考え方。大きくはしない）。失敗したら投げる（呼ぶ側は、元の動画をそのまま残す）
+ * 区間をつないだ動画（MP4）を作る。画質（quality）は呼ぶ側が決める。最初の区間より大きくはしない
+ * （小さい動画は、そのままの大きさ）。失敗したら投げる（呼ぶ側は、元の動画をそのまま残す）
  */
 export async function composeClips(clips: ComposeClip[], quality: VideoQuality, fileName: string): Promise<File> {
   if (!canCompose()) throw new Error(t.compose.unsupported)
   checkClips(clips)
-  const dir = `compose/${Date.now().toString(36)}`
+  const dir = `compose/${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
   const temps: string[] = []
   const output = `${dir}/out.mp4`
   try {
@@ -67,5 +69,6 @@ export async function composeClips(clips: ComposeClip[], quality: VideoQuality, 
     return new File([bytes], `${base}-edit.mp4`, { type: 'video/mp4' })
   } finally {
     await Promise.all([...temps, output].map((p) => deleteFile(p)))
+    await deleteDir(dir)
   }
 }

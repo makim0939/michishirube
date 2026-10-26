@@ -174,6 +174,15 @@ export async function listContentFiles(): Promise<string[]> {
   return files.filter((f) => f.type === 'file').map((f) => `media/${f.name}`)
 }
 
+/** フォルダごと消す（一時ファイルのフォルダの片付け） */
+export async function deleteDir(path: string) {
+  try {
+    await Filesystem.rmdir({ path: fullPath(path), directory: DIR, recursive: true })
+  } catch {
+    // もう無い
+  }
+}
+
 export async function deleteFile(path: string) {
   try {
     await Filesystem.deleteFile({ path: fullPath(path), directory: DIR })
