@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const plugin = vi.hoisted(() => ({
   getPurchases: vi.fn(),
   getProducts: vi.fn(),
+  addListener: vi.fn(async (_event: string, _listener: () => void) => ({ remove: async () => {} })),
   purchaseProduct: vi.fn(),
   restorePurchases: vi.fn(),
 }))
@@ -22,6 +23,7 @@ import {
   refreshPlus,
   restorePurchases,
   sendTip,
+  watchPurchases,
 } from './purchases'
 
 beforeEach(async () => {
@@ -81,6 +83,22 @@ describe('買う操作', () => {
     await buyPlus()
     expect(plugin.purchaseProduct).toHaveBeenCalledWith({ productIdentifier: PRODUCT_PLUS })
     expect(await isPlus()).toBe(true)
+  })
+
+  it('買えた直後にストアへ問い合わせられなくても、Plus を使えるようにする', async () => {
+    plugin.purchaseProduct.mockResolvedValue({})
+    plugin.getPurchases.mockRejectedValue(new Error('offline'))
+    await buyPlus()
+    expect(await isPlus()).toBe(true)
+  })
+
+  it('ストアから購入の知らせが来たら、確認し直す（承認待ちだった購入が、あとで通ったとき）', async () => {
+    watchPurchases()
+    expect(plugin.addListener).toHaveBeenCalledWith('transactionUpdated', expect.any(Function))
+    const onUpdate = plugin.addListener.mock.calls[0][1] as () => void
+    plugin.getPurchases.mockResolvedValue({ purchases: [{ productIdentifier: PRODUCT_PLUS }] })
+    onUpdate()
+    await vi.waitFor(async () => expect(await isPlus()).toBe(true))
   })
 
   it('投げ銭は Plus を解放しない', async () => {

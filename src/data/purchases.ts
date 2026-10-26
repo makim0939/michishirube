@@ -81,7 +81,7 @@ export class PurchaseCancelled extends Error {}
 /** ストアの購入をやめた・待ち（承認待ち）の知らせか。文言はストアごとに違うので、広めに見る */
 export function isCancelled(e: unknown): boolean {
   const message = String((e as { message?: unknown } | null)?.message ?? e)
-  return /cancel|userCancelled|pending/i.test(message)
+  return /cancel|pending/i.test(message)
 }
 
 async function buy(productIdentifier: string) {
@@ -93,10 +93,22 @@ async function buy(productIdentifier: string) {
   }
 }
 
-/** Plus を買う。買えたら、覚える */
+/**
+ * Plus を買う。買えたら、そのまま覚える（買った直後にストアへ問い合わせ直さない。
+ * 電波がなくて問い合わせに失敗しても、お金を払ったのに使えない状態にしないため。取り消しは、次の確認で反映する）
+ */
 export async function buyPlus() {
   await buy(PRODUCT_PLUS)
-  await refreshPlus()
+  await db.meta.put({ key: PLUS_KEY, value: true })
+}
+
+/**
+ * ストアからの購入の知らせ（「承認待ち」だった購入が、あとで承認されたときなど）を受けたら、確認し直す。
+ * アプリを開いている間、1回だけ呼ぶ
+ */
+export function watchPurchases() {
+  if (!canPurchase) return
+  void NativePurchases.addListener('transactionUpdated', () => void refreshPlus()).catch(() => {})
 }
 
 /** 投げ銭（何度でも送れる）。何も解放しない */

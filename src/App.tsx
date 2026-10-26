@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { moveContentsToFiles, optimizeVideos, tidyContentFiles, watchContentFiles } from './data/content'
 import { initFiles } from './data/files'
-import { refreshPlus } from './data/purchases'
+import { refreshPlus, watchPurchases } from './data/purchases'
 import { ensureSeeded } from './data/repo'
 import { restoreSnapshotIfEmpty, watchSnapshot } from './data/snapshot'
 import { startAutoSync } from './data/sync'
@@ -106,6 +106,7 @@ export function App() {
         void optimizeVideos()
         // 買ったもの（Plus）を、ストアに確かめて覚える
         void refreshPlus()
+        watchPurchases()
         setReady(true)
       })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))

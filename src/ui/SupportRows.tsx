@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Product } from '@capgo/native-purchases'
 import {
   buyPlus,
@@ -23,6 +23,8 @@ export function SupportRows() {
   const plus = usePlus()
   const [products, setProducts] = useState<{ plus?: Product; tip?: Product }>({})
   const [busy, setBusy] = useState(false)
+  /** 続けて押されても、購入を二重に始めない（state は、次の描画まで変わらないため、別に持つ） */
+  const running = useRef(false)
 
   useEffect(() => {
     if (canPurchase) void loadProducts().then(setProducts)
@@ -32,7 +34,8 @@ export function SupportRows() {
 
   /** 購入の処理。やめたときは何も出さない。失敗は、ストアの文ではなく、こちらの文で知らせる */
   const run = async (task: () => Promise<void>, done?: string) => {
-    if (busy) return
+    if (running.current) return
+    running.current = true
     setBusy(true)
     try {
       await task()
@@ -40,6 +43,7 @@ export function SupportRows() {
     } catch (e) {
       if (!(e instanceof PurchaseCancelled)) toast.show(t.support.failed, 'error')
     } finally {
+      running.current = false
       setBusy(false)
     }
   }
