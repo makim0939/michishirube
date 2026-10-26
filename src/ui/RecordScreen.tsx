@@ -15,6 +15,7 @@ import { useCupImageUrl } from './cupImage'
 import { useAction, useToast } from './feedback'
 import { canRecordInApp, Recorder } from './Recorder'
 import { backHandler, go, goBack, href } from './router'
+import { restoreAt } from './restoreAt'
 import { readStorage, removeStorage, writeStorage } from './storage'
 import { SkillPicker } from './SkillPicker'
 import { Trimmer } from './Trimmer'
@@ -339,10 +340,22 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
     }
   }
 
+  /**
+   * 動画・写真を外す。撮り直しのできない動画を誤タップで失わないよう、確認ダイアログは出さず（手間を増やさず）、
+   * 「元に戻す」のトーストを出す。外した物は、このクロージャに持っているので、元の位置にそのまま戻せる
+   */
   const removeItem = (item: Item) => {
+    const index = items.findIndex((i) => i.key === item.key)
     setItems((prev) => prev.filter((i) => i.key !== item.key))
     if (item.kind === 'existing') setRemoved((prev) => [...prev, item.media.id])
     change()
+    toast.show(t.record.removed, 'ok', {
+      label: t.record.undoRemove,
+      onClick: () => {
+        setItems((prev) => restoreAt(prev, item, index))
+        if (item.kind === 'existing') setRemoved((prev) => prev.filter((id) => id !== item.media.id))
+      },
+    })
   }
 
   /** この動画だけ、YouTube に上げる公開範囲を切り替える（初めは設定のとおり） */

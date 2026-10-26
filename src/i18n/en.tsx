@@ -194,6 +194,8 @@ export const en: Messages = {
     shootPhoto: 'Photo',
     album: 'Library',
     remove: 'Remove',
+    removed: 'Removed',
+    undoRemove: 'Undo',
     privacyToggle: (label) => `YouTube visibility: ${label} (tap to switch)`,
     addMore: 'Add more',
     reupload: "The trimmed video will be uploaded to YouTube again. The previous video stays on YouTube, so delete it in the YouTube app if you don't need it.",

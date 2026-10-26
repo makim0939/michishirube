@@ -200,6 +200,8 @@ export const ja = {
     shootPhoto: '写真を撮る',
     album: 'アルバム',
     remove: '外す',
+    removed: '外しました',
+    undoRemove: '元に戻す',
     privacyToggle: (label: string) => `YouTube の公開範囲：${label}（押すと切り替わります）`,
     addMore: '撮り足す',
     reupload: '切り取った動画は YouTube に上げ直します。前の動画は YouTube に残るので、不要なら YouTube アプリで削除してください。',
