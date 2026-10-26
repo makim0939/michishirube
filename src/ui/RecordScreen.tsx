@@ -15,7 +15,7 @@ import { useCupImageUrl } from './cupImage'
 import { useAction, useToast } from './feedback'
 import { canRecordInApp, Recorder } from './Recorder'
 import { backHandler, go, goBack, href } from './router'
-import { restoreAt } from './restoreAt'
+import { undoLast, type Removed } from './removedStack'
 import { readStorage, removeStorage, writeStorage } from './storage'
 import { SkillPicker } from './SkillPicker'
 import { Trimmer } from './Trimmer'
@@ -107,14 +107,16 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
   const editing = !!recordId
   const run = useAction()
   const toast = useToast()
-  /** 「元に戻す」のトーストが出ているか。この画面を離れるとき、効かなくなるそのトーストを消す */
-  const undoShown = useRef(false)
-  useEffect(
-    () => () => {
-      if (undoShown.current) toast.hide(t.record.removed)
-    },
-    [toast],
-  )
+  /** 外した動画・写真（外した順）と、いま出ている「元に戻す」のトーストの key */
+  const undo = useRef<{ stack: Removed<Item>[]; toastKey: number | null }>({ stack: [], toastKey: null })
+  /** 積んだ物を捨て、効かなくなる「元に戻す」のトーストを消す（保存を始めたとき・画面を離れるとき） */
+  const dropUndo = () => {
+    if (undo.current.toastKey !== null) toast.hide(undo.current.toastKey)
+    undo.current = { stack: [], toastKey: null }
+  }
+  const dropUndoRef = useRef(dropUndo)
+  dropUndoRef.current = dropUndo
+  useEffect(() => () => dropUndoRef.current(), [])
   const videoSettings = useLiveQuery(getVideoSettings)
   const storage = videoSettings?.storage
   // 型は、同じ分野の中から選び直せる（練習の途中で、描く型を変えることがある）
@@ -350,20 +352,29 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
 
   /**
    * 動画・写真を外す。撮り直しのできない動画を誤タップで失わないよう、確認ダイアログは出さず（手間を増やさず）、
-   * 「元に戻す」のトーストを出す。外した物は、このクロージャに持っているので、元の位置にそのまま戻せる
+   * 「元に戻す」のトーストを出す。続けて外したときは、押すたびに直近の物から戻す（トーストは1つのまま）
    */
   const removeItem = (item: Item) => {
     const index = items.findIndex((i) => i.key === item.key)
     setItems((prev) => prev.filter((i) => i.key !== item.key))
     if (item.kind === 'existing') setRemoved((prev) => [...prev, item.media.id])
     change()
-    undoShown.current = true
-    toast.show(t.record.removed, 'ok', {
+    undo.current.stack.push({ item, index })
+    showUndo()
+  }
+
+  const showUndo = () => {
+    undo.current.toastKey = toast.show(t.record.removed, 'ok', {
       label: t.record.undoRemove,
       onClick: () => {
-        undoShown.current = false
-        setItems((prev) => restoreAt(prev, item, index))
+        const last = undo.current.stack.pop()
+        undo.current.toastKey = null
+        if (!last) return
+        setItems((prev) => undoLast(prev, [last]).list)
+        const { item } = last
         if (item.kind === 'existing') setRemoved((prev) => prev.filter((id) => id !== item.media.id))
+        // まだ外した物が残っていれば、続けて戻せるように、トーストを出し直す
+        if (undo.current.stack.length > 0) showUndo()
       },
     })
   }
@@ -391,6 +402,8 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
 
   /** more：保存したら、続けて次の杯を撮る。動画・写真が入り終わる前に押したら、入るのを待ってから保存する */
   const save = (more = false) => {
+    // 保存を始めたら、外した物は戻せない（保存する内容と、画面の並びが、ずれないように）
+    dropUndo()
     if (preparing > 0) {
       queuedSave.current = more
       setSaving(true)

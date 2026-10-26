@@ -15,12 +15,19 @@ interface ToastAction {
 
 interface ToastApi {
   /** action を渡すと、トーストにボタンを1つ出す（少し長く出す） */
-  show: (message: string, tone?: 'ok' | 'error', action?: ToastAction) => void
-  /** 出ているトーストが、この文のものなら消す（画面を離れて、押しても効かなくなる「元に戻す」を残さないため。別のトーストは消さない） */
-  hide: (message: string) => void
+  show: (message: string, tone?: 'ok' | 'error', action?: ToastAction) => number
+  /** show が返した key のトーストが、まだ出ていれば消す（画面を離れて、押しても効かなくなる「元に戻す」を残さないため。別のトーストは消さない） */
+  hide: (key: number) => void
 }
 
-const ToastContext = createContext<ToastApi>({ show: () => {}, hide: () => {} })
+const ToastContext = createContext<ToastApi>({ show: () => 0, hide: () => {} })
+
+let toastSeq = 0
+
+/** key の違うトーストは、そのまま残す */
+export function toastAfterHide<T extends { key: number }>(cur: T | null, key: number): T | null {
+  return cur?.key === key ? null : cur
+}
 
 export function useToast() {
   return useContext(ToastContext)
@@ -180,8 +187,12 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
   const closeCelebration = useCallback(() => setCelebration(null), [])
   const toastApi = useMemo<ToastApi>(
     () => ({
-      show: (message, tone = 'ok', action) => setToast({ message, tone, action, key: Date.now() }),
-      hide: (message) => setToast((cur) => (cur?.message === message ? null : cur)),
+      show: (message, tone = 'ok', action) => {
+        const key = ++toastSeq
+        setToast({ message, tone, action, key })
+        return key
+      },
+      hide: (key) => setToast((cur) => toastAfterHide(cur, key)),
     }),
     [],
   )
