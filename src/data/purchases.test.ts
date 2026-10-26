@@ -20,6 +20,7 @@ import {
   mayCompose,
   noteComposeUse,
   isPlus,
+  loadProducts,
   PRODUCT_PLUS,
   PRODUCT_TIP,
   PurchaseCancelled,
@@ -139,6 +140,13 @@ describe('「つなぐ」を使ってよいか', () => {
     expect(await mayCompose(true)).toBe(true)
     await noteComposeUse()
     expect((await db.meta.get('purchase:composeUses'))?.value).toBe(FREE_COMPOSE_USES)
+  })
+
+  it('一度でも商品が取れたことがあれば、電波が無くて取れなくても、制限を外さない', async () => {
+    plugin.getProducts.mockResolvedValue({ products: [{ identifier: PRODUCT_PLUS }] })
+    await loadProducts()
+    await db.meta.put({ key: 'purchase:composeUses', value: FREE_COMPOSE_USES })
+    expect(await mayCompose(false)).toBe(false)
   })
 
   it('ストアから Plus の商品が取れないときは、買う手段が無いので止めない', async () => {

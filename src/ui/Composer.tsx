@@ -48,7 +48,7 @@ const trimmed = (r: Row) => r.duration > 0 && (r.start > 0.05 || r.end < r.durat
  * 作っている間は閉じられない（途中で止めると、元の動画と見分けがつかなくなるため）
  */
 export function Composer({
-  clips,
+  clips: initialClips,
   quality,
   fileName,
   onDone,
@@ -61,6 +61,8 @@ export function Composer({
   onDone: (file: File, order: string[]) => void
   onClose: () => void
 }) {
+  // 開いた時点の動画を使い続ける（親の再描画のたびに、新しい配列が渡されても、長さを読み直さない）
+  const [clips] = useState(initialClips)
   const video = useRef<HTMLVideoElement>(null)
   const strip = useRef<HTMLDivElement>(null)
   const dragging = useRef<'start' | 'end' | 'head' | null>(null)

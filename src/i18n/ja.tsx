@@ -98,7 +98,6 @@ export const ja = {
     purchased: '購入済み',
     plusThanks: 'ありがとうございます。Plus が使えます',
     plusLine: (free: number) => `動画をつなぐ機能です。無料で試せるのは${free}回までです`,
-    close: '閉じる',
     restore: '購入を復元',
     restored: '購入を復元しました',
     nothingToRestore: '復元できる購入はありませんでした',

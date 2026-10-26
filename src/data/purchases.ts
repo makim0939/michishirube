@@ -30,6 +30,9 @@ export function hasPlus(purchases: PurchaseLike[]): boolean {
   return purchases.some((p) => p.productIdentifier === PRODUCT_PLUS && !p.revocationDate)
 }
 
+/** ストアに Plus の商品があるのを、一度でも確かめたか（端末だけ） */
+const PLUS_LISTED_KEY = 'purchase:plusListed'
+
 /** 試した回数を覚える場所（端末だけ） */
 const COMPOSE_USES_KEY = 'purchase:composeUses'
 
@@ -66,10 +69,9 @@ export async function loadProducts(): Promise<{ plus?: Product; tip?: Product }>
   if (!canPurchase) return {}
   try {
     const { products } = await NativePurchases.getProducts({ productIdentifiers: [PRODUCT_PLUS, PRODUCT_TIP] })
-    return {
-      plus: products.find((p) => p.identifier === PRODUCT_PLUS),
-      tip: products.find((p) => p.identifier === PRODUCT_TIP),
-    }
+    const plus = products.find((p) => p.identifier === PRODUCT_PLUS)
+    if (plus) await db.meta.put({ key: PLUS_LISTED_KEY, value: true })
+    return { plus, tip: products.find((p) => p.identifier === PRODUCT_TIP) }
   } catch {
     return {}
   }
@@ -124,11 +126,13 @@ export async function restorePurchases(): Promise<boolean> {
 
 /**
  * 「つなぐ」を使ってよいか。Plus を買っている・無料で試せる回数が残っている、のどちらか。
- * plusAvailable は、ストアから Plus の商品が取れたか。取れない（まだ登録・承認されていない、電波がない）ときは、
- * 買う手段が無いので、止めずに使えるようにする（買えないのに、使えなくならないように）
+ * plusAvailable は、ストアから Plus の商品が取れたか。一度も取れたことがない（まだ登録・承認されていない）ときは、
+ * 買う手段が無いので、止めずに使えるようにする（買えないのに、使えなくならないように）。
+ * 一度でも取れたことがあれば、電波が無くて取れなくても、回数の制限を外さない（機内モードで制限を避けられないように）
  */
 export async function mayCompose(plusAvailable: boolean): Promise<boolean> {
-  if (!plusAvailable || (await isPlus())) return true
+  const listed = plusAvailable || (await db.meta.get(PLUS_LISTED_KEY))?.value === true
+  if (!listed || (await isPlus())) return true
   return ((await db.meta.get(COMPOSE_USES_KEY))?.value as number | undefined ?? 0) < FREE_COMPOSE_USES
 }
 

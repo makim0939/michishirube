@@ -94,7 +94,6 @@ export const en: Messages = {
     purchased: 'Purchased',
     plusThanks: 'Thank you. Plus is unlocked',
     plusLine: (free: number) => `Join videos together. The free trial is ${free} times`,
-    close: 'Close',
     restore: 'Restore purchases',
     restored: 'Purchases restored',
     nothingToRestore: 'No purchases to restore',
