@@ -6,6 +6,7 @@ import WebKit
 class MainViewController: CAPBridgeViewController {
     override open func capacitorDidLoad() {
         bridge?.registerPluginInstance(VideoTranscoderPlugin())
+        bridge?.registerPluginInstance(VideoComposerPlugin())
         bridge?.registerPluginInstance(SignInWithApplePlugin())
         passAppLanguage()
     }

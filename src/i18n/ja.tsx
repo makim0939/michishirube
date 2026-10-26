@@ -459,6 +459,11 @@ export const ja = {
     noContentFile: '端末に動画・写真のファイルがありません',
     filesNotReady: 'ファイルの準備ができていません',
   },
+  compose: {
+    unsupported: 'この端末では動画をつなげません',
+    noClips: 'つなぐ動画がありません',
+    badRange: '切り取る範囲が正しくありません',
+  },
   trim: {
     unsupported: 'この端末では動画を作り直せません',
     encodeFailed: 'エンコードに失敗しました',

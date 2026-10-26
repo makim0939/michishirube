@@ -125,6 +125,19 @@ async function fileExists(path: string): Promise<boolean> {
   }
 }
 
+interface VideoComposerPlugin {
+  compose(options: {
+    clips: { input: string; start: number; end?: number }[]
+    output: string
+    maxShortSide: number
+    videoBitrate: number
+    audioBitrate: number
+  }): Promise<{ size: number; duration: number }>
+}
+
+/** アプリの中だけのプラグイン（ios/App/App/VideoComposerPlugin.swift・android の VideoComposerPlugin.java） */
+const VideoComposer = registerPlugin<VideoComposerPlugin>('VideoComposer')
+
 interface VideoTranscoderPlugin {
   transcode(options: {
     input: string
@@ -201,4 +214,22 @@ export async function deleteAllContentFiles() {
     // もう無い
   }
   await Filesystem.mkdir({ path: `${ROOT}/media`, directory: DIR, recursive: true })
+}
+
+/**
+ * 動画のファイルから区間を切り出し、順につないで、決めた画質の MP4 に作り直して output に書く。
+ * end を省くと、その動画の終わりまで。つなぎ目はカットのみ（iOS と Android で同じにするため）
+ */
+export async function composeVideoFiles(
+  clips: { input: string; start: number; end?: number }[],
+  output: string,
+  preset: { shortSide: number; video: number; audio: number },
+): Promise<{ size: number; duration: number }> {
+  return VideoComposer.compose({
+    clips: clips.map((c) => ({ ...c, input: fullPath(c.input) })),
+    output: fullPath(output),
+    maxShortSide: preset.shortSide,
+    videoBitrate: preset.video,
+    audioBitrate: preset.audio,
+  })
 }
