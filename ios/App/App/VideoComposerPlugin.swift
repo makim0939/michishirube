@@ -105,6 +105,8 @@ public class VideoComposerPlugin: CAPPlugin, CAPBridgedPlugin {
             let natural = try await srcVideo.load(.naturalSize)
             let preferred = try await srcVideo.load(.preferredTransform)
             let oriented = CGRect(origin: .zero, size: natural).applying(preferred)
+            // 大きさが 0 の映像は、拡大の計算が無限大になる。最初の区間に限らず、どの区間でも断る
+            guard oriented.width > 0, oriented.height > 0 else { throw fail(4, "映像の大きさが分かりません") }
             pieces.append(
                 Piece(
                     range: CMTimeRange(start: cursor, duration: range.duration),
@@ -116,7 +118,6 @@ public class VideoComposerPlugin: CAPPlugin, CAPBridgedPlugin {
 
         // 書き出す大きさ：最初の区間の向きと比に合わせ、短い辺を maxShortSide までにする（小さい動画は大きくしない）
         let first = pieces[0].size
-        guard min(first.width, first.height) > 0 else { throw fail(4, "映像の大きさが分かりません") }
         let scale = min(1, maxShortSide / min(first.width, first.height))
         let even = { (v: CGFloat) -> Int in max(2, Int((v * scale / 2).rounded()) * 2) }
         let width = even(first.width)
