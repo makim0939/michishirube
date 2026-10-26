@@ -87,6 +87,17 @@ export const en: Messages = {
     pickTitle: (label) => `Swap "${label}" for`,
     playBoth: 'Play both (muted)',
   },
+  support: {
+    tip: 'Support development (tip)',
+    tipThanks: 'Thank you. It means a lot',
+    plus: 'Latte-chō Plus',
+    purchased: 'Purchased',
+    plusThanks: 'Thank you. Plus is unlocked',
+    restore: 'Restore purchases',
+    restored: 'Purchases restored',
+    nothingToRestore: 'No purchases to restore',
+    failed: "Couldn't complete the purchase. Please try again",
+  },
   settings: {
     title: 'Settings',
     appName: 'Latte-chō',

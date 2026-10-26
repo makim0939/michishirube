@@ -29,6 +29,9 @@ importers:
       '@capacitor/share':
         specifier: 8.0.3
         version: 8.0.3(@capacitor/core@8.5.2)
+      '@capgo/native-purchases':
+        specifier: 8.9.6
+        version: 8.9.6(@capacitor/core@8.5.2)
       '@dagrejs/dagre':
         specifier: ^3.1.1
         version: 3.1.1
@@ -643,6 +646,11 @@ packages:
 
   '@capacitor/synapse@1.0.4':
     resolution: {integrity: sha512-/C1FUo8/OkKuAT4nCIu/34ny9siNHr9qtFezu4kxm6GY1wNFxrCFWjfYx5C1tUhVGz3fxBABegupkpjXvjCHrw==}
+
+  '@capgo/native-purchases@8.9.6':
+    resolution: {integrity: sha512-HOK8C9FKVN8FOdZHmF32Uss1IDqB71ADYiWcJ5a4Gqvnho6Jtc8RtIr1Yg8I86YMm4W/nj7TZ54q7Z72Hlau3Q==}
+    peerDependencies:
+      '@capacitor/core': '>=8.0.0'
 
   '@cloudflare/kv-asset-handler@0.5.0':
     resolution: {integrity: sha512-jxQYkj8dSIzc0cD6cMMNdOc1UVjqSqu8BZdor5s8cGjW2I8BjODt/kWPVdY+u9zj3ms75Q5qaZgnxUad83+eAg==}
@@ -3733,6 +3741,10 @@ snapshots:
       '@capacitor/core': 8.5.2
 
   '@capacitor/synapse@1.0.4': {}
+
+  '@capgo/native-purchases@8.9.6(@capacitor/core@8.5.2)':
+    dependencies:
+      '@capacitor/core': 8.5.2
 
   '@cloudflare/kv-asset-handler@0.5.0': {}
 

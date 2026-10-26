@@ -24,6 +24,7 @@ import { getVideoTemplates, isCustomTemplates } from '../data/videoText'
 import { ConfirmButton, formatBytes, requestPersist, saveFile } from './common'
 import { clearImageCaches } from './imageCache'
 import { useAction, useToast } from './feedback'
+import { SupportRows } from './SupportRows'
 import { FeedbackPage } from './FeedbackPage'
 import { RoadmapSettings } from './RoadmapSettings'
 import { backHandler, go, href, type SettingsSection } from './router'
@@ -196,6 +197,7 @@ function SettingsHome() {
               </a>
             </li>
           )}
+          <SupportRows />
           <Row to="data" label={t.settings.deleteData} />
           <li>
             <a

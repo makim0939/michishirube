@@ -15,7 +15,8 @@ let package = Package(
         .package(name: "CapacitorApp", path: "../../../node_modules/.pnpm/@capacitor+app@8.1.1_@capacitor+core@8.5.2/node_modules/@capacitor/app"),
         .package(name: "CapacitorBrowser", path: "../../../node_modules/.pnpm/@capacitor+browser@8.0.4_@capacitor+core@8.5.2/node_modules/@capacitor/browser"),
         .package(name: "CapacitorFilesystem", path: "../../../node_modules/.pnpm/@capacitor+filesystem@8.1.3_@capacitor+core@8.5.2/node_modules/@capacitor/filesystem"),
-        .package(name: "CapacitorShare", path: "../../../node_modules/.pnpm/@capacitor+share@8.0.3_@capacitor+core@8.5.2/node_modules/@capacitor/share")
+        .package(name: "CapacitorShare", path: "../../../node_modules/.pnpm/@capacitor+share@8.0.3_@capacitor+core@8.5.2/node_modules/@capacitor/share"),
+        .package(name: "CapgoNativePurchases", path: "../../../node_modules/.pnpm/@capgo+native-purchases@8.9.6_@capacitor+core@8.5.2/node_modules/@capgo/native-purchases")
     ],
     targets: [
         .target(
@@ -26,7 +27,8 @@ let package = Package(
                 .product(name: "CapacitorApp", package: "CapacitorApp"),
                 .product(name: "CapacitorBrowser", package: "CapacitorBrowser"),
                 .product(name: "CapacitorFilesystem", package: "CapacitorFilesystem"),
-                .product(name: "CapacitorShare", package: "CapacitorShare")
+                .product(name: "CapacitorShare", package: "CapacitorShare"),
+                .product(name: "CapgoNativePurchases", package: "CapgoNativePurchases")
             ]
         )
     ]

@@ -1,0 +1,104 @@
+import 'fake-indexeddb/auto'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const plugin = vi.hoisted(() => ({
+  getPurchases: vi.fn(),
+  getProducts: vi.fn(),
+  purchaseProduct: vi.fn(),
+  restorePurchases: vi.fn(),
+}))
+vi.mock('@capgo/native-purchases', () => ({ NativePurchases: plugin }))
+vi.mock('../platform', () => ({ isIosApp: true }))
+
+import { db } from './db'
+import {
+  buyPlus,
+  hasPlus,
+  isCancelled,
+  isPlus,
+  PRODUCT_PLUS,
+  PRODUCT_TIP,
+  PurchaseCancelled,
+  refreshPlus,
+  restorePurchases,
+  sendTip,
+} from './purchases'
+
+beforeEach(async () => {
+  vi.clearAllMocks()
+  await db.meta.clear()
+})
+
+describe('Plus を買っているかの判定', () => {
+  it('購入の一覧に Plus があれば買っている', () => {
+    expect(hasPlus([{ productIdentifier: PRODUCT_PLUS }])).toBe(true)
+  })
+
+  it('投げ銭だけでは Plus にならない', () => {
+    expect(hasPlus([{ productIdentifier: PRODUCT_TIP }])).toBe(false)
+  })
+
+  it('返金・取り消しされた Plus は数えない', () => {
+    expect(hasPlus([{ productIdentifier: PRODUCT_PLUS, revocationDate: '2026-10-27T00:00:00Z' }])).toBe(false)
+  })
+})
+
+describe('購入の確認と覚え方', () => {
+  it('ストアに Plus があれば、端末に買ったと覚える（今のサインインの購入だけを見る）', async () => {
+    plugin.getPurchases.mockResolvedValue({ purchases: [{ productIdentifier: PRODUCT_PLUS }] })
+    expect(await refreshPlus()).toBe(true)
+    expect(plugin.getPurchases).toHaveBeenCalledWith({ onlyCurrentEntitlements: true })
+    expect(await isPlus()).toBe(true)
+  })
+
+  it('返金されて一覧から消えたら、次の確認で買っていない状態に戻す', async () => {
+    await db.meta.put({ key: 'purchase:plus', value: true })
+    plugin.getPurchases.mockResolvedValue({ purchases: [] })
+    expect(await refreshPlus()).toBe(false)
+    expect(await isPlus()).toBe(false)
+  })
+
+  it('ストアに問い合わせられないときは、覚えている結果をそのまま使う', async () => {
+    await db.meta.put({ key: 'purchase:plus', value: true })
+    plugin.getPurchases.mockRejectedValue(new Error('offline'))
+    expect(await refreshPlus()).toBe(true)
+    expect(await isPlus()).toBe(true)
+  })
+
+  it('復元したら、ストアの結果を覚え直して返す', async () => {
+    plugin.restorePurchases.mockResolvedValue(undefined)
+    plugin.getPurchases.mockResolvedValue({ purchases: [{ productIdentifier: PRODUCT_PLUS }] })
+    expect(await restorePurchases()).toBe(true)
+    expect(plugin.restorePurchases).toHaveBeenCalledTimes(1)
+    expect(await isPlus()).toBe(true)
+  })
+})
+
+describe('買う操作', () => {
+  it('Plus を買えたら、確認して覚える', async () => {
+    plugin.purchaseProduct.mockResolvedValue({})
+    plugin.getPurchases.mockResolvedValue({ purchases: [{ productIdentifier: PRODUCT_PLUS }] })
+    await buyPlus()
+    expect(plugin.purchaseProduct).toHaveBeenCalledWith({ productIdentifier: PRODUCT_PLUS })
+    expect(await isPlus()).toBe(true)
+  })
+
+  it('投げ銭は Plus を解放しない', async () => {
+    plugin.purchaseProduct.mockResolvedValue({})
+    await sendTip()
+    expect(plugin.purchaseProduct).toHaveBeenCalledWith({ productIdentifier: PRODUCT_TIP })
+    expect(await isPlus()).toBe(false)
+  })
+
+  it('買う操作をやめたときは、エラーではなくやめたことを表す', async () => {
+    plugin.purchaseProduct.mockRejectedValue(new Error('User cancelled'))
+    await expect(sendTip()).rejects.toBeInstanceOf(PurchaseCancelled)
+    expect(isCancelled(new Error('Purchase was cancelled'))).toBe(true)
+    expect(isCancelled(new Error('network down'))).toBe(false)
+  })
+
+  it('ほかの失敗は、そのまま投げる', async () => {
+    plugin.purchaseProduct.mockRejectedValue(new Error('network down'))
+    await expect(sendTip()).rejects.toThrow('network down')
+  })
+})

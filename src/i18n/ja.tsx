@@ -91,6 +91,17 @@ export const ja = {
     pickTitle: (label: string) => `「${label}」と入れ替える杯`,
     playBoth: '同時に再生（音なし）',
   },
+  support: {
+    tip: '開発を応援する（投げ銭）',
+    tipThanks: 'ありがとうございます。励みになります',
+    plus: 'ラテ帳 Plus',
+    purchased: '購入済み',
+    plusThanks: 'ありがとうございます。Plus が使えます',
+    restore: '購入を復元',
+    restored: '購入を復元しました',
+    nothingToRestore: '復元できる購入はありませんでした',
+    failed: '購入できませんでした。もう一度試してください',
+  },
   settings: {
     title: '設定',
     appName: 'ラテ帳',
