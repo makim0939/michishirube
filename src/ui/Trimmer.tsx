@@ -7,17 +7,17 @@ import { useBackHandler } from './useBackHandler'
 import { t } from '../i18n'
 
 /** フィルムの1コマあたりの数（写真アプリのように、横いっぱいに並べる） */
-const FRAMES = 9
+export const FRAMES = 9
 /** 範囲の最短 */
 const MIN_LENGTH = 0.3
 
-function formatTime(sec: number) {
+export function formatTime(sec: number) {
   const s = Math.max(0, sec)
   return `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`
 }
 
 /** 動画から、フィルムに並べる小さなコマを作る（別の video で順に移動して描く）。isCancelled が true になったら止める */
-async function makeFilmstrip(
+export async function makeFilmstrip(
   url: string,
   duration: number,
   count: number,

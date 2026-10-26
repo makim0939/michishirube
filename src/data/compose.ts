@@ -1,6 +1,7 @@
 import { composeVideoFiles, deleteDir, deleteFile, readBlobFile, usesFiles, writeBlobFile } from './files'
 import { QUALITY } from './mediaPrep'
 import type { VideoQuality } from './videoStorage'
+import { isIosApp } from '../platform'
 import { t } from '../i18n'
 
 /**
@@ -28,6 +29,12 @@ const EPSILON = 1e-6
 export function canCompose(): boolean {
   return usesFiles
 }
+
+/**
+ * 「つなぐ」の入口を出すか。いまは iPhone・iPad のアプリだけ
+ * （Android の書き出しは、実機での確認が済んでから。Web 版は、書き出しの部品が無い）
+ */
+export const canJoinVideos = isIosApp
 
 /** 渡された区間が書き出せる形か。空・負の始め・短すぎる範囲は、ネイティブに渡す前に断る */
 export function checkClips(clips: ComposeClip[]) {

@@ -15,7 +15,10 @@ import { db } from './db'
 import {
   buyPlus,
   hasPlus,
+  FREE_COMPOSE_USES,
   isCancelled,
+  mayCompose,
+  noteComposeUse,
   isPlus,
   PRODUCT_PLUS,
   PRODUCT_TIP,
@@ -118,5 +121,28 @@ describe('買う操作', () => {
   it('ほかの失敗は、そのまま投げる', async () => {
     plugin.purchaseProduct.mockRejectedValue(new Error('network down'))
     await expect(sendTip()).rejects.toThrow('network down')
+  })
+})
+
+describe('「つなぐ」を使ってよいか', () => {
+  it('無料で試せる回数までは使え、使い切ると止まる', async () => {
+    for (let i = 0; i < FREE_COMPOSE_USES; i++) {
+      expect(await mayCompose(true)).toBe(true)
+      await noteComposeUse()
+    }
+    expect(await mayCompose(true)).toBe(false)
+  })
+
+  it('Plus を買っていれば、回数に関わらず使え、回数は数えない', async () => {
+    await db.meta.put({ key: 'purchase:plus', value: true })
+    await db.meta.put({ key: 'purchase:composeUses', value: FREE_COMPOSE_USES })
+    expect(await mayCompose(true)).toBe(true)
+    await noteComposeUse()
+    expect((await db.meta.get('purchase:composeUses'))?.value).toBe(FREE_COMPOSE_USES)
+  })
+
+  it('ストアから Plus の商品が取れないときは、買う手段が無いので止めない', async () => {
+    await db.meta.put({ key: 'purchase:composeUses', value: FREE_COMPOSE_USES })
+    expect(await mayCompose(false)).toBe(true)
   })
 })
