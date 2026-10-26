@@ -16,7 +16,7 @@ import { t } from '../i18n'
 /**
  * 設定の「その他」に並べる、アプリ内課金の行（iPhone・iPad のアプリだけ）。
  * 説明は並べず、1行ずつ、押すとストアの購入の画面が出る。買ったかどうかは、行の右に出すだけ。
- * 行の名前と価格はストアのもの（取れなければ、価格だけ空にして、押せる）
+ * 価格はストアのもの。ストアから商品が取れた行だけを出す
  */
 export function SupportRows() {
   const toast = useToast()
@@ -76,12 +76,15 @@ export function SupportRows() {
           </li>
         </>
       )}
-      <li>
-        <button type="button" className="settings-row choice" disabled={busy} onClick={() => run(sendTip, t.support.tipThanks)}>
-          <span className="settings-label">{t.support.tip}</span>
-          <span className="settings-value">{products.tip?.priceString}</span>
-        </button>
-      </li>
+      {/* 商品がストアに無い（まだ登録・承認されていない、取れなかった）ときは出さない。押しても必ず失敗する行を見せないため */}
+      {products.tip && (
+        <li>
+          <button type="button" className="settings-row choice" disabled={busy} onClick={() => run(sendTip, t.support.tipThanks)}>
+            <span className="settings-label">{t.support.tip}</span>
+            <span className="settings-value">{products.tip.priceString}</span>
+          </button>
+        </li>
+      )}
     </>
   )
 }
