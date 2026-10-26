@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import { composeClips, MIN_CLIP_SECONDS } from '../data/compose'
 import { inMemory, probeDuration } from '../data/mediaPrep'
 import type { VideoQuality } from '../data/videoStorage'
@@ -236,6 +236,23 @@ export function Composer({
     dragging.current = null
   }
 
+  /** 取っ手を、キーボードや読み上げ（上下のスワイプ）でも0.1秒ずつ動かせるようにする */
+  const nudge = (which: 'start' | 'end') => (e: KeyboardEvent) => {
+    if (!row) return
+    const step = e.key === 'ArrowRight' || e.key === 'ArrowUp' ? 0.1 : e.key === 'ArrowLeft' || e.key === 'ArrowDown' ? -0.1 : 0
+    if (!step) return
+    e.preventDefault()
+    if (which === 'start') {
+      const start = Math.max(0, Math.min(row.start + step, row.end - MIN_CLIP_SECONDS))
+      patch(row.key, { start })
+      seek(start)
+    } else {
+      const end = Math.min(duration, Math.max(row.end + step, row.start + MIN_CLIP_SECONDS))
+      patch(row.key, { end })
+      seek(end)
+    }
+  }
+
   const move = (delta: -1 | 1) => {
     const to = selected + delta
     if (to < 0 || to >= rows.length) return
@@ -363,6 +380,8 @@ export function Composer({
                   aria-valuemax={duration}
                   aria-valuenow={row.start}
                   aria-valuetext={formatTime(row.start)}
+                  tabIndex={0}
+                  onKeyDown={nudge('start')}
                   onPointerDown={onPointerDown('start')}
                   onPointerMove={onPointerMove}
                   onPointerUp={onPointerUp}
@@ -376,6 +395,8 @@ export function Composer({
                   aria-valuemax={duration}
                   aria-valuenow={row.end}
                   aria-valuetext={formatTime(row.end)}
+                  tabIndex={0}
+                  onKeyDown={nudge('end')}
                   onPointerDown={onPointerDown('end')}
                   onPointerMove={onPointerMove}
                   onPointerUp={onPointerUp}
