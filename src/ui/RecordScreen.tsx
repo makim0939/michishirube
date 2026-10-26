@@ -100,12 +100,12 @@ const ANDROID_MAX_PICK_BYTES = 400 * 1024 * 1024
 let keySeq = 0
 const nextKey = () => `item-${++keySeq}`
 
-/**
- * 記録する画面。recordId があれば、保存した記録を編集する
- */
 /** 「元に戻す」のトーストが出ている長さ。積みを捨てる時間も、これに合わせる */
 const UNDO_MS = toastDuration(t.record.removed, 'ok', true)
 
+/**
+ * 記録する画面。recordId があれば、保存した記録を編集する
+ */
 export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: string; recordId?: string }) {
   const editing = !!recordId
   const run = useAction()
@@ -120,6 +120,12 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
   const hideUndoToast = () => {
     if (undoToast.current !== null) toast.hide(undoToast.current)
     undoToast.current = null
+  }
+  /** 保存に成功したら、外した物は不要（「もう1杯」で画面が残っても、次の記録に持ち越さない） */
+  const dropUndo = () => {
+    hideUndoToast()
+    undoRef.current = { stack: [], at: 0 }
+    setUndo(undoRef.current)
   }
   // 画面を離れるとき、押しても効かなくなる「元に戻す」のトーストを消す
   useEffect(() => () => hideUndoToast(), [])
@@ -485,12 +491,12 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
             replace,
           })
           saved = true
-          hideUndoToast()
+          dropUndo()
           toast.show(skillId === (originalSkillId.current ?? routeSkillId) ? t.record.saved : t.record.movedAndSaved(splitName(skill.name).main))
         } else {
           await addRecord({ skillId, outcome, reason, causes, nextAction, files: added })
           saved = true
-          hideUndoToast()
+          dropUndo()
           clearDraft()
           const total = await db.records.count()
           if (more) {
