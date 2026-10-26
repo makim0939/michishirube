@@ -25,6 +25,9 @@ export async function initFiles() {
     // すでにある
   }
   baseUri = (await Filesystem.getUri({ path: ROOT, directory: DIR })).uri
+  // 「仕上げる」の一時ファイル（compose/）は、書き出しの途中でアプリが終わると残る。起動のたびに片付ける
+  // （書き出しは、画面を開いて始めるので、起動の時点で進んでいるものは無い）
+  await Filesystem.rmdir({ path: `${ROOT}/compose`, directory: DIR, recursive: true }).catch(() => {})
 }
 
 function fullPath(path: string) {

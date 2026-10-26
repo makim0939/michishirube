@@ -69,11 +69,10 @@ export async function composeClips(clips: ComposeClip[], quality: VideoQuality, 
       inputs.push({ input, start: c.start, ...(c.end === undefined ? {} : { end: c.end }) })
     }
     await composeVideoFiles(inputs, output, QUALITY[quality])
+    // 読み終えた Blob は、ファイルを消しても読める（メモリにある）。もう一度写さない（長い動画で、メモリが倍になるため）
     const blob = await readBlobFile(output, 'video/mp4')
-    // 書き出した MP4 は、一時ファイルを消す前にメモリへ写す（消すと読めなくなるため）
-    const bytes = await blob.arrayBuffer()
     const base = fileName.replace(/\.[^.]+$/, '').replace(/-edit$/, '')
-    return new File([bytes], `${base}-edit.mp4`, { type: 'video/mp4' })
+    return new File([blob], `${base}-edit.mp4`, { type: 'video/mp4' })
   } finally {
     await Promise.all([...temps, output].map((p) => deleteFile(p)))
     await deleteDir(dir)
