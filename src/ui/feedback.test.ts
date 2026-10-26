@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { toastDuration } from './feedback'
+import { toastAfterHide, toastDuration } from './feedback'
 
 describe('toastDuration', () => {
   it('短い一言は2.5秒', () => {
@@ -22,5 +22,20 @@ describe('toastDuration', () => {
   it('どれだけ長くても6秒まで', () => {
     expect(toastDuration('あ'.repeat(300), 'ok', false)).toBe(6000)
     expect(toastDuration('あ'.repeat(300), 'error', false)).toBe(6000)
+  })
+})
+
+describe('トーストを key で消す', () => {
+  it('同じ key のトーストは消える', () => {
+    expect(toastAfterHide({ key: 3 }, 3)).toBeNull()
+  })
+
+  it('別の key のトースト（保存の知らせなど）は、残す', () => {
+    const cur = { key: 4 }
+    expect(toastAfterHide(cur, 3)).toBe(cur)
+  })
+
+  it('何も出ていなければ、何もしない', () => {
+    expect(toastAfterHide(null, 3)).toBeNull()
   })
 })
