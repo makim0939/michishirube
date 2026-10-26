@@ -3593,3 +3593,36 @@ h1.wordmark {
 .clip-tools .editor-sound:disabled {
   opacity: 0.35;
 }
+
+/* ---- BGM（つなぐ画面） ---- */
+
+.bgm-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bgm-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 55%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.bgm-volume {
+  flex: 1;
+  min-width: 0;
+  accent-color: #f5c542;
+}
+
+.bgm-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}

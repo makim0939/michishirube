@@ -170,3 +170,11 @@ export const ChevronDownIcon = (p: P) => (
     <path d="M6.5 9.5l5.5 5.5 5.5-5.5" />
   </Icon>
 )
+
+export const MusicIcon = (p: P) => (
+  <Icon {...p}>
+    <path d="M9 18V6l10-2v12" />
+    <circle cx="6.5" cy="18" r="2.5" />
+    <circle cx="16.5" cy="16" r="2.5" />
+  </Icon>
+)

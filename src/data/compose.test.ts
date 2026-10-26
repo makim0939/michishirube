@@ -10,7 +10,7 @@ const files = vi.hoisted(() => ({
 }))
 vi.mock('./files', () => files)
 
-import { checkClips, composeClips } from './compose'
+import { checkClips, composeClips, totalSeconds } from './compose'
 
 const source = { file: 'media/a.mp4' }
 
@@ -69,5 +69,45 @@ describe('動画をつなぐ', () => {
     files.composeVideoFiles.mockRejectedValue(new Error('boom'))
     await expect(composeClips([{ source: { blob: new Blob(['x']) }, start: 0 }], 'standard', 'a.mp4')).rejects.toThrow('boom')
     expect(files.deleteDir).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('BGM つきで書き出す', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    files.readBlobFile.mockResolvedValue(new Blob(['mp4'], { type: 'video/mp4' }))
+    files.composeVideoFiles.mockResolvedValue({ size: 3, duration: 1 })
+  })
+
+  it('メモリの BGM は一時ファイルに書いて渡し、全体の長さと音量（0〜1 に収める）を添える', async () => {
+    await composeClips(
+      [
+        { source: { file: 'media/a.mp4' }, start: 1, end: 3, duration: 5 },
+        { source: { file: 'media/b.mp4' }, start: 0, duration: 4 },
+      ],
+      'standard',
+      'a.mp4',
+      { source: { blob: new Blob(['x']) }, volume: 1.7, extension: 'mp3' },
+    )
+    const bgm = files.composeVideoFiles.mock.calls[0][3] as { input: string; volume: number; totalSeconds: number }
+    expect(bgm.input).toMatch(/\/bgm\.mp3$/)
+    expect(bgm.volume).toBe(1)
+    expect(bgm.totalSeconds).toBe(6)
+    expect(files.deleteFile).toHaveBeenCalledWith(expect.stringMatching(/bgm\.mp3$/))
+  })
+
+  it('BGM が無ければ、ネイティブに BGM を渡さない', async () => {
+    await composeClips([{ source: { file: 'media/a.mp4' }, start: 0 }], 'standard', 'a.mp4')
+    expect(files.composeVideoFiles.mock.calls[0][3]).toBeUndefined()
+  })
+})
+
+describe('つないだ全体の長さ', () => {
+  it('終わりを省いた区間は、動画の長さまで数える', () => {
+    expect(totalSeconds([{ source: { file: 'a' }, start: 1, duration: 4 }, { source: { file: 'b' }, start: 0, end: 2.5 }])).toBe(5.5)
+  })
+
+  it('長さが分からない区間があれば 0（BGM の終わりを小さくしない）', () => {
+    expect(totalSeconds([{ source: { file: 'a' }, start: 1 }])).toBe(0)
   })
 })

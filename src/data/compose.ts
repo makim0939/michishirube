@@ -19,6 +19,18 @@ export interface ComposeClip {
   start: number
   /** 秒。切り出す終わり。省くと動画の終わりまで */
   end?: number
+  /** 動画の長さ（秒）。end を省いたとき、つないだ全体の長さを求めるのに使う（BGM の終わりを小さくする位置） */
+  duration?: number
+}
+
+/** BGM。入れた動画の長さまで繰り返し、終わりで小さくしていく */
+export interface ComposeBgm {
+  /** アプリのファイルの場所か、メモリの音声 */
+  source: ComposeSource
+  /** 0〜1。元の動画の音は、そのまま */
+  volume: number
+  /** 音声の拡張子（m4a・mp3 など）。一時ファイルの名前に使う。分からなければ m4a */
+  extension?: string
 }
 
 /** 区間の最小の長さ（秒）。trim.ts の clampRange と同じ */
@@ -45,11 +57,27 @@ export function checkClips(clips: ComposeClip[]) {
   }
 }
 
+/** つないだ全体の長さ（秒）。長さが分からない区間（end も duration も無い）があれば 0 */
+export function totalSeconds(clips: ComposeClip[]): number {
+  let total = 0
+  for (const c of clips) {
+    const end = c.end ?? c.duration
+    if (end === undefined) return 0
+    total += Math.max(0, end - c.start)
+  }
+  return total
+}
+
 /**
  * 区間をつないだ動画（MP4）を作る。画質（quality）は呼ぶ側が決める。最初の区間より大きくはしない
  * （小さい動画は、そのままの大きさ）。失敗したら投げる（呼ぶ側は、元の動画をそのまま残す）
  */
-export async function composeClips(clips: ComposeClip[], quality: VideoQuality, fileName: string): Promise<File> {
+export async function composeClips(
+  clips: ComposeClip[],
+  quality: VideoQuality,
+  fileName: string,
+  bgm?: ComposeBgm,
+): Promise<File> {
   if (!canCompose()) throw new Error(t.compose.unsupported)
   checkClips(clips)
   const dir = `compose/${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
@@ -68,7 +96,19 @@ export async function composeClips(clips: ComposeClip[], quality: VideoQuality, 
       }
       inputs.push({ input, start: c.start, ...(c.end === undefined ? {} : { end: c.end }) })
     }
-    await composeVideoFiles(inputs, output, QUALITY[quality])
+    let bgmInput: { input: string; volume: number; totalSeconds: number } | undefined
+    if (bgm) {
+      let input: string
+      if ('file' in bgm.source) {
+        input = bgm.source.file
+      } else {
+        input = `${dir}/bgm.${bgm.extension || 'm4a'}`
+        temps.push(input)
+        await writeBlobFile(input, bgm.source.blob)
+      }
+      bgmInput = { input, volume: Math.max(0, Math.min(1, bgm.volume)), totalSeconds: totalSeconds(clips) }
+    }
+    await composeVideoFiles(inputs, output, QUALITY[quality], bgmInput)
     const blob = await readBlobFile(output, 'video/mp4')
     // 書き出した MP4 は、一時ファイルを消す前にメモリへ写す（消すと読めなくなるため）
     const bytes = await blob.arrayBuffer()

@@ -15,6 +15,11 @@ public class VideoComposerPlugin: CAPPlugin, CAPBridgedPlugin {
 
     private let queue = DispatchQueue(label: "lattecho.compose")
 
+    private struct Bgm {
+        let url: URL
+        let volume: Float
+    }
+
     private struct Clip {
         let url: URL
         let start: Double
@@ -44,11 +49,17 @@ public class VideoComposerPlugin: CAPPlugin, CAPBridgedPlugin {
         let videoBitrate = call.getInt("videoBitrate") ?? 1_200_000
         let audioBitrate = call.getInt("audioBitrate") ?? 96_000
         let outURL = docs.appendingPathComponent(output)
+        // BGM（任意）。入力のファイルと、音量（0〜1）。動画の長さまで繰り返し、終わりの 1.5 秒で小さくしていく
+        var bgm: Bgm?
+        if let raw = call.getObject("bgm"), let input = raw["input"] as? String {
+            let volume = (raw["volume"] as? NSNumber)?.floatValue ?? 0.3
+            bgm = Bgm(url: docs.appendingPathComponent(input), volume: max(0, min(1, volume)))
+        }
 
         Task {
             do {
                 let result = try await Self.run(
-                    clips: clips, outURL: outURL, maxShortSide: maxShortSide,
+                    clips: clips, bgm: bgm, outURL: outURL, maxShortSide: maxShortSide,
                     videoBitrate: videoBitrate, audioBitrate: audioBitrate, queue: queue)
                 call.resolve(result)
             } catch {
@@ -63,7 +74,7 @@ public class VideoComposerPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     private static func run(
-        clips: [Clip], outURL: URL, maxShortSide: CGFloat, videoBitrate: Int, audioBitrate: Int, queue: DispatchQueue
+        clips: [Clip], bgm: Bgm?, outURL: URL, maxShortSide: CGFloat, videoBitrate: Int, audioBitrate: Int, queue: DispatchQueue
     ) async throws -> [String: Any] {
         let timescale: CMTimeScale = 600
         let composition = AVMutableComposition()
@@ -114,6 +125,35 @@ public class VideoComposerPlugin: CAPPlugin, CAPBridgedPlugin {
                     size: oriented.size,
                     origin: oriented.origin))
             cursor = cursor + range.duration
+        }
+
+        // BGM：動画の長さまで繰り返して並べる（長ければ、動画の終わりで切る）
+        var bgmTrack: AVMutableCompositionTrack?
+        var audioMix: AVMutableAudioMix?
+        if let bgm {
+            let asset = AVURLAsset(url: bgm.url)
+            guard let source = try await asset.loadTracks(withMediaType: .audio).first else {
+                throw fail(9, "BGM の音がありません")
+            }
+            let length = try await asset.load(.duration)
+            guard length > .zero,
+                let track = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)
+            else { throw fail(9, "BGM の長さが分かりません") }
+            var at = CMTime.zero
+            while at < cursor {
+                let piece = min(length, cursor - at)
+                try track.insertTimeRange(CMTimeRange(start: .zero, duration: piece), of: source, at: at)
+                at = at + piece
+            }
+            // 音量は一定にし、終わりの 1.5 秒で 0 まで下げる（ぶつ切りで終わらないように）
+            let params = AVMutableAudioMixInputParameters(track: track)
+            params.setVolume(bgm.volume, at: .zero)
+            let fade = min(CMTime(seconds: 1.5, preferredTimescale: timescale), cursor)
+            params.setVolumeRamp(fromStartVolume: bgm.volume, toEndVolume: 0, timeRange: CMTimeRange(start: cursor - fade, duration: fade))
+            let mix = AVMutableAudioMix()
+            mix.inputParameters = [params]
+            audioMix = mix
+            bgmTrack = track
         }
 
         // 書き出す大きさ：最初の区間の向きと比に合わせ、短い辺を maxShortSide までにする（小さい動画は大きくしない）
@@ -181,9 +221,10 @@ public class VideoComposerPlugin: CAPPlugin, CAPBridgedPlugin {
         writer.add(videoIn)
 
         var pairs: [(AVAssetReaderOutput, AVAssetWriterInput)] = [(videoOut, videoIn)]
-        if let audioTrack, hasAudio {
+        let audioTracks = [hasAudio ? audioTrack : nil, bgmTrack].compactMap { $0 }
+        if !audioTracks.isEmpty {
             let audioOut = AVAssetReaderAudioMixOutput(
-                audioTracks: [audioTrack],
+                audioTracks: audioTracks,
                 audioSettings: [
                     AVFormatIDKey: kAudioFormatLinearPCM,
                     AVSampleRateKey: 44_100,
@@ -193,6 +234,7 @@ public class VideoComposerPlugin: CAPPlugin, CAPBridgedPlugin {
                     AVLinearPCMIsBigEndianKey: false,
                     AVLinearPCMIsNonInterleaved: false,
                 ])
+            audioOut.audioMix = audioMix
             reader.add(audioOut)
             let audioIn = AVAssetWriterInput(
                 mediaType: .audio,
