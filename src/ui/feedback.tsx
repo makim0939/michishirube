@@ -16,9 +16,11 @@ interface ToastAction {
 interface ToastApi {
   /** action を渡すと、トーストにボタンを1つ出す（少し長く出す） */
   show: (message: string, tone?: 'ok' | 'error', action?: ToastAction) => void
+  /** 出ているトーストが、この文のものなら消す（画面を離れて、押しても効かなくなる「元に戻す」を残さないため。別のトーストは消さない） */
+  hide: (message: string) => void
 }
 
-const ToastContext = createContext<ToastApi>({ show: () => {} })
+const ToastContext = createContext<ToastApi>({ show: () => {}, hide: () => {} })
 
 export function useToast() {
   return useContext(ToastContext)
@@ -177,7 +179,10 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
 
   const closeCelebration = useCallback(() => setCelebration(null), [])
   const toastApi = useMemo<ToastApi>(
-    () => ({ show: (message, tone = 'ok', action) => setToast({ message, tone, action, key: Date.now() }) }),
+    () => ({
+      show: (message, tone = 'ok', action) => setToast({ message, tone, action, key: Date.now() }),
+      hide: (message) => setToast((cur) => (cur?.message === message ? null : cur)),
+    }),
     [],
   )
 

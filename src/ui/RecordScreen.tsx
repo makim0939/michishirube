@@ -107,6 +107,14 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
   const editing = !!recordId
   const run = useAction()
   const toast = useToast()
+  /** 「元に戻す」のトーストが出ているか。この画面を離れるとき、効かなくなるそのトーストを消す */
+  const undoShown = useRef(false)
+  useEffect(
+    () => () => {
+      if (undoShown.current) toast.hide(t.record.removed)
+    },
+    [toast],
+  )
   const videoSettings = useLiveQuery(getVideoSettings)
   const storage = videoSettings?.storage
   // 型は、同じ分野の中から選び直せる（練習の途中で、描く型を変えることがある）
@@ -349,9 +357,11 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
     setItems((prev) => prev.filter((i) => i.key !== item.key))
     if (item.kind === 'existing') setRemoved((prev) => [...prev, item.media.id])
     change()
+    undoShown.current = true
     toast.show(t.record.removed, 'ok', {
       label: t.record.undoRemove,
       onClick: () => {
+        undoShown.current = false
         setItems((prev) => restoreAt(prev, item, index))
         if (item.kind === 'existing') setRemoved((prev) => prev.filter((id) => id !== item.media.id))
       },
