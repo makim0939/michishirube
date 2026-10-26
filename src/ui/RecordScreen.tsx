@@ -103,16 +103,19 @@ const nextKey = () => `item-${++keySeq}`
 /**
  * 記録する画面。recordId があれば、保存した記録を編集する
  */
+/** 「元に戻す」のトーストが出ている長さの目安（toastDuration の上限） */
+const UNDO_MS = 6000
+
 export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: string; recordId?: string }) {
   const editing = !!recordId
   const run = useAction()
   const toast = useToast()
   /** 外した動画・写真（外した順）と、いま出ている「元に戻す」のトーストの key */
-  const undo = useRef<{ stack: Removed<Item>[]; toastKey: number | null }>({ stack: [], toastKey: null })
+  const undo = useRef<{ stack: Removed<Item>[]; toastKey: number | null; at: number }>({ stack: [], toastKey: null, at: 0 })
   /** 積んだ物を捨て、効かなくなる「元に戻す」のトーストを消す（保存を始めたとき・画面を離れるとき） */
   const dropUndo = () => {
     if (undo.current.toastKey !== null) toast.hide(undo.current.toastKey)
-    undo.current = { stack: [], toastKey: null }
+    undo.current = { stack: [], toastKey: null, at: 0 }
   }
   const dropUndoRef = useRef(dropUndo)
   dropUndoRef.current = dropUndo
@@ -359,6 +362,9 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
     setItems((prev) => prev.filter((i) => i.key !== item.key))
     if (item.kind === 'existing') setRemoved((prev) => [...prev, item.media.id])
     change()
+    // トーストが消えて（約6秒）戻せなくなった物は、次に外したときの「元に戻す」で急に出てこないよう、捨てる
+    if (Date.now() - undo.current.at > UNDO_MS) undo.current.stack = []
+    undo.current.at = Date.now()
     undo.current.stack.push({ item, index })
     showUndo()
   }
@@ -374,7 +380,10 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
         const { item } = last
         if (item.kind === 'existing') setRemoved((prev) => prev.filter((id) => id !== item.media.id))
         // まだ外した物が残っていれば、続けて戻せるように、トーストを出し直す
-        if (undo.current.stack.length > 0) showUndo()
+        if (undo.current.stack.length > 0) {
+          undo.current.at = Date.now()
+          showUndo()
+        }
       },
     })
   }
