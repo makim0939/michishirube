@@ -367,7 +367,7 @@ export async function importBackup(zips: Blob[]): Promise<ImportSummary> {
 
 /** この端末だけの meta（同期の接続先など） */
 function isLocalMeta(key: string): boolean {
-  return key.startsWith('sync:') || key.startsWith('youtube:')
+  return key.startsWith('sync:') || key.startsWith('youtube:') || key.startsWith('purchase:')
 }
 
 function backupFileName(includeMedia: boolean, now = new Date()): string {
