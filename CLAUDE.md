@@ -62,4 +62,4 @@
   - `worktree-pr`：作業ツリー → PR → レビュー → マージ → 片づけ（この流れで開発する）
   - `verify-on-device`：ブラウザ・iOS シミュレーター・Android エミュレーター・実機での確認（デバッグ・UX レビュー）
   - `app-screenshots`：アプリの画面を撮る（紹介サイト・記事・App Store の画面写真）
-  - `supervise-sessions`：開発のセッションを見回り、止まったものを起こし、判断待ちを知らせる（監督役のセッションで `/loop 30m /supervise-sessions`）
+  - `supervise-sessions`：開発のセッションを見回り、止まったものを起こし、判断待ちを知らせ、週の使用量が余りそうならレビューを立てる（監督役のセッションで `/loop 30m /supervise-sessions`）
