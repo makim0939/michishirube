@@ -464,6 +464,11 @@ export const en: Messages = {
     noContentFile: 'The video/photo file is not on this device',
     filesNotReady: 'Files are not ready yet',
   },
+  compose: {
+    unsupported: "This device can't join videos",
+    noClips: 'There are no videos to join',
+    badRange: 'The range to keep is not valid',
+  },
   trim: {
     unsupported: "This device can't re-encode videos",
     encodeFailed: 'Encoding failed',

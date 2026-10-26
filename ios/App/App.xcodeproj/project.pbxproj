@@ -17,6 +17,7 @@
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
 		9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9582B6822FE993A50072D4E8 /* SceneDelegate.swift */; };
 		A1C0DE022FF0000000000001 /* VideoTranscoderPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C0DE012FF0000000000001 /* VideoTranscoderPlugin.swift */; };
+		A1C0DE9B2FF0000000000001 /* VideoComposerPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C0DE9A2FF0000000000001 /* VideoComposerPlugin.swift */; };
 		A1C0DE082FF0000000000001 /* SignInWithApplePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C0DE072FF0000000000001 /* SignInWithApplePlugin.swift */; };
 		A1C0DE022FF0000000000002 /* MainViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C0DE012FF0000000000002 /* MainViewController.swift */; };
 		A1C0DE0B2FF0000000000001 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = A1C0DE0A2FF0000000000001 /* InfoPlist.strings */; };
@@ -35,6 +36,7 @@
 		9582B6822FE993A50072D4E8 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
 		A1C0DE012FF0000000000001 /* VideoTranscoderPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoTranscoderPlugin.swift; sourceTree = "<group>"; };
+		A1C0DE9A2FF0000000000001 /* VideoComposerPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoComposerPlugin.swift; sourceTree = "<group>"; };
 		A1C0DE072FF0000000000001 /* SignInWithApplePlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInWithApplePlugin.swift; sourceTree = "<group>"; };
 		A1C0DE012FF0000000000002 /* MainViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainViewController.swift; sourceTree = "<group>"; };
 		A1C0DE0C2FF0000000000001 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
@@ -76,6 +78,7 @@
 				9582B6822FE993A50072D4E8 /* SceneDelegate.swift */,
 				A1C0DE012FF0000000000002 /* MainViewController.swift */,
 				A1C0DE012FF0000000000001 /* VideoTranscoderPlugin.swift */,
+				A1C0DE9A2FF0000000000001 /* VideoComposerPlugin.swift */,
 				A1C0DE072FF0000000000001 /* SignInWithApplePlugin.swift */,
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
@@ -200,6 +203,7 @@
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,
 				A1C0DE022FF0000000000002 /* MainViewController.swift in Sources */,
 				A1C0DE022FF0000000000001 /* VideoTranscoderPlugin.swift in Sources */,
+				A1C0DE9B2FF0000000000001 /* VideoComposerPlugin.swift in Sources */,
 				A1C0DE082FF0000000000001 /* SignInWithApplePlugin.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
