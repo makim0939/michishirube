@@ -4,9 +4,12 @@ import android.media.MediaMetadataRetriever;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
+import androidx.media3.common.C;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.MimeTypes;
 import androidx.media3.common.util.UnstableApi;
+import androidx.media3.common.audio.DefaultGainProvider;
+import androidx.media3.common.audio.GainProcessor;
 import androidx.media3.effect.Presentation;
 import androidx.media3.transformer.Composition;
 import androidx.media3.transformer.DefaultEncoderFactory;
@@ -24,6 +27,7 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import java.io.File;
 import org.json.JSONObject;
 
@@ -81,6 +85,20 @@ public class VideoComposerPlugin extends Plugin {
             return;
         }
 
+        // BGM（任意）：入力のファイルと音量（0〜1）。動画の長さまで繰り返し、終わりの 1.5 秒で小さくしていく
+        JSObject bgm = call.getObject("bgm");
+        File bgmFile = null;
+        float bgmVolume = 0.3f;
+        double bgmTotalSeconds = 0;
+        if (bgm != null && bgm.optString("input", null) != null) {
+            bgmFile = new File(dir, bgm.optString("input"));
+            bgmVolume = (float) Math.max(0, Math.min(1, bgm.optDouble("volume", 0.3)));
+            bgmTotalSeconds = bgm.optDouble("totalSeconds", 0);
+        }
+        final File bgmInput = bgmFile;
+        final float bgmGain = bgmVolume;
+        final double totalSeconds = bgmTotalSeconds;
+
         final int shortSide = targetShortSide;
         //noinspection ResultOfMethodCallIgnored
         out.delete();
@@ -122,8 +140,24 @@ public class VideoComposerPlugin extends Plugin {
                 EditedMediaItemSequence sequence = new EditedMediaItemSequence.Builder(items.build())
                     .experimentalSetForceAudioTrack(true)
                     .build();
+                ImmutableList.Builder<EditedMediaItemSequence> sequences = new ImmutableList.Builder<>();
+                sequences.add(sequence);
+                if (bgmInput != null) {
+                    DefaultGainProvider.Builder gain = new DefaultGainProvider.Builder(bgmGain);
+                    long fadeUs = 1_500_000L;
+                    long startUs = Math.round(totalSeconds * 1_000_000L) - fadeUs;
+                    if (totalSeconds > 0 && startUs > 0) gain.addFadeAt(startUs, fadeUs, DefaultGainProvider.FADE_OUT_LINEAR);
+                    EditedMediaItem bgmItem = new EditedMediaItem.Builder(MediaItem.fromUri(Uri.fromFile(bgmInput)))
+                        .setRemoveVideo(true)
+                        .setEffects(new Effects(ImmutableList.of(new GainProcessor(gain.build())), ImmutableList.of()))
+                        .build();
+                    // 動画の長さまで繰り返す（繰り返す列は、ほかの列が終わるまで続く）
+                    sequences.add(
+                        new EditedMediaItemSequence.Builder(ImmutableSet.of(C.TRACK_TYPE_AUDIO)).addItem(bgmItem).setIsLooping(true).build()
+                    );
+                }
                 // 大きさは、つないだ全体でそろえる（区間ごとに向き・大きさが違っても、枠に収める）
-                Composition composition = new Composition.Builder(sequence)
+                Composition composition = new Composition.Builder(sequences.build())
                     .setEffects(new Effects(ImmutableList.of(), ImmutableList.of(Presentation.createForShortSide(shortSide))))
                     // HDR（標準のカメラの 10bit 動画）は、SDR に変換する（H.264 の HDR を作れない端末が多いため）
                     .setHdrMode(Composition.HDR_MODE_TONE_MAP_HDR_TO_SDR_USING_OPEN_GL)

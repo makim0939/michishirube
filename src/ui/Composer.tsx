@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
+import { BUNDLED_BGM, bgmBlob, bgmExtension, bgmTitle, type BgmChoice } from '../data/bgm'
 import { composeClips, MIN_CLIP_SECONDS } from '../data/compose'
 import { inMemory, probeDuration } from '../data/mediaPrep'
 import type { VideoQuality } from '../data/videoStorage'
-import { BackIcon, ForwardIcon, PauseIcon, PlayIcon } from './icons'
+import { BackIcon, ForwardIcon, MusicIcon, PauseIcon, PlayIcon } from './icons'
 import { FRAMES, formatTime, makeFilmstrip } from './Trimmer'
 import { useBackHandler } from './useBackHandler'
 import { t } from '../i18n'
@@ -75,6 +76,11 @@ export function Composer({
   const [playing, setPlaying] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string>()
+  /** 選んだ BGM と音量（0〜1。元の動画の音は、そのまま） */
+  const [bgm, setBgm] = useState<BgmChoice>()
+  const [bgmVolume, setBgmVolume] = useState(0.3)
+  const [bgmListOpen, setBgmListOpen] = useState(false)
+  const bgmInput = useRef<HTMLInputElement>(null)
 
   useBackHandler(() => {
     if (!busy) onClose()
@@ -272,7 +278,7 @@ export function Composer({
 
   const ready = rows.every((r) => r.duration > 0)
   const total = rows.reduce((sum, r) => sum + Math.max(0, r.end - r.start), 0)
-  const anyEdit = rows.length > 1 || rows.some(trimmed)
+  const anyEdit = rows.length > 1 || rows.some(trimmed) || !!bgm
 
   const done = async () => {
     if (!ready) return
@@ -292,10 +298,12 @@ export function Composer({
             start: r.start,
             // 動画の終わりまで使うときは end を送らない（長さの誤差で、終わりを超えないように）
             ...(r.end >= r.duration - 0.05 ? {} : { end: r.end }),
+            duration: r.duration,
           }
         }),
         quality,
         fileName,
+        bgm ? { source: { blob: await bgmBlob(bgm) }, volume: bgmVolume, extension: bgmExtension(bgm) } : undefined,
       )
       onDone(
         file,
@@ -425,6 +433,70 @@ export function Composer({
             </li>
           ))}
         </ul>
+        {/* BGM（任意）。曲が同梱されていれば一覧、無ければ、そのままファイルから選ぶ。選んだら、音量を出す */}
+        {!busy && (
+          <div className="bgm-row">
+            <button
+              type="button"
+              className="editor-text-button bgm-button"
+              onClick={() => (BUNDLED_BGM.length > 0 ? setBgmListOpen((o) => !o) : bgmInput.current?.click())}
+            >
+              <MusicIcon size={18} />
+              {bgm ? bgmTitle(bgm) : t.compose.bgm}
+            </button>
+            {bgm && (
+              <>
+                <input
+                  type="range"
+                  className="bgm-volume"
+                  min={0.05}
+                  max={1}
+                  step={0.05}
+                  value={bgmVolume}
+                  aria-label={t.compose.bgmVolume}
+                  onChange={(e) => setBgmVolume(Number(e.target.value))}
+                />
+                <button type="button" className="editor-text-button" onClick={() => setBgm(undefined)}>
+                  {t.compose.bgmOff}
+                </button>
+              </>
+            )}
+            <input
+              ref={bgmInput}
+              hidden
+              type="file"
+              accept="audio/*,.m4a,.mp3,.wav,.aac"
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (file) setBgm({ kind: 'file', file })
+                e.target.value = ''
+              }}
+            />
+          </div>
+        )}
+        {!busy && bgmListOpen && (
+          <ul className="bgm-list">
+            {BUNDLED_BGM.map((track) => (
+              <li key={track.id}>
+                <button
+                  type="button"
+                  className="editor-text-button"
+                  onClick={() => {
+                    setBgm({ kind: 'bundled', track })
+                    setBgmListOpen(false)
+                  }}
+                >
+                  {track.title}
+                </button>
+              </li>
+            ))}
+            <li>
+              <button type="button" className="editor-text-button" onClick={() => bgmInput.current?.click()}>
+                {t.compose.bgmFile}
+              </button>
+            </li>
+          </ul>
+        )}
         {!busy && (
           <div className="clip-tools">
             <button type="button" className="editor-sound" aria-label={t.compose.earlier} disabled={selected === 0} onClick={() => move(-1)}>

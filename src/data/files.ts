@@ -131,6 +131,7 @@ async function fileExists(path: string): Promise<boolean> {
 interface VideoComposerPlugin {
   compose(options: {
     clips: { input: string; start: number; end?: number }[]
+    bgm?: { input: string; volume: number; totalSeconds: number }
     output: string
     maxShortSide: number
     videoBitrate: number
@@ -230,15 +231,18 @@ export async function deleteAllContentFiles() {
 
 /**
  * 動画のファイルから区間を切り出し、順につないで、決めた画質の MP4 に作り直して output に書く。
- * end を省くと、その動画の終わりまで。つなぎ目はカットのみ（iOS と Android で同じにするため）
+ * end を省くと、その動画の終わりまで。つなぎ目はカットのみ（iOS と Android で同じにするため）。
+ * bgm は、動画の長さまで繰り返し、終わりの 1.5 秒で小さくしていく。totalSeconds は、つないだ全体の長さ（秒）
  */
 export async function composeVideoFiles(
   clips: { input: string; start: number; end?: number }[],
   output: string,
   preset: { shortSide: number; video: number; audio: number },
+  bgm?: { input: string; volume: number; totalSeconds: number },
 ): Promise<{ size: number; duration: number }> {
   return VideoComposer.compose({
     clips: clips.map((c) => ({ ...c, input: fullPath(c.input) })),
+    ...(bgm ? { bgm: { ...bgm, input: fullPath(bgm.input) } } : {}),
     output: fullPath(output),
     maxShortSide: preset.shortSide,
     videoBitrate: preset.video,

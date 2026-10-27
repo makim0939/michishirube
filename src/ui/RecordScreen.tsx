@@ -735,8 +735,8 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
             </li>
           </ul>
         )}
-        {/* 動画が2本以上あるときだけ（1本だけなら、「編集」の切り取りで足りる） */}
-        {joinable.length >= 2 && (
+        {/* 仕上げる（つなぐ・BGM）。動画があるときに出す */}
+        {joinable.length >= 1 && (
           <button type="button" className="btn small join-button" onClick={() => void startJoin()}>
             <ScissorsIcon size={16} />
             {t.compose.join}
