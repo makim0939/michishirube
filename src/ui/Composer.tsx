@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import { BUNDLED_BGM, bgmBlob, bgmExtension, bgmTitle, type BgmChoice } from '../data/bgm'
-import { composeClips, MIN_CLIP_SECONDS } from '../data/compose'
+import { canSplitAt, composeClips, MIN_CLIP_SECONDS } from '../data/compose'
 import { inMemory, probeDuration } from '../data/mediaPrep'
 import type { VideoQuality } from '../data/videoStorage'
 import { BackIcon, ForwardIcon, MusicIcon, PauseIcon, PlayIcon, SpeakerIcon } from './icons'
@@ -16,7 +16,11 @@ export interface ComposerClip {
   file?: string
 }
 
+/** 並びの 1 つ分（動画の 1 区間）。分割すると、同じ動画（key）から区間が増える */
 interface Row {
+  /** 並びの中での名前（最初は動画の key と同じ。分割で増えた区間は、別の名前） */
+  id: string
+  /** 元の動画（clips の key） */
   key: string
   /** 動画の長さ（秒）。読み取るまでは 0 */
   duration: number
@@ -45,7 +49,7 @@ const trimmed = (r: Row) => r.duration > 0 && (r.start > 0.05 || r.end < r.durat
 
 /**
  * 動画をつなぐ（iPhone の写真アプリのように）。下に動画を並べ、選んだ1本の両端の取っ手で範囲を決める。
- * 並べ替えと外すも、選んだ1本に対して行う。「完了」で、並べた順につなぎ、onDone に渡す（つなぎ目はカットのみ）。
+ * 並べ替え・分割（白い線の位置で 2 つに分ける）・外すも、選んだ1本に対して行う。「完了」で、並べた順につなぎ、onDone に渡す（つなぎ目はカットのみ）。
  * 作っている間は閉じられない（途中で止めると、元の動画と見分けがつかなくなるため）
  */
 export function Composer({
@@ -71,7 +75,7 @@ export function Composer({
   const strip = useRef<HTMLDivElement>(null)
   const dragging = useRef<'start' | 'end' | 'head' | null>(null)
   const playUntil = useRef<number | null>(null)
-  const [rows, setRows] = useState<Row[]>(() => clips.map((c) => ({ key: c.key, duration: 0, start: 0, end: 0 })))
+  const [rows, setRows] = useState<Row[]>(() => clips.map((c) => ({ id: c.key, key: c.key, duration: 0, start: 0, end: 0 })))
   const [selected, setSelected] = useState(0)
   const [url, setUrl] = useState<string>()
   const [frames, setFrames] = useState<Record<string, string[]>>({})
@@ -94,6 +98,7 @@ export function Composer({
   const resume = useRef(false)
   /** 動画ごとの読み込み済みの URL（続けて再生するとき、次の動画をすぐ出すため） */
   const urls = useRef(new Map<string, string>())
+  const urlPromises = useRef(new Map<string, Promise<string>>())
   const [thumbs, setThumbs] = useState<Record<string, string>>({})
   const [plusSheet, setPlusSheet] = useState(false)
   const [confirmClose, setConfirmClose] = useState(false)
@@ -123,8 +128,22 @@ export function Composer({
     }
   }, [clips])
 
-  // 選んだ動画を、メモリに写して再生できるようにする（iPhone で IndexedDB の動画を直接再生できないことがあるため）。
-  // 一度写したものは取っておく（続けて再生するとき、次の動画をすぐ出すため）。画面を閉じるときにまとめて解放する
+  /** 動画を、メモリに写して再生できるようにした URL（iPhone で IndexedDB の動画を直接再生できないことがあるため）。
+   * 一度写したものは取っておく（続けて再生するとき、並びの絵を作るとき、すぐ使えるように）。画面を閉じるときにまとめて解放する */
+  const urlFor = (key: string): Promise<string> => {
+    let p = urlPromises.current.get(key)
+    if (!p) {
+      p = inMemory(clipOf(key).blob).then((b) => {
+        const u = URL.createObjectURL(b)
+        urls.current.set(key, u)
+        return u
+      })
+      urlPromises.current.set(key, p)
+    }
+    return p
+  }
+
+  // 選んだ動画を、再生できるようにする
   useEffect(() => {
     if (!selectedKey) return
     let cancelled = false
@@ -136,50 +155,51 @@ export function Composer({
       return
     }
     setUrl(undefined)
-    inMemory(clipOf(selectedKey).blob)
-      .then((b) => {
-        if (cancelled) return
-        const u = URL.createObjectURL(b)
-        urls.current.set(selectedKey, u)
-        setUrl(u)
+    urlFor(selectedKey)
+      .then((u) => {
+        if (!cancelled) setUrl(u)
       })
       .catch(() => setError(t.common.videoLoadFailed))
     return () => {
       cancelled = true
     }
-    // clipOf は clips から引くだけなので、選んだ動画が変わったときだけ読み直す
+    // urlFor は clips から引くだけなので、選んだ動画が変わったときだけ読み直す
   }, [selectedKey])
 
   useEffect(() => {
+    const promises = urlPromises.current
     const cache = urls.current
     return () => {
-      for (const u of cache.values()) URL.revokeObjectURL(u)
+      for (const p of promises.values()) void p.then((u) => URL.revokeObjectURL(u)).catch(() => {})
+      promises.clear()
       cache.clear()
     }
   }, [])
 
-  // 並びの小さな絵（動画の最初のコマ。保存済みの絵は、できあがりの最後のコマなので使わない）
+  // 並びの小さな絵（区間の始めのコマ。保存済みの絵は、できあがりの最後のコマなので使わない）。分割で増えた区間の分も作る
+  const thumbBusy = useRef(new Set<string>())
   useEffect(() => {
     let cancelled = false
     void (async () => {
-      for (const c of clips) {
+      for (const r of rows) {
+        if (r.duration <= 0 || thumbs[r.id] || thumbBusy.current.has(r.id)) continue
+        thumbBusy.current.add(r.id)
         try {
-          const u = URL.createObjectURL(await inMemory(c.blob))
-          try {
-            const [frame] = await makeFramesAt(u, [0.1], () => cancelled)
-            if (frame && !cancelled) setThumbs((prev) => ({ ...prev, [c.key]: frame }))
-          } finally {
-            URL.revokeObjectURL(u)
-          }
+          const u = await urlFor(r.key)
+          const [frame] = await makeFramesAt(u, [Math.min(r.start + 0.1, r.duration - 0.05)], () => cancelled)
+          if (frame && !cancelled) setThumbs((prev) => ({ ...prev, [r.id]: frame }))
         } catch {
           // 絵が作れなくても、番号と長さで見分けられる
+        } finally {
+          thumbBusy.current.delete(r.id)
         }
       }
     })()
     return () => {
       cancelled = true
     }
-  }, [clips])
+    // 区間が増えたとき・長さが分かったときだけ（取っ手を動かすたびには、作り直さない）
+  }, [rows.map((r) => `${r.id}:${r.duration > 0}`).join()])
 
   // BGM を、画面で聞けるようにする（iPhone は audio 要素の音量を変えられないので、GainNode で音量を決める）
   useEffect(() => {
@@ -267,7 +287,16 @@ export function Composer({
     // 動画を読み込んだとき（選んだ動画が変わったとき）だけ。取っ手を動かすたびには、やり直さない
   }, [url, duration > 0])
 
-  const patch = (key: string, p: Partial<Row>) => setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...p } : r)))
+  // 同じ動画の別の区間を選んだとき（分割したあと）は、動画を読み込み直さないので、その区間の始めへ移る
+  useEffect(() => {
+    const v = video.current
+    if (!v || !row || sequenceRef.current) return
+    v.currentTime = row.start
+    setCurrent(row.start)
+    // 区間を選び直したときだけ（取っ手を動かすたびには、動かさない）
+  }, [row?.id])
+
+  const patch = (id: string, p: Partial<Row>) => setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...p } : r)))
 
   const seek = (time: number) => {
     const v = video.current
@@ -291,7 +320,13 @@ export function Composer({
     const v = video.current
     if (!v || playUntil.current === null || v.currentTime < playUntil.current) return
     playUntil.current = null
-    if (sequenceRef.current && selected < rows.length - 1) {
+    const next = rows[selected + 1]
+    if (sequenceRef.current && next && next.key === row?.key) {
+      // 同じ動画の次の区間（分割したもの）：読み込み直さず、その位置へ飛ぶ
+      v.currentTime = next.start
+      playUntil.current = next.end
+      setSelected(selected + 1)
+    } else if (sequenceRef.current && next) {
       resume.current = true
       v.pause()
       setSelected(selected + 1)
@@ -374,11 +409,11 @@ export function Composer({
     const time = timeAt(e.clientX)
     if (which === 'start') {
       const start = Math.max(0, Math.min(time, row.end - MIN_CLIP_SECONDS))
-      patch(row.key, { start })
+      patch(row.id, { start })
       seek(start)
     } else if (which === 'end') {
       const end = Math.min(duration, Math.max(time, row.start + MIN_CLIP_SECONDS))
-      patch(row.key, { end })
+      patch(row.id, { end })
       seek(end)
     } else {
       seek(Math.min(row.end, Math.max(row.start, time)))
@@ -397,11 +432,11 @@ export function Composer({
     e.preventDefault()
     if (which === 'start') {
       const start = Math.max(0, Math.min(row.start + step, row.end - MIN_CLIP_SECONDS))
-      patch(row.key, { start })
+      patch(row.id, { start })
       seek(start)
     } else {
       const end = Math.min(duration, Math.max(row.end + step, row.start + MIN_CLIP_SECONDS))
-      patch(row.key, { end })
+      patch(row.id, { end })
       seek(end)
     }
   }
@@ -418,6 +453,18 @@ export function Composer({
     setSelected(to)
   }
 
+  /** いまの位置（白い線）で、選んだ区間を 2 つに分ける。どちらも最短の長さ以上あるときだけ */
+  const canSplit = !!row && canSplitAt(row.start, row.end, current)
+  const splitCount = useRef(0)
+  const split = () => {
+    if (!row || !canSplit) return
+    stopAll()
+    const at = current
+    const added: Row = { ...row, id: `${row.key}#${++splitCount.current}`, start: at }
+    setRows((prev) => prev.flatMap((r) => (r.id === row.id ? [{ ...r, end: at }, added] : [r])))
+    setSelected(selected + 1)
+  }
+
   const remove = () => {
     if (rows.length <= 1) return
     stopAll()
@@ -432,7 +479,7 @@ export function Composer({
   /** 書き出しが要るか（複数をつなぐ・BGM・音を消す・切り取り） */
   const needsCompose = paid || muted || rows.some(trimmed)
   /** 開いたときから、手を加えたか（やめるとき、確認を出すかの判断。開いただけでは、変えていない） */
-  const dirty = !!bgm || muted || rows.some(trimmed) || rows.length !== clips.length || rows.some((r, i) => r.key !== clips[i]?.key)
+  const dirty = !!bgm || muted || rows.some(trimmed) || rows.length !== clips.length || rows.some((r, i) => r.id !== clips[i]?.key)
 
   const done = async () => {
     if (!ready || busy) return
@@ -622,7 +669,7 @@ export function Composer({
         {/* つなぐ動画の並び。押して選び、選んだ1本を並べ替え・外す */}
         <ul className="clip-row" aria-label={t.compose.clips}>
           {rows.map((r, i) => (
-            <li key={r.key}>
+            <li key={r.id}>
               <button
                 type="button"
                 className={`clip-chip${i === selected ? ' selected' : ''}`}
@@ -630,7 +677,7 @@ export function Composer({
                 disabled={busy}
                 onClick={() => choose(i)}
               >
-                {thumbs[r.key] && <img className="clip-thumb" src={thumbs[r.key]} alt="" />}
+                {thumbs[r.id] && <img className="clip-thumb" src={thumbs[r.id]} alt="" />}
                 <span className="clip-index">{i + 1}</span>
                 <span className="clip-length">{r.duration > 0 ? formatTime(r.end - r.start) : '…'}</span>
               </button>
@@ -715,6 +762,9 @@ export function Composer({
               onClick={() => move(1)}
             >
               <ForwardIcon size={20} />
+            </button>
+            <button type="button" className="editor-text-button" disabled={!canSplit} onClick={split}>
+              {t.compose.split}
             </button>
             <button type="button" className="editor-text-button" disabled={rows.length <= 1} onClick={remove}>
               {t.compose.remove}

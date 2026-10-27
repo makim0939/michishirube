@@ -462,7 +462,8 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
    * ほかの動画は外す。「元に戻す」で、つなぐ前（動画の並び）に戻せる（各範囲は、つなぎ直すときに決め直す）
    */
   const onJoined = (file: File, order: string[], paid: boolean) => {
-    const [first, ...rest] = order
+    // order は、区間の並び（分割した動画は、同じ動画が何度も出る）。動画ごとにまとめる
+    const [first, ...rest] = Array.from(new Set(order))
     const original = items.find((i) => i.key === first)
     const restItems = rest.flatMap((key) => items.find((i) => i.key === key) ?? [])
     setItems((prev) =>
@@ -478,8 +479,8 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
     change()
     attachPoster(first, file)
     if (paid) void noteComposeUse()
-    // 1 本だけ（切り取り・音を消す・BGM）のときは、動画が増減しないので、トーストは出さない
-    if (restItems.length === 0) return
+    // 動画が 1 本のまま・区間も 1 つ（切り取り・音を消す・BGM だけ）のときは、トーストを出さない
+    if (order.length <= 1) return
     toast.show(t.compose.joined, 'ok', {
       label: t.record.undoRemove,
       onClick: () => {
@@ -495,9 +496,9 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
         )
         const ids = restItems.flatMap((i) => (i.kind === 'existing' ? [i.media.id] : []))
         if (ids.length > 0) setRemoved((prev) => prev.filter((id) => !ids.includes(id)))
-        const rest = { stack: undoRef.current.stack.filter((r) => !keys.has(r.item.key)), at: Date.now() }
-        undoRef.current = rest
-        setUndo(rest)
+        const remaining = { stack: undoRef.current.stack.filter((r) => !keys.has(r.item.key)), at: Date.now() }
+        undoRef.current = remaining
+        setUndo(remaining)
         change()
       },
     })
