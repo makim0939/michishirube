@@ -172,13 +172,14 @@ jobs:
             echo "- ビルドしたコミット：\`$(git rev-parse --short HEAD)\`（タグ \`v$VERSION\`、ブランチ \`release/$VERSION\`）"
             echo "- 次：App Store Connect の TestFlight で、ビルドの処理を待つ"
           } >> "$GITHUB_STEP_SUMMARY"
+          # 全角の「）」は、変数名の一部と読まれ、set -u で落ちる。波括弧で区切る（PR が作れないときも、ジョブを赤にしない）
           if URL=$(gh pr create --base "$BASE" --head "release/$VERSION" \
               --title "版を $VERSION に上げる" \
               --body "リリース用ワークフローが、v$VERSION をビルド・アップロードしたあとに作った PR です（タグ v$VERSION は、このブランチの先頭に付いています）。マージして、記録を main に戻してください。" 2>&1); then
             echo "- PR：$URL" >> "$GITHUB_STEP_SUMMARY"
           else
             {
-              echo "- PR は作れませんでした（$URL）。手元で作る："
+              echo "- PR は作れませんでした（${URL}）。手元で作る："
               echo '```'
               echo "gh pr create --base $BASE --head release/$VERSION --title '版を $VERSION に上げる' --fill"
               echo '```'
