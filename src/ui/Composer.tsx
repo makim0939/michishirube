@@ -3,8 +3,9 @@ import { BUNDLED_BGM, bgmBlob, bgmExtension, bgmTitle, type BgmChoice } from '..
 import { composeClips, MIN_CLIP_SECONDS } from '../data/compose'
 import { inMemory, probeDuration } from '../data/mediaPrep'
 import type { VideoQuality } from '../data/videoStorage'
-import { BackIcon, ForwardIcon, MusicIcon, PauseIcon, PlayIcon } from './icons'
-import { FRAMES, formatTime, makeFilmstrip } from './Trimmer'
+import { BackIcon, ForwardIcon, MusicIcon, PauseIcon, PlayIcon, SpeakerIcon } from './icons'
+import { PlusSheet } from './PlusSheet'
+import { FRAMES, formatTime, makeFilmstrip, makeFramesAt } from './Trimmer'
 import { useBackHandler } from './useBackHandler'
 import { t } from '../i18n'
 
@@ -13,7 +14,6 @@ export interface ComposerClip {
   key: string
   blob: Blob
   file?: string
-  poster?: Blob
 }
 
 interface Row {
@@ -52,14 +52,17 @@ export function Composer({
   clips: initialClips,
   quality,
   fileName,
+  mayUsePaid,
   onDone,
   onClose,
 }: {
   clips: ComposerClip[]
   quality: VideoQuality
   fileName: string
-  /** order は、つないだ動画の並び順（clips の key）。使わなかった動画は含まない */
-  onDone: (file: File, order: string[]) => void
+  /** 有料の操作（2 本以上をつなぐ・BGM）をしてよいか。Plus を買っている・無料の回数が残っている間は true */
+  mayUsePaid: () => Promise<boolean>
+  /** order は、つないだ動画の並び順（clips の key）。使わなかった動画は含まない。paid は、有料の操作を使ったか（無料の回数に数える） */
+  onDone: (file: File, order: string[], paid: boolean) => void
   onClose: () => void
 }) {
   // 開いた時点の動画を使い続ける（親の再描画のたびに、新しい配列が渡されても、長さを読み直さない）
@@ -76,16 +79,25 @@ export function Composer({
   const [playing, setPlaying] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string>()
-  /** 選んだ BGM と音量（0〜1。元の動画の音は、そのまま） */
+  /** 選んだ BGM と音量（0〜1。元の動画の音とは別に決める） */
   const [bgm, setBgm] = useState<BgmChoice>()
   const [bgmVolume, setBgmVolume] = useState(0.3)
   const [bgmListOpen, setBgmListOpen] = useState(false)
   const bgmInput = useRef<HTMLInputElement>(null)
-
-  useBackHandler(() => {
-    if (!busy) onClose()
-    return true
-  })
+  const bgmVolumeRef = useRef(0.3)
+  /** 元の動画の音を使わない */
+  const [muted, setMuted] = useState(false)
+  /** 並べた順に続けて再生している（取っ手を動かす・止めると、やめる） */
+  const [sequence, setSequence] = useState(false)
+  const sequenceRef = useRef(false)
+  /** 次の動画を読み込んだら、続けて再生する */
+  const resume = useRef(false)
+  /** 動画ごとの読み込み済みの URL（続けて再生するとき、次の動画をすぐ出すため） */
+  const urls = useRef(new Map<string, string>())
+  const [thumbs, setThumbs] = useState<Record<string, string>>({})
+  const [plusSheet, setPlusSheet] = useState(false)
+  const [confirmClose, setConfirmClose] = useState(false)
+  const bgmAudio = useRef<{ el: HTMLAudioElement; ctx: AudioContext; gain: GainNode } | null>(null)
 
   const row = rows[selected]
   const clipOf = (key: string) => clips.find((c) => c.key === key)!
@@ -111,27 +123,102 @@ export function Composer({
     }
   }, [clips])
 
-  // 選んだ動画を、メモリに写して再生できるようにする（iPhone で IndexedDB の動画を直接再生できないことがあるため）
+  // 選んだ動画を、メモリに写して再生できるようにする（iPhone で IndexedDB の動画を直接再生できないことがあるため）。
+  // 一度写したものは取っておく（続けて再生するとき、次の動画をすぐ出すため）。画面を閉じるときにまとめて解放する
   useEffect(() => {
     if (!selectedKey) return
-    let revoked = false
-    let u: string | undefined
-    setUrl(undefined)
+    let cancelled = false
     setPlaying(false)
     setCurrent(0)
+    const cached = urls.current.get(selectedKey)
+    if (cached) {
+      setUrl(cached)
+      return
+    }
+    setUrl(undefined)
     inMemory(clipOf(selectedKey).blob)
       .then((b) => {
-        if (revoked) return
-        u = URL.createObjectURL(b)
+        if (cancelled) return
+        const u = URL.createObjectURL(b)
+        urls.current.set(selectedKey, u)
         setUrl(u)
       })
       .catch(() => setError(t.common.videoLoadFailed))
     return () => {
-      revoked = true
-      if (u) URL.revokeObjectURL(u)
+      cancelled = true
     }
     // clipOf は clips から引くだけなので、選んだ動画が変わったときだけ読み直す
   }, [selectedKey])
+
+  useEffect(() => {
+    const cache = urls.current
+    return () => {
+      for (const u of cache.values()) URL.revokeObjectURL(u)
+      cache.clear()
+    }
+  }, [])
+
+  // 並びの小さな絵（動画の最初のコマ。保存済みの絵は、できあがりの最後のコマなので使わない）
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      for (const c of clips) {
+        try {
+          const u = URL.createObjectURL(await inMemory(c.blob))
+          try {
+            const [frame] = await makeFramesAt(u, [0.1], () => cancelled)
+            if (frame && !cancelled) setThumbs((prev) => ({ ...prev, [c.key]: frame }))
+          } finally {
+            URL.revokeObjectURL(u)
+          }
+        } catch {
+          // 絵が作れなくても、番号と長さで見分けられる
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [clips])
+
+  // BGM を、画面で聞けるようにする（iPhone は audio 要素の音量を変えられないので、GainNode で音量を決める）
+  useEffect(() => {
+    if (!bgm) return
+    let cancelled = false
+    let objectUrl: string | undefined
+    void bgmBlob(bgm)
+      .then((b) => {
+        if (cancelled) return
+        objectUrl = URL.createObjectURL(b)
+        const el = new Audio(objectUrl)
+        el.loop = true
+        const ctx = new AudioContext()
+        const gain = ctx.createGain()
+        gain.gain.value = bgmVolumeRef.current
+        ctx.createMediaElementSource(el).connect(gain).connect(ctx.destination)
+        bgmAudio.current = { el, ctx, gain }
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+      const a = bgmAudio.current
+      bgmAudio.current = null
+      if (a) {
+        a.el.pause()
+        void a.ctx.close().catch(() => {})
+      }
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [bgm])
+
+  useEffect(() => {
+    bgmVolumeRef.current = bgmVolume
+    if (bgmAudio.current) bgmAudio.current.gain.gain.value = bgmVolume
+  }, [bgmVolume])
+
+  useEffect(() => {
+    if (video.current) video.current.muted = muted
+  }, [muted])
 
   // フィルムのコマ（選んだ動画の分を、一度だけ作る）
   useEffect(() => {
@@ -149,18 +236,30 @@ export function Composer({
     // frames は、作り終えたかの確認にだけ使う（作るたびに読み直さない）
   }, [url, selectedKey, duration])
 
-  // iPhone は、タップするまで動画のデータを読み込まず、最初のコマが出ない。音なしで一度再生して止め、先頭のコマを出す
+  // iPhone は、タップするまで動画のデータを読み込まず、最初のコマが出ない。音なしで一度再生して止め、先頭のコマを出す。
+  // 続けて再生している途中なら、止めずに、この動画の範囲の始めから再生する
   useEffect(() => {
     const v = video.current
     if (!v || !url || duration <= 0) return
     let cancelled = false
     void (async () => {
+      const r = rows[selected]
+      if (resume.current) {
+        resume.current = false
+        v.muted = true
+        await v.play().catch(() => {})
+        if (cancelled || !r) return
+        v.currentTime = r.start
+        playUntil.current = r.end
+        v.muted = muted
+        return
+      }
       v.muted = true
       await v.play().catch(() => {})
       v.pause()
       if (cancelled) return
-      v.currentTime = rows[selected]?.start ?? 0
-      v.muted = false
+      v.currentTime = r?.start ?? 0
+      v.muted = muted
     })()
     return () => {
       cancelled = true
@@ -177,28 +276,76 @@ export function Composer({
     setCurrent(time)
   }
 
+  /** 再生を止める（BGM も） */
+  const stopAll = () => {
+    video.current?.pause()
+    bgmAudio.current?.el.pause()
+    sequenceRef.current = false
+    resume.current = false
+    playUntil.current = null
+    setSequence(false)
+  }
+
+  /** この動画の範囲の終わりに来たら、続けて再生しているときは次の動画へ、そうでなければ止める */
+  const checkEnd = () => {
+    const v = video.current
+    if (!v || playUntil.current === null || v.currentTime < playUntil.current) return
+    playUntil.current = null
+    if (sequenceRef.current && selected < rows.length - 1) {
+      resume.current = true
+      v.pause()
+      setSelected(selected + 1)
+    } else {
+      stopAll()
+    }
+  }
+
   const onTimeUpdate = () => {
     const v = video.current
     if (!v) return
     setCurrent(v.currentTime)
-    if (playUntil.current !== null && v.currentTime >= playUntil.current) {
-      v.pause()
-      playUntil.current = null
-    }
+    checkEnd()
   }
 
-  /** 選んだ範囲を再生する（いまの位置が範囲の外なら、始めから） */
+  // timeupdate は 0.25 秒ごとなので、再生中は、範囲の終わりを細かく見る（つなぎ目を、書き出しに近づける）
+  useEffect(() => {
+    if (!playing) return
+    let id = requestAnimationFrame(function tick() {
+      checkEnd()
+      id = requestAnimationFrame(tick)
+    })
+    return () => cancelAnimationFrame(id)
+  }, [playing, selected, rows.length])
+
+  /** 選んだ動画の範囲から、並べた順に最後まで再生する。BGM も、つないだときと同じ位置から流す */
   const togglePlay = () => {
     const v = video.current
     if (!v || !row) return
-    if (playing) {
-      v.pause()
+    if (playing || sequence) {
+      stopAll()
       return
     }
     if (v.currentTime < row.start || v.currentTime >= row.end - 0.05) v.currentTime = row.start
     playUntil.current = row.end
-    v.muted = false
+    v.muted = muted
+    sequenceRef.current = true
+    setSequence(true)
     void v.play()
+    const a = bgmAudio.current
+    if (a) {
+      const before = rows.slice(0, selected).reduce((sum, r) => sum + (r.end - r.start), 0)
+      const at = before + Math.max(0, v.currentTime - row.start)
+      if (a.ctx.state === 'suspended') void a.ctx.resume()
+      a.el.currentTime = a.el.duration > 0 && Number.isFinite(a.el.duration) ? at % a.el.duration : 0
+      void a.el.play().catch(() => {})
+    }
+  }
+
+  /** 並びの動画を選ぶ（再生中なら止める） */
+  const choose = (i: number) => {
+    if (i === selected) return
+    stopAll()
+    setSelected(i)
   }
 
   // ---- フィルムの取っ手（Trimmer と同じ動き） ----
@@ -216,7 +363,7 @@ export function Composer({
     } catch {
       // 取れなくても、フィルムの上で動かす分には動く
     }
-    video.current?.pause()
+    stopAll()
     dragging.current = which
     if (which === 'head' && row) seek(Math.min(row.end, Math.max(row.start, timeAt(e.clientX))))
   }
@@ -262,6 +409,7 @@ export function Composer({
   const move = (delta: -1 | 1) => {
     const to = selected + delta
     if (to < 0 || to >= rows.length) return
+    stopAll()
     setRows((prev) => {
       const next = [...prev]
       ;[next[selected], next[to]] = [next[to], next[selected]]
@@ -272,24 +420,35 @@ export function Composer({
 
   const remove = () => {
     if (rows.length <= 1) return
+    stopAll()
     setRows((prev) => prev.filter((_, i) => i !== selected))
     setSelected((s) => Math.max(0, Math.min(s, rows.length - 2)))
   }
 
   const ready = rows.every((r) => r.duration > 0)
   const total = rows.reduce((sum, r) => sum + Math.max(0, r.end - r.start), 0)
-  const anyEdit = rows.length > 1 || rows.some(trimmed) || !!bgm
+  /** 有料の操作（2 本以上をつなぐ・BGM）。切り取りと音を消すだけなら、いつでも無料 */
+  const paid = rows.length > 1 || !!bgm
+  /** 書き出しが要るか（複数をつなぐ・BGM・音を消す・切り取り） */
+  const needsCompose = paid || muted || rows.some(trimmed)
+  /** 開いたときから、手を加えたか（やめるとき、確認を出すかの判断。開いただけでは、変えていない） */
+  const dirty = !!bgm || muted || rows.some(trimmed) || rows.length !== clips.length || rows.some((r, i) => r.key !== clips[i]?.key)
 
   const done = async () => {
-    if (!ready) return
-    if (!anyEdit) {
+    if (!ready || busy) return
+    if (!needsCompose) {
       onClose()
       return
     }
-    video.current?.pause()
+    stopAll()
     setError(undefined)
     setBusy(true)
     try {
+      // 無料で試せる回数を使い切っていたら、書き出す前に購入の案内（画面を見て、触れたうえで判断してもらう）
+      if (paid && !(await mayUsePaid())) {
+        setPlusSheet(true)
+        return
+      }
       const file = await composeClips(
         rows.map((r) => {
           const c = clipOf(r.key)
@@ -304,10 +463,12 @@ export function Composer({
         quality,
         fileName,
         bgm ? { source: { blob: await bgmBlob(bgm) }, volume: bgmVolume, extension: bgmExtension(bgm) } : undefined,
+        muted,
       )
       onDone(
         file,
         rows.map((r) => r.key),
+        paid,
       )
     } catch (e) {
       setError(e instanceof Error ? t.compose.failedWith(e.message) : t.compose.failed)
@@ -316,6 +477,19 @@ export function Composer({
     }
   }
 
+  /** 変えていれば、確認してから閉じる（作っている間は閉じない） */
+  const requestClose = () => {
+    if (busy) return
+    if (dirty) setConfirmClose(true)
+    else onClose()
+  }
+
+  useBackHandler(() => {
+    if (confirmClose) setConfirmClose(false)
+    else requestClose()
+    return true
+  })
+
   const pct = (time: number) => `${(duration > 0 ? time / duration : 0) * 100}%`
   const length = row ? row.end - row.start : 0
   const film = selectedKey ? frames[selectedKey] : undefined
@@ -323,7 +497,7 @@ export function Composer({
   return (
     <div className="recorder editor" role="dialog" aria-modal="true" aria-label={t.compose.title}>
       <div className="editor-top">
-        <button className="editor-text-button" onClick={onClose} disabled={busy}>
+        <button className="editor-text-button" onClick={requestClose} disabled={busy}>
           {t.editor.cancel}
         </button>
         <span className="editor-title">{ready ? formatTime(total) : ''}</span>
@@ -344,7 +518,7 @@ export function Composer({
           onPause={() => setPlaying(false)}
           onClick={busy ? undefined : togglePlay}
         />
-        {duration > 0 && !playing && !busy && (
+        {duration > 0 && !playing && !sequence && !busy && (
           <button className="editor-play" aria-label={t.editor.playRange} onClick={togglePlay}>
             <PlayIcon size={30} />
           </button>
@@ -354,15 +528,35 @@ export function Composer({
       <div className="editor-panel">
         {error && <p className="trimmer-error">{error}</p>}
         {!ready && !error && <p className="editor-status">{t.editor.loading}</p>}
-        {busy && <p className="editor-status">{t.compose.working}</p>}
+        {busy && (
+          <div className="editor-progress">
+            <p>{t.compose.working}</p>
+            <div className="progress indeterminate" aria-hidden="true">
+              <span />
+            </div>
+          </div>
+        )}
+        {confirmClose && !busy && (
+          <div className="confirm">
+            <p>{t.compose.discardAsk}</p>
+            <div className="row">
+              <button type="button" className="btn danger" onClick={onClose}>
+                {t.compose.discard}
+              </button>
+              <button type="button" className="btn" onClick={() => setConfirmClose(false)}>
+                {t.compose.keepEditing}
+              </button>
+            </div>
+          </div>
+        )}
         {duration > 0 && !busy && (
           <div className="editor-tools">
             <button
               className="editor-play-small"
-              aria-label={playing ? t.player.pause : t.editor.playRange}
+              aria-label={playing || sequence ? t.player.pause : t.editor.playRange}
               onClick={togglePlay}
             >
-              {playing ? <PauseIcon size={20} /> : <PlayIcon size={20} />}
+              {playing || sequence ? <PauseIcon size={20} /> : <PlayIcon size={20} />}
             </button>
             <div
               className="filmstrip"
@@ -413,6 +607,15 @@ export function Composer({
               </div>
               <div className="filmstrip-head" style={{ left: pct(current) }} aria-hidden="true" />
             </div>
+            <button
+              type="button"
+              className={`editor-sound${muted ? ' off' : ''}`}
+              aria-pressed={muted}
+              aria-label={muted ? t.editor.mutedLabel : t.editor.soundLabel}
+              onClick={() => setMuted((m) => !m)}
+            >
+              <SpeakerIcon size={22} off={muted} />
+            </button>
           </div>
         )}
 
@@ -425,21 +628,23 @@ export function Composer({
                 className={`clip-chip${i === selected ? ' selected' : ''}`}
                 aria-pressed={i === selected}
                 disabled={busy}
-                onClick={() => setSelected(i)}
+                onClick={() => choose(i)}
               >
+                {thumbs[r.key] && <img className="clip-thumb" src={thumbs[r.key]} alt="" />}
                 <span className="clip-index">{i + 1}</span>
                 <span className="clip-length">{r.duration > 0 ? formatTime(r.end - r.start) : '…'}</span>
               </button>
             </li>
           ))}
         </ul>
-        {/* BGM（任意）。曲が同梱されていれば一覧、無ければ、そのままファイルから選ぶ。選んだら、音量を出す */}
-        {!busy && (
+        {/* BGM（任意）。同梱の曲が入るまでは出さない（曲の持ち合わせがない人には使えないため）。選んだら、音量を出す。
+            曲の一覧の末尾から、ファイルも選べる */}
+        {!busy && BUNDLED_BGM.length > 0 && (
           <div className="bgm-row">
             <button
               type="button"
               className="editor-text-button bgm-button"
-              onClick={() => (BUNDLED_BGM.length > 0 ? setBgmListOpen((o) => !o) : bgmInput.current?.click())}
+              onClick={() => setBgmListOpen((o) => !o)}
             >
               <MusicIcon size={18} />
               {bgm ? bgmTitle(bgm) : t.compose.bgm}
@@ -517,6 +722,16 @@ export function Composer({
           </div>
         )}
       </div>
+
+      {plusSheet && (
+        <PlusSheet
+          onUnlocked={() => {
+            setPlusSheet(false)
+            void done()
+          }}
+          onClose={() => setPlusSheet(false)}
+        />
+      )}
     </div>
   )
 }

@@ -49,6 +49,8 @@ public class VideoComposerPlugin: CAPPlugin, CAPBridgedPlugin {
         let videoBitrate = call.getInt("videoBitrate") ?? 1_200_000
         let audioBitrate = call.getInt("audioBitrate") ?? 96_000
         let outURL = docs.appendingPathComponent(output)
+        // 元の動画の音を使わない（BGM だけ、または無音にする）
+        let muteOriginal = call.getBool("muteOriginal") ?? false
         // BGM（任意）。入力のファイルと、音量（0〜1）。動画の長さまで繰り返し、終わりの 1.5 秒で小さくしていく
         var bgm: Bgm?
         if let raw = call.getObject("bgm"), let input = raw["input"] as? String {
@@ -59,7 +61,7 @@ public class VideoComposerPlugin: CAPPlugin, CAPBridgedPlugin {
         Task {
             do {
                 let result = try await Self.run(
-                    clips: clips, bgm: bgm, outURL: outURL, maxShortSide: maxShortSide,
+                    clips: clips, bgm: bgm, muteOriginal: muteOriginal, outURL: outURL, maxShortSide: maxShortSide,
                     videoBitrate: videoBitrate, audioBitrate: audioBitrate, queue: queue)
                 call.resolve(result)
             } catch {
@@ -74,7 +76,7 @@ public class VideoComposerPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     private static func run(
-        clips: [Clip], bgm: Bgm?, outURL: URL, maxShortSide: CGFloat, videoBitrate: Int, audioBitrate: Int, queue: DispatchQueue
+        clips: [Clip], bgm: Bgm?, muteOriginal: Bool, outURL: URL, maxShortSide: CGFloat, videoBitrate: Int, audioBitrate: Int, queue: DispatchQueue
     ) async throws -> [String: Any] {
         let timescale: CMTimeScale = 600
         let composition = AVMutableComposition()
@@ -109,7 +111,7 @@ public class VideoComposerPlugin: CAPPlugin, CAPBridgedPlugin {
 
             try videoTrack.insertTimeRange(range, of: srcVideo, at: cursor)
             // 音が無い動画（音なしで撮ったもの）は、その間を無音にする
-            if let srcAudio = try await asset.loadTracks(withMediaType: .audio).first, let audioTrack {
+            if !muteOriginal, let srcAudio = try await asset.loadTracks(withMediaType: .audio).first, let audioTrack {
                 try audioTrack.insertTimeRange(range, of: srcAudio, at: cursor)
                 hasAudio = true
             }

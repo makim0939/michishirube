@@ -132,6 +132,8 @@ interface VideoComposerPlugin {
   compose(options: {
     clips: { input: string; start: number; end?: number }[]
     bgm?: { input: string; volume: number; totalSeconds: number }
+    /** 元の動画の音を使わない */
+    muteOriginal?: boolean
     output: string
     maxShortSide: number
     videoBitrate: number
@@ -239,10 +241,12 @@ export async function composeVideoFiles(
   output: string,
   preset: { shortSide: number; video: number; audio: number },
   bgm?: { input: string; volume: number; totalSeconds: number },
+  muteOriginal = false,
 ): Promise<{ size: number; duration: number }> {
   return VideoComposer.compose({
     clips: clips.map((c) => ({ ...c, input: fullPath(c.input) })),
     ...(bgm ? { bgm: { ...bgm, input: fullPath(bgm.input) } } : {}),
+    ...(muteOriginal ? { muteOriginal } : {}),
     output: fullPath(output),
     maxShortSide: preset.shortSide,
     videoBitrate: preset.video,

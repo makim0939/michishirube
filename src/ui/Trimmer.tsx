@@ -16,13 +16,8 @@ export function formatTime(sec: number) {
   return `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`
 }
 
-/** 動画から、フィルムに並べる小さなコマを作る（別の video で順に移動して描く）。isCancelled が true になったら止める */
-export async function makeFilmstrip(
-  url: string,
-  duration: number,
-  count: number,
-  isCancelled: () => boolean,
-): Promise<string[]> {
+/** 動画の、決めた時刻のコマを小さく作る（別の video で順に移動して描く）。isCancelled が true になったら止める */
+export async function makeFramesAt(url: string, times: number[], isCancelled: () => boolean): Promise<string[]> {
   const video = document.createElement('video')
   video.muted = true
   video.playsInline = true
@@ -34,12 +29,11 @@ export async function makeFilmstrip(
     video.pause()
     const height = 72
     const frames: string[] = []
-    for (let i = 0; i < count; i++) {
+    for (const time of times) {
       // 編集を閉じたら、残りのコマは作らない（裏で動画を読み続けないように）
       if (isCancelled()) break
-      const t = Math.min(duration - 0.05, ((i + 0.5) / count) * duration)
-      video.currentTime = t
-      await waitUntilSeekable(video, t, 3000)
+      video.currentTime = time
+      await waitUntilSeekable(video, time, 3000)
       const canvas = document.createElement('canvas')
       canvas.height = height
       canvas.width = Math.round((height * (video.videoWidth || 9)) / (video.videoHeight || 16))
@@ -51,6 +45,17 @@ export async function makeFilmstrip(
     video.removeAttribute('src')
     video.load()
   }
+}
+
+/** 動画から、フィルムに並べる小さなコマを作る。isCancelled が true になったら止める */
+export function makeFilmstrip(
+  url: string,
+  duration: number,
+  count: number,
+  isCancelled: () => boolean,
+): Promise<string[]> {
+  const times = Array.from({ length: count }, (_, i) => Math.min(duration - 0.05, ((i + 0.5) / count) * duration))
+  return makeFramesAt(url, times, isCancelled)
 }
 
 /**

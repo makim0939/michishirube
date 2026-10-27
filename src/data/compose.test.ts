@@ -102,6 +102,24 @@ describe('BGM つきで書き出す', () => {
   })
 })
 
+describe('元の動画の音', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    files.readBlobFile.mockResolvedValue(new Blob(['mp4'], { type: 'video/mp4' }))
+    files.composeVideoFiles.mockResolvedValue({ size: 3, duration: 1 })
+  })
+
+  it('音を消すと、ネイティブに muteOriginal を渡す', async () => {
+    await composeClips([{ source: { file: 'media/a.mp4' }, start: 0 }], 'standard', 'a.mp4', undefined, true)
+    expect(files.composeVideoFiles.mock.calls[0][4]).toBe(true)
+  })
+
+  it('既定では、元の音を残す', async () => {
+    await composeClips([{ source: { file: 'media/a.mp4' }, start: 0 }], 'standard', 'a.mp4')
+    expect(files.composeVideoFiles.mock.calls[0][4]).toBeFalsy()
+  })
+})
+
 describe('つないだ全体の長さ', () => {
   it('終わりを省いた区間は、動画の長さまで数える', () => {
     expect(totalSeconds([{ source: { file: 'a' }, start: 1, duration: 4 }, { source: { file: 'b' }, start: 0, end: 2.5 }])).toBe(5.5)

@@ -77,6 +77,8 @@ export async function composeClips(
   quality: VideoQuality,
   fileName: string,
   bgm?: ComposeBgm,
+  /** 元の動画の音を使わない（BGM だけ、または無音） */
+  muteOriginal = false,
 ): Promise<File> {
   if (!canCompose()) throw new Error(t.compose.unsupported)
   checkClips(clips)
@@ -108,7 +110,7 @@ export async function composeClips(
       }
       bgmInput = { input, volume: Math.max(0, Math.min(1, bgm.volume)), totalSeconds: totalSeconds(clips) }
     }
-    await composeVideoFiles(inputs, output, QUALITY[quality], bgmInput)
+    await composeVideoFiles(inputs, output, QUALITY[quality], bgmInput, muteOriginal)
     // 読み終えた Blob は、ファイルを消しても読める（メモリにある）。もう一度写さない（長い動画で、メモリが倍になるため）
     const blob = await readBlobFile(output, 'video/mp4')
     const base = fileName.replace(/\.[^.]+$/, '').replace(/-edit$/, '')
