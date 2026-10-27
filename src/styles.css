@@ -3286,6 +3286,31 @@ a.notice {
   width: 100%;
 }
 
+/* 長さの分からない書き出し：線が左から右へ流れる */
+.progress.indeterminate span {
+  width: 35%;
+  transition: none;
+  animation: progress-slide 1.3s ease-in-out infinite;
+}
+
+@keyframes progress-slide {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(290%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progress.indeterminate span {
+    width: 100%;
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
 /* ---- 設定（項目の一覧。押すとその項目の画面を開く） ---- */
 
 .settings-list {
@@ -3538,6 +3563,9 @@ h1.wordmark {
 
 .join-button {
   margin-top: 10px;
+  /* 「編集」と同じ大きさ（横いっぱいに広げない） */
+  align-self: flex-start;
+  width: auto;
 }
 
 .clip-row {
@@ -3550,6 +3578,8 @@ h1.wordmark {
 }
 
 .clip-chip {
+  position: relative;
+  overflow: hidden;
   appearance: none;
   display: flex;
   flex-direction: column;
@@ -3574,6 +3604,21 @@ h1.wordmark {
   opacity: 0.5;
 }
 
+.clip-thumb {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* 絵の上でも読めるように、番号と長さに影を付ける */
+.clip-index,
+.clip-length {
+  position: relative;
+  text-shadow: 0 0 3px rgb(0 0 0 / 90%), 0 0 6px rgb(0 0 0 / 60%);
+}
+
 .clip-index {
   font-weight: 700;
 }
@@ -3581,7 +3626,7 @@ h1.wordmark {
 .clip-length {
   font-size: 0.7rem;
   font-variant-numeric: tabular-nums;
-  color: rgb(255 255 255 / 70%);
+  color: rgb(255 255 255 / 90%);
 }
 
 .clip-tools {

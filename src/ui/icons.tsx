@@ -109,6 +109,13 @@ export const ScissorsIcon = (p: P) => (
   </Icon>
 )
 
+export const FilmIcon = (p: P) => (
+  <Icon {...p}>
+    <rect x="4" y="4" width="16" height="16" rx="2" />
+    <path d="M8 4v16M16 4v16M4 9h4M4 15h4M16 9h4M16 15h4" />
+  </Icon>
+)
+
 export const MicIcon = ({ off, ...p }: P & { off?: boolean }) => (
   <Icon {...p}>
     <rect x="9" y="3.5" width="6" height="11" rx="3" />

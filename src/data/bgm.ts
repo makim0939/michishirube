@@ -33,6 +33,9 @@ export function bgmExtension(choice: BgmChoice): string {
 export async function bgmBlob(choice: BgmChoice): Promise<Blob> {
   if (choice.kind === 'file') return choice.file
   const res = await fetch(`${import.meta.env.BASE_URL}${choice.track.path}`)
-  if (!res.ok) throw new Error(`BGM を読めません（${res.status}）`)
-  return res.blob()
+  // iPhone のアプリは、音声・動画のファイルを HTTP でない応答で返すので、成功でも status が 0 になる（ok が false）
+  if (res.status !== 0 && !res.ok) throw new Error(`BGM を読めません（${res.status}）`)
+  const blob = await res.blob()
+  if (blob.size === 0) throw new Error('BGM を読めません（空のファイル）')
+  return blob
 }

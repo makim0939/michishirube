@@ -57,6 +57,8 @@ public class VideoComposerPlugin extends Plugin {
         // 小さい動画を大きくはしない（iOS と同じ。大きさは最初の区間を基準にする）
         int targetShortSide = maxShortSide;
         ImmutableList.Builder<EditedMediaItem> items = new ImmutableList.Builder<>();
+        // 元の動画の音を使わない（BGM だけ、または無音にする）
+        final boolean muteOriginal = Boolean.TRUE.equals(call.getBoolean("muteOriginal", false));
         try {
             for (int i = 0; i < clips.length(); i++) {
                 JSONObject clip = clips.getJSONObject(i);
@@ -78,7 +80,7 @@ public class VideoComposerPlugin extends Plugin {
                     .setUri(Uri.fromFile(in))
                     .setClippingConfiguration(clipping.build())
                     .build();
-                items.add(new EditedMediaItem.Builder(mediaItem).build());
+                items.add(new EditedMediaItem.Builder(mediaItem).setRemoveAudio(muteOriginal).build());
             }
         } catch (Exception e) {
             call.reject("clips が読めません: " + e.getMessage(), e);
@@ -137,9 +139,9 @@ public class VideoComposerPlugin extends Plugin {
                     )
                     .build();
                 // 音が無い動画（音なしで撮ったもの）があっても、つないだ音が途切れないよう、音の枠を必ず作る
-                EditedMediaItemSequence sequence = new EditedMediaItemSequence.Builder(items.build())
-                    .experimentalSetForceAudioTrack(true)
-                    .build();
+                EditedMediaItemSequence.Builder sequenceBuilder = new EditedMediaItemSequence.Builder(items.build());
+                if (!muteOriginal) sequenceBuilder.experimentalSetForceAudioTrack(true);
+                EditedMediaItemSequence sequence = sequenceBuilder.build();
                 ImmutableList.Builder<EditedMediaItemSequence> sequences = new ImmutableList.Builder<>();
                 sequences.add(sequence);
                 if (bgmInput != null) {

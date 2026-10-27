@@ -21,12 +21,11 @@ import { expireUndo, undoAll, undoLast, type UndoState } from './removedStack'
 import { readStorage, removeStorage, writeStorage } from './storage'
 import { SkillPicker } from './SkillPicker'
 import { Composer, type ComposerClip } from './Composer'
-import { PlusSheet } from './PlusSheet'
 import { Trimmer } from './Trimmer'
 import { recordBackAction } from './recordBack'
 import { useBackHandler } from './useBackHandler'
 import { patternFor } from './world'
-import { BackIcon, CameraIcon, ChevronDownIcon, PhotoIcon, PlusIcon, ScissorsIcon, VideoIcon } from './icons'
+import { BackIcon, CameraIcon, ChevronDownIcon, FilmIcon, PhotoIcon, PlusIcon, ScissorsIcon, VideoIcon } from './icons'
 import { t } from '../i18n'
 
 const OUTCOMES: { value: Outcome; label: string }[] = (['good', 'meh', 'bad'] as const).map((value) => ({
@@ -203,8 +202,6 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
   const [trimming, setTrimming] = useState<string | null>(null)
   /** 「つなぐ」の画面を開いている */
   const [joining, setJoining] = useState(false)
-  /** 無料で試せる回数を使い切ったので、Plus の案内を出している */
-  const [plusSheet, setPlusSheet] = useState(false)
   const [pickingSkill, setPickingSkill] = useState(false)
   const videoInput = useRef<HTMLInputElement>(null)
   const photoInput = useRef<HTMLInputElement>(null)
@@ -384,7 +381,8 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
    * 動画・写真を外す。撮り直しのできない動画を誤タップで失わないよう、確認ダイアログは出さず（手間を増やさず）、
    * 「元に戻す」のトーストを出す。続けて外したときは、押すたびに直近の物から戻す（トーストは1つのまま）
    */
-  const removeItem = (item: Item) => {
+  /** quiet：「外しました」のトーストを出さない（つないだとき、別のトーストを出すため） */
+  const removeItem = (item: Item, quiet = false) => {
     const index = items.findIndex((i) => i.key === item.key)
     setItems((prev) => prev.filter((i) => i.key !== item.key))
     if (item.kind === 'existing') setRemoved((prev) => [...prev, item.media.id])
@@ -394,7 +392,7 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
     const next = { stack: [...cur.stack, { item, index }], at: Date.now() }
     undoRef.current = next
     setUndo(next)
-    showUndo()
+    if (!quiet) showUndo()
   }
 
   const showUndo = () => {
@@ -453,35 +451,54 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
   /** つなぐ動画（端末に中身があるもの）。並びは、画面の並びのまま */
   const joinable = canJoinVideos ? items.filter((i) => isVideo({ type: itemType(i) }) && !!itemBlob(i)) : []
 
-  /** 「つなぐ」を押した。Plus を買っている・無料で試せる間は、画面を開く。使い切っていれば、Plus の案内 */
-  const startJoin = () =>
-    run(async () => {
-      const { plus } = await loadProducts()
-      if (await mayCompose(!!plus)) setJoining(true)
-      else setPlusSheet(true)
-    })
+  /** 画面は誰でも開ける。有料の操作（2 本以上をつなぐ・BGM）は、「完了」を押したときに、回数を見る */
+  const mayUsePaid = async () => {
+    const { plus } = await loadProducts()
+    return mayCompose(!!plus)
+  }
 
   /**
    * つないだ動画で置き換える。つないだ順の先頭の動画に、できあがりを入れ（保存済みなら、中身の差し替え）、
-   * ほかの動画は外す（「元に戻す」で戻せる）
+   * ほかの動画は外す。「元に戻す」で、つなぐ前（動画の並び）に戻せる（各範囲は、つなぎ直すときに決め直す）
    */
-  const onJoined = (file: File, order: string[]) => {
+  const onJoined = (file: File, order: string[], paid: boolean) => {
     const [first, ...rest] = order
+    const original = items.find((i) => i.key === first)
+    const restItems = rest.flatMap((key) => items.find((i) => i.key === key) ?? [])
     setItems((prev) =>
       prev.map((i) => {
         if (i.key !== first) return i
         return i.kind === 'new' ? { ...i, file, poster: undefined, inMemory: true } : { ...i, replaced: { file, poster: undefined } }
       }),
     )
-    for (const key of rest) {
-      const item = items.find((i) => i.key === key)
-      if (item) removeItem(item)
-    }
+    // 外した動画も、保存に失敗したときに戻せるよう、外した物の積みに入れる（トーストは、つないだことを 1 回だけ出す）
+    for (const item of restItems) removeItem(item, true)
     // 使わなかった動画（つなぐ画面で外したもの）は、そのまま残る
     setJoining(false)
     change()
     attachPoster(first, file)
-    void noteComposeUse()
+    if (paid) void noteComposeUse()
+    toast.show(t.compose.joined, 'ok', {
+      label: t.record.undoRemove,
+      onClick: () => {
+        // 保存の最中は戻さない（保存する内容と、画面の並びが、ずれないように）
+        if (!original || savingRef.current) return
+        const keys = new Set(restItems.map((i) => i.key))
+        const entries = undoRef.current.stack.filter((r) => keys.has(r.item.key))
+        setItems((prev) =>
+          undoAll(
+            prev.map((i) => (i.key === first ? original : i)),
+            entries,
+          ),
+        )
+        const ids = restItems.flatMap((i) => (i.kind === 'existing' ? [i.media.id] : []))
+        if (ids.length > 0) setRemoved((prev) => prev.filter((id) => !ids.includes(id)))
+        const rest = { stack: undoRef.current.stack.filter((r) => !keys.has(r.item.key)), at: Date.now() }
+        undoRef.current = rest
+        setUndo(rest)
+        change()
+      },
+    })
   }
 
   /** more：保存したら、続けて次の杯を撮る。動画・写真が入り終わる前に押したら、入るのを待ってから保存する */
@@ -737,8 +754,8 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
         )}
         {/* 仕上げる（つなぐ・BGM）。動画があるときに出す */}
         {joinable.length >= 1 && (
-          <button type="button" className="btn small join-button" onClick={() => void startJoin()}>
-            <ScissorsIcon size={16} />
+          <button type="button" className="btn small join-button" onClick={() => setJoining(true)}>
+            <FilmIcon size={16} />
             {t.compose.join}
           </button>
         )}
@@ -931,23 +948,13 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
               blob: itemBlob(i)!,
               // 保存済みで、まだ切り取っていない動画は、アプリのファイルをそのまま書き出しに渡す
               file: i.kind === 'existing' && !i.replaced ? i.media.file : undefined,
-              poster: i.kind === 'new' ? i.poster?.blob : (i.replaced?.poster?.blob ?? i.media.poster),
             }),
           )}
           quality={(joinable[0]?.kind === 'new' ? joinable[0].quality : undefined) ?? videoSettings?.quality ?? 'standard'}
           fileName={joinable[0]?.kind === 'new' ? joinable[0].file.name : (joinable[0]?.media.name ?? 'video.mp4')}
+          mayUsePaid={mayUsePaid}
           onDone={onJoined}
           onClose={() => setJoining(false)}
-        />
-      )}
-
-      {plusSheet && (
-        <PlusSheet
-          onUnlocked={() => {
-            setPlusSheet(false)
-            setJoining(true)
-          }}
-          onClose={() => setPlusSheet(false)}
         />
       )}
 
