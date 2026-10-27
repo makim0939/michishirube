@@ -3671,3 +3671,52 @@ h1.wordmark {
   padding: 0;
   list-style: none;
 }
+
+/* 仕上げる画面のキャンセル確認。黒い全画面に合わせ、中央に小さく出す（共通の .confirm は明るい色で、白い文字が見えなくなる） */
+.editor-confirm-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(0 0 0 / 55%);
+}
+
+.editor-confirm {
+  width: min(100%, 320px);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 22px 18px 16px;
+  border-radius: 16px;
+  background: #26211e;
+  color: #fff;
+}
+
+.editor-confirm p {
+  margin: 0;
+  text-align: center;
+  font-weight: 600;
+}
+
+.editor-confirm-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.editor-confirm-button {
+  appearance: none;
+  border: none;
+  border-radius: 12px;
+  min-height: 44px;
+  background: rgb(255 255 255 / 12%);
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
+.editor-confirm-button.danger {
+  color: #ff7a6b;
+}

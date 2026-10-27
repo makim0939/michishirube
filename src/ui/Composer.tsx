@@ -583,19 +583,6 @@ export function Composer({
             </div>
           </div>
         )}
-        {confirmClose && !busy && (
-          <div className="confirm">
-            <p>{t.compose.discardAsk}</p>
-            <div className="row">
-              <button type="button" className="btn danger" onClick={onClose}>
-                {t.compose.discard}
-              </button>
-              <button type="button" className="btn" onClick={() => setConfirmClose(false)}>
-                {t.compose.keepEditing}
-              </button>
-            </div>
-          </div>
-        )}
         {duration > 0 && !busy && (
           <div className="editor-tools">
             <button
@@ -781,6 +768,21 @@ export function Composer({
           }}
           onClose={() => setPlusSheet(false)}
         />
+      )}
+      {confirmClose && !busy && (
+        <div className="editor-confirm-backdrop" onClick={() => setConfirmClose(false)}>
+          <div className="editor-confirm" role="alertdialog" onClick={(e) => e.stopPropagation()}>
+            <p>{t.compose.discardAsk}</p>
+            <div className="editor-confirm-actions">
+              <button type="button" className="editor-confirm-button danger" onClick={onClose}>
+                {t.compose.discard}
+              </button>
+              <button type="button" className="editor-confirm-button" onClick={() => setConfirmClose(false)}>
+                {t.compose.keepEditing}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
