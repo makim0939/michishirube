@@ -70,6 +70,32 @@ export function useFrames(url: string, dur: number, n: number): string[] {
   return frames
 }
 
+/** 区間 [start, end] を、幅 width（px）に並べる絵。0.5 秒ごとの位置にそろえて、使い回す */
+export function SegFilm({ url, start, end, width }: { url: string; start: number; end: number; width: number }) {
+  const n = Math.max(1, Math.round(width / 34))
+  const [frames, setFrames] = useState<string[]>([])
+  useEffect(() => {
+    let off = false
+    void (async () => {
+      const out: string[] = []
+      for (let i = 0; i < n; i++) {
+        const t = start + ((i + 0.5) / n) * (end - start)
+        out.push(await frameAt(url, Math.round(t * 2) / 2, 48))
+        if (off) return
+      }
+      setFrames(out)
+    })()
+    return () => {
+      off = true
+    }
+  }, [url, Math.round(start * 2), Math.round(end * 2), n])
+  return (
+    <div className="p-film" aria-hidden="true">
+      {Array.from({ length: n }, (_, i) => (frames[i] ? <img key={i} src={frames[i]} alt="" /> : <span key={i} />))}
+    </div>
+  )
+}
+
 export function Thumb({ url, t, className }: { url: string; t: number; className?: string }) {
   const [src, setSrc] = useState<string>()
   useEffect(() => {

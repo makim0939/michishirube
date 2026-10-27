@@ -3,20 +3,8 @@ import { createRoot } from 'react-dom/client'
 import '../src/styles.css'
 import './proto.css'
 import { fmt } from './model'
-import { ProtoA } from './ProtoA'
-import { ProtoB } from './ProtoB'
-import { ProtoC } from './ProtoC'
-import { ProtoD } from './ProtoD'
-import type { ConfirmMode } from './Shell'
-import type { Range } from './types'
-
-const PROTOS = {
-  a: { name: 'A 切り出して集める', C: ProtoA },
-  b: { name: 'B タイムライン', C: ProtoB },
-  c: { name: 'C 見ながら押す', C: ProtoC },
-  d: { name: 'D 場面を自動で分ける', C: ProtoD },
-} as const
-type Key = keyof typeof PROTOS
+import { ProtoR } from './ProtoR'
+import type { ConfirmMode, Range, Variant } from './types'
 
 const q = new URLSearchParams(location.search)
 const setQ = (k: string, v: string) => {
@@ -24,10 +12,20 @@ const setQ = (k: string, v: string) => {
   n.set(k, v)
   location.search = n.toString()
 }
+const pick = <T extends string>(k: string, ok: readonly T[], d: T): T => (ok.includes(q.get(k) as T) ? (q.get(k) as T) : d)
+
+const variant: Variant = { split: pick('split', ['under', 'selected'] as const, 'under'), delete: pick('delete', ['ripple', 'gap'] as const, 'ripple') }
+const mode: ConfirmMode = pick('confirm', ['sheet', 'undo'] as const, 'sheet')
+
+function Opt({ k, v, label, on }: { k: string; v: string; label: string; on: boolean }) {
+  return (
+    <button className={on ? 'on' : ''} onClick={() => setQ(k, v)}>
+      {label}
+    </button>
+  )
+}
 
 function App() {
-  const key = (q.get('proto') as Key) in PROTOS ? (q.get('proto') as Key) : 'b'
-  const mode = (['inline', 'sheet', 'undo'].includes(q.get('confirm') ?? '') ? q.get('confirm') : 'inline') as ConfirmMode
   const [url, setUrl] = useState(`${import.meta.env.BASE_URL}sample.mp4`)
   const [dur, setDur] = useState(0)
   const [ranges, setRanges] = useState<Range[]>([])
@@ -44,7 +42,6 @@ function App() {
     v.onloadedmetadata = () => setDur(v.duration)
   }, [url])
 
-  const { C } = PROTOS[key]
   const reset = () => {
     setEpoch((e) => e + 1)
     setTaps(0)
@@ -56,19 +53,17 @@ function App() {
     <div className="p-page">
       <header className="p-head">
         <div className="p-tabs">
-          {(Object.keys(PROTOS) as Key[]).map((k) => (
-            <button key={k} className={k === key ? 'on' : ''} onClick={() => setQ('proto', k)}>
-              {PROTOS[k].name}
-            </button>
-          ))}
+          分割・頭尻：
+          <Opt k="split" v="under" label="再生ヘッドの下" on={variant.split === 'under'} />
+          <Opt k="split" v="selected" label="タップで選ぶ" on={variant.split === 'selected'} />
         </div>
-        <div className="p-tabs small">
+        <div className="p-tabs">
+          削除：
+          <Opt k="delete" v="ripple" label="詰める" on={variant.delete === 'ripple'} />
+          <Opt k="delete" v="gap" label="斜線で残す" on={variant.delete === 'gap'} />
           確認：
-          {(['inline', 'sheet', 'undo'] as const).map((m) => (
-            <button key={m} className={m === mode ? 'on' : ''} onClick={() => setQ('confirm', m)}>
-              {m === 'inline' ? 'カード' : m === 'sheet' ? 'シート' : '出さない'}
-            </button>
-          ))}
+          <Opt k="confirm" v="sheet" label="シート" on={mode === 'sheet'} />
+          <Opt k="confirm" v="undo" label="出さない" on={mode === 'undo'} />
           <label className="p-file">
             動画を選ぶ
             <input
@@ -88,11 +83,12 @@ function App() {
       </header>
       <div className="p-phone" onPointerDownCapture={() => dur > 0 && setTaps((n) => n + 1)}>
         {dur > 0 && !closed && (
-          <C
-            key={`${key}-${epoch}-${url}`}
+          <ProtoR
+            key={`${epoch}-${url}`}
             url={url}
             dur={dur}
             mode={mode}
+            variant={variant}
             onRanges={setRanges}
             onDone={() => setClosed('done')}
             onDiscard={() => setClosed('discard')}
@@ -130,16 +126,19 @@ function App() {
       </div>
       <aside className="p-side">
         <p>
-          <b>操作の回数</b>（指を置いた回数）：{taps}　<button className="p-text" onClick={reset}>最初から</button>
+          <b>操作の回数</b>（指を置いた回数）：{taps}　
+          <button className="p-text" onClick={reset}>
+            最初から
+          </button>
         </p>
         <p>
           <b>できあがり</b>：{fmt(total)}（もとは {fmt(dur)}）
         </p>
         <p className="p-list">{ranges.map((r) => `${fmt(r.start)}–${fmt(r.end)}`).join('  →  ')}</p>
         <p className="p-scenario">
-          <b>共通のシナリオ</b>（サンプル動画：①抽出 0–5 秒／②スチーム 5–11 秒／③注ぎ 11–20 秒／④できあがり 20–24 秒）
-          <br />1. 頭の 2 秒を切る　2. ②スチームの場面を、まるごと抜く　3. 完了。
-          <br />終わったら「操作の回数」を見る。
+          <b>共通のシナリオ</b>（サンプル 24 秒：①抽出 0–5／②スチーム 5–11／③注ぎ 11–20／④できあがり 20–24）
+          <br />1. 頭の 2 秒を切る　2. ②スチームを抜く　3. 尻の 4 秒（④）を切る　4. 完了
+          <br />できあがりは、2–5 → 11–20（12 秒）になれば正解。終わったら「操作の回数」を見る。
         </p>
       </aside>
     </div>

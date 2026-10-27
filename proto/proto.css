@@ -98,3 +98,33 @@
   .p-side { padding: 8px; }
   .p-phone { width: 100vw; height: calc(100dvh - 84px); border-radius: 0; box-shadow: none; }
 }
+
+/* ===== ProtoR：写真アプリの見た目（既存の .editor）に、Resolve の 2 段タイムラインを足す ===== */
+.p-phone .recorder { position: absolute; z-index: 1; }
+.p2 .editor-panel { padding: 8px 14px calc(env(safe-area-inset-bottom, 0px) + 10px); gap: 12px; flex: none; }
+.p2-ov { position: relative; touch-action: none; }
+.p2-ov-in { position: relative; height: 100%; touch-action: none; user-select: none; -webkit-user-select: none; }
+.p2-cu { position: relative; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; border-radius: 8px; background: #1b1714; }
+.p2-cu-in { position: absolute; top: 0; bottom: 0; left: 0; }
+.p2-seg { position: absolute; top: 4px; bottom: 4px; overflow: hidden; border-left: 2px solid #0d0b0a; }
+.p2-cu .p2-seg { top: 6px; bottom: 6px; border-radius: 4px; }
+.p2-seg .p-film { position: absolute; inset: 0; }
+.p2-seg.off::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(135deg, rgb(255 255 255 / 22%) 0 2px, transparent 2px 7px), rgb(0 0 0 / 66%); }
+.p2 .filmstrip-frame { z-index: 2; }
+.p2 .filmstrip-handle.wide { width: 18px; }
+.p2 .filmstrip-handle.wide.start { left: -18px; }
+.p2 .filmstrip-handle.wide.end { right: -18px; }
+.p2 .filmstrip-handle.wide::before { inset: 0 -13px; }
+.p2 .filmstrip-head { z-index: 3; }
+.p2-ov .filmstrip-head { top: 0; bottom: 0; }
+.p2-cu .filmstrip-head { top: 0; bottom: 0; }
+.p2-tools { display: flex; justify-content: space-between; gap: 2px; }
+.p2-tool { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 0 4px; min-height: 52px; border: none; background: none; color: #fff; cursor: pointer; font: inherit; }
+.p2-tool span { font-size: 0.62rem; white-space: nowrap; color: rgb(255 255 255 / 70%); }
+.p2-tool:disabled { opacity: 0.3; }
+.p2-backdrop { position: absolute; inset: 0; z-index: 10; background: rgb(0 0 0 / 55%); display: flex; align-items: flex-end; }
+.p2-sheet { width: 100%; padding: 0 12px calc(env(safe-area-inset-bottom, 0px) + 12px); display: flex; flex-direction: column; gap: 8px; }
+.p2-sheet-group { background: #2b2522; border-radius: 14px; overflow: hidden; }
+.p2-sheet-btn { width: 100%; min-height: 56px; border: none; background: none; color: #fff; font: inherit; font-size: 1.05rem; cursor: pointer; }
+.p2-sheet-btn.danger { color: #ff7a6b; }
+.p2-sheet-btn.strong { font-weight: 700; }
