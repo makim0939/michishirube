@@ -150,6 +150,9 @@ public class VideoComposerPlugin: CAPPlugin, CAPBridgedPlugin {
         }
 
         try? FileManager.default.removeItem(at: outURL)
+        // 書き出し先のフォルダが無ければ作る（動画がすべてアプリのファイルにあるときは、一時の入力を書かないので、フォルダが無い。
+        // Android は、書き出す前にフォルダを作っている）
+        try FileManager.default.createDirectory(at: outURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         let reader = try AVAssetReader(asset: composition)
         let writer = try AVAssetWriter(outputURL: outURL, fileType: .mp4)
         writer.shouldOptimizeForNetworkUse = true

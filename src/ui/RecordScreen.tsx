@@ -1,6 +1,8 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useRef, useState } from 'react'
+import { canJoinVideos } from '../data/compose'
 import { contentBlob } from '../data/content'
+import { loadProducts, mayCompose, noteComposeUse } from '../data/purchases'
 import { db } from '../data/db'
 import { compressPhoto, inMemory, makePoster, type Poster } from '../data/mediaPrep'
 import { addRecord, deleteRecord, lastNextAction, updateRecord, type NewMedia } from '../data/repo'
@@ -18,6 +20,8 @@ import { backHandler, go, goBack, href } from './router'
 import { expireUndo, undoAll, undoLast, type UndoState } from './removedStack'
 import { readStorage, removeStorage, writeStorage } from './storage'
 import { SkillPicker } from './SkillPicker'
+import { Composer, type ComposerClip } from './Composer'
+import { PlusSheet } from './PlusSheet'
 import { Trimmer } from './Trimmer'
 import { recordBackAction } from './recordBack'
 import { useBackHandler } from './useBackHandler'
@@ -197,6 +201,10 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
   const [confirmLeave, setConfirmLeave] = useState<{ back: true } | { to: string } | null>(null)
   const [recording, setRecording] = useState(false)
   const [trimming, setTrimming] = useState<string | null>(null)
+  /** 「つなぐ」の画面を開いている */
+  const [joining, setJoining] = useState(false)
+  /** 無料で試せる回数を使い切ったので、Plus の案内を出している */
+  const [plusSheet, setPlusSheet] = useState(false)
   const [pickingSkill, setPickingSkill] = useState(false)
   const videoInput = useRef<HTMLInputElement>(null)
   const photoInput = useRef<HTMLInputElement>(null)
@@ -440,6 +448,40 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
     setTrimming(null)
     change()
     attachPoster(key, file)
+  }
+
+  /** つなぐ動画（端末に中身があるもの）。並びは、画面の並びのまま */
+  const joinable = canJoinVideos ? items.filter((i) => isVideo({ type: itemType(i) }) && !!itemBlob(i)) : []
+
+  /** 「つなぐ」を押した。Plus を買っている・無料で試せる間は、画面を開く。使い切っていれば、Plus の案内 */
+  const startJoin = () =>
+    run(async () => {
+      const { plus } = await loadProducts()
+      if (await mayCompose(!!plus)) setJoining(true)
+      else setPlusSheet(true)
+    })
+
+  /**
+   * つないだ動画で置き換える。つないだ順の先頭の動画に、できあがりを入れ（保存済みなら、中身の差し替え）、
+   * ほかの動画は外す（「元に戻す」で戻せる）
+   */
+  const onJoined = (file: File, order: string[]) => {
+    const [first, ...rest] = order
+    setItems((prev) =>
+      prev.map((i) => {
+        if (i.key !== first) return i
+        return i.kind === 'new' ? { ...i, file, poster: undefined, inMemory: true } : { ...i, replaced: { file, poster: undefined } }
+      }),
+    )
+    for (const key of rest) {
+      const item = items.find((i) => i.key === key)
+      if (item) removeItem(item)
+    }
+    // 使わなかった動画（つなぐ画面で外したもの）は、そのまま残る
+    setJoining(false)
+    change()
+    attachPoster(first, file)
+    void noteComposeUse()
   }
 
   /** more：保存したら、続けて次の杯を撮る。動画・写真が入り終わる前に押したら、入るのを待ってから保存する */
@@ -693,6 +735,13 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
             </li>
           </ul>
         )}
+        {/* 動画が2本以上あるときだけ（1本だけなら、「編集」の切り取りで足りる） */}
+        {joinable.length >= 2 && (
+          <button type="button" className="btn small join-button" onClick={() => void startJoin()}>
+            <ScissorsIcon size={16} />
+            {t.compose.join}
+          </button>
+        )}
         {[
           { ref: videoInput, accept: 'video/*', capture: true, multiple: false },
           { ref: photoInput, accept: 'image/*', capture: true, multiple: false },
@@ -872,6 +921,34 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
 
       {pickingSkill && skills && (
         <SkillPicker skills={skills} current={skillId} onPick={pickSkill} onClose={() => setPickingSkill(false)} />
+      )}
+
+      {joining && (
+        <Composer
+          clips={joinable.map(
+            (i): ComposerClip => ({
+              key: i.key,
+              blob: itemBlob(i)!,
+              // 保存済みで、まだ切り取っていない動画は、アプリのファイルをそのまま書き出しに渡す
+              file: i.kind === 'existing' && !i.replaced ? i.media.file : undefined,
+              poster: i.kind === 'new' ? i.poster?.blob : (i.replaced?.poster?.blob ?? i.media.poster),
+            }),
+          )}
+          quality={(joinable[0]?.kind === 'new' ? joinable[0].quality : undefined) ?? videoSettings?.quality ?? 'standard'}
+          fileName={joinable[0]?.kind === 'new' ? joinable[0].file.name : (joinable[0]?.media.name ?? 'video.mp4')}
+          onDone={onJoined}
+          onClose={() => setJoining(false)}
+        />
+      )}
+
+      {plusSheet && (
+        <PlusSheet
+          onUnlocked={() => {
+            setPlusSheet(false)
+            setJoining(true)
+          }}
+          onClose={() => setPlusSheet(false)}
+        />
       )}
 
       {trimItem && trimBlob && (

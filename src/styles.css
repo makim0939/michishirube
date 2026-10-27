@@ -3533,3 +3533,63 @@ h1.wordmark {
   align-items: stretch;
   width: 100%;
 }
+
+/* ---- 動画をつなぐ（並びと、つなぐボタン） ---- */
+
+.join-button {
+  margin-top: 10px;
+}
+
+.clip-row {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  padding: 2px 2px 4px;
+  list-style: none;
+  overflow-x: auto;
+}
+
+.clip-chip {
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 64px;
+  height: 56px;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  background: rgb(255 255 255 / 12%);
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
+.clip-chip.selected {
+  border-color: #f5c542;
+}
+
+.clip-chip:disabled {
+  opacity: 0.5;
+}
+
+.clip-index {
+  font-weight: 700;
+}
+
+.clip-length {
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+  color: rgb(255 255 255 / 70%);
+}
+
+.clip-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.clip-tools .editor-sound:disabled {
+  opacity: 0.35;
+}

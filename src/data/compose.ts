@@ -1,6 +1,7 @@
 import { composeVideoFiles, deleteDir, deleteFile, readBlobFile, usesFiles, writeBlobFile } from './files'
 import { QUALITY } from './mediaPrep'
 import type { VideoQuality } from './videoStorage'
+import { isIosApp } from '../platform'
 import { t } from '../i18n'
 
 /**
@@ -28,6 +29,12 @@ const EPSILON = 1e-6
 export function canCompose(): boolean {
   return usesFiles
 }
+
+/**
+ * 「つなぐ」の入口を出すか。いまは iPhone・iPad のアプリだけ
+ * （Android の書き出しは、実機での確認が済んでから。Web 版は、書き出しの部品が無い）
+ */
+export const canJoinVideos = isIosApp
 
 /** 渡された区間が書き出せる形か。空・負の始め・短すぎる範囲は、ネイティブに渡す前に断る */
 export function checkClips(clips: ComposeClip[]) {
@@ -62,11 +69,10 @@ export async function composeClips(clips: ComposeClip[], quality: VideoQuality, 
       inputs.push({ input, start: c.start, ...(c.end === undefined ? {} : { end: c.end }) })
     }
     await composeVideoFiles(inputs, output, QUALITY[quality])
+    // 読み終えた Blob は、ファイルを消しても読める（メモリにある）。もう一度写さない（長い動画で、メモリが倍になるため）
     const blob = await readBlobFile(output, 'video/mp4')
-    // 書き出した MP4 は、一時ファイルを消す前にメモリへ写す（消すと読めなくなるため）
-    const bytes = await blob.arrayBuffer()
     const base = fileName.replace(/\.[^.]+$/, '').replace(/-edit$/, '')
-    return new File([bytes], `${base}-edit.mp4`, { type: 'video/mp4' })
+    return new File([blob], `${base}-edit.mp4`, { type: 'video/mp4' })
   } finally {
     await Promise.all([...temps, output].map((p) => deleteFile(p)))
     await deleteDir(dir)

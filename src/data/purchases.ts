@@ -17,11 +17,8 @@ export const PRODUCT_TIP = 'me.makimura.lattecho.app.tip'
 /** いま買えるか（iPhone・iPad のアプリだけ） */
 export const canPurchase = isIosApp
 
-/**
- * 「ラテ帳 Plus」（買い切り）の入口を出すか。解放する機能（動画をつなぐ など）ができるまでは出さない
- * （何も解放しない商品は、審査で通らない）。投げ銭は、これに関わらず出す
- */
-export const PLUS_ENABLED = false
+/** Plus なしで「つなぐ」を試せる回数（成功した回数） */
+export const FREE_COMPOSE_USES = 3
 
 /** 買ったことを覚えておく場所。端末だけのもの（同期・バックアップには入れない。backup.ts の isLocalMeta） */
 const PLUS_KEY = 'purchase:plus'
@@ -32,6 +29,12 @@ type PurchaseLike = { productIdentifier: string; revocationDate?: string }
 export function hasPlus(purchases: PurchaseLike[]): boolean {
   return purchases.some((p) => p.productIdentifier === PRODUCT_PLUS && !p.revocationDate)
 }
+
+/** ストアに Plus の商品があるのを、一度でも確かめたか（端末だけ） */
+const PLUS_LISTED_KEY = 'purchase:plusListed'
+
+/** 試した回数を覚える場所（端末だけ） */
+const COMPOSE_USES_KEY = 'purchase:composeUses'
 
 /** 端末に覚えている、Plus を買ったか */
 export async function isPlus(): Promise<boolean> {
@@ -66,10 +69,9 @@ export async function loadProducts(): Promise<{ plus?: Product; tip?: Product }>
   if (!canPurchase) return {}
   try {
     const { products } = await NativePurchases.getProducts({ productIdentifiers: [PRODUCT_PLUS, PRODUCT_TIP] })
-    return {
-      plus: products.find((p) => p.identifier === PRODUCT_PLUS),
-      tip: products.find((p) => p.identifier === PRODUCT_TIP),
-    }
+    const plus = products.find((p) => p.identifier === PRODUCT_PLUS)
+    if (plus) await db.meta.put({ key: PLUS_LISTED_KEY, value: true })
+    return { plus, tip: products.find((p) => p.identifier === PRODUCT_TIP) }
   } catch {
     return {}
   }
@@ -120,4 +122,23 @@ export async function sendTip() {
 export async function restorePurchases(): Promise<boolean> {
   await NativePurchases.restorePurchases()
   return refreshPlus()
+}
+
+/**
+ * 「つなぐ」を使ってよいか。Plus を買っている・無料で試せる回数が残っている、のどちらか。
+ * plusAvailable は、ストアから Plus の商品が取れたか。一度も取れたことがない（まだ登録・承認されていない）ときは、
+ * 買う手段が無いので、止めずに使えるようにする（買えないのに、使えなくならないように）。
+ * 一度でも取れたことがあれば、電波が無くて取れなくても、回数の制限を外さない（機内モードで制限を避けられないように）
+ */
+export async function mayCompose(plusAvailable: boolean): Promise<boolean> {
+  const listed = plusAvailable || (await db.meta.get(PLUS_LISTED_KEY))?.value === true
+  if (!listed || (await isPlus())) return true
+  return ((await db.meta.get(COMPOSE_USES_KEY))?.value as number | undefined ?? 0) < FREE_COMPOSE_USES
+}
+
+/** 「つなぐ」に成功した回数を数える（Plus を買っていれば数えない） */
+export async function noteComposeUse() {
+  if (await isPlus()) return
+  const uses = ((await db.meta.get(COMPOSE_USES_KEY))?.value as number | undefined) ?? 0
+  await db.meta.put({ key: COMPOSE_USES_KEY, value: uses + 1 })
 }
