@@ -494,6 +494,7 @@ export const ja = {
     later: '後ろへ',
     split: '分割',
     remove: '外す',
+    restore: '戻す',
     failed: 'つなげませんでした。もう一度試してください。元の動画はそのままです',
     failedWith: (detail: string) => `つなげませんでした（${detail}）。元の動画はそのままです`,
   },
