@@ -478,6 +478,8 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
     change()
     attachPoster(first, file)
     if (paid) void noteComposeUse()
+    // 1 本だけ（切り取り・音を消す・BGM）のときは、動画が増減しないので、トーストは出さない
+    if (restItems.length === 0) return
     toast.show(t.compose.joined, 'ok', {
       label: t.record.undoRemove,
       onClick: () => {

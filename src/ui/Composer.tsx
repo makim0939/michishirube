@@ -79,7 +79,7 @@ export function Composer({
   const [playing, setPlaying] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string>()
-  /** 選んだ BGM と音量（0〜1。元の動画の音は、そのまま） */
+  /** 選んだ BGM と音量（0〜1。元の動画の音とは別に決める） */
   const [bgm, setBgm] = useState<BgmChoice>()
   const [bgmVolume, setBgmVolume] = useState(0.3)
   const [bgmListOpen, setBgmListOpen] = useState(false)
@@ -429,12 +429,14 @@ export function Composer({
   const total = rows.reduce((sum, r) => sum + Math.max(0, r.end - r.start), 0)
   /** 有料の操作（2 本以上をつなぐ・BGM）。切り取りと音を消すだけなら、いつでも無料 */
   const paid = rows.length > 1 || !!bgm
-  /** 開いたときから変えたか（やめるとき、確認を出すかの判断） */
-  const changed = paid || muted || rows.some(trimmed) || rows.some((r, i) => r.key !== clips[i]?.key)
+  /** 書き出しが要るか（複数をつなぐ・BGM・音を消す・切り取り） */
+  const needsCompose = paid || muted || rows.some(trimmed)
+  /** 開いたときから、手を加えたか（やめるとき、確認を出すかの判断。開いただけでは、変えていない） */
+  const dirty = !!bgm || muted || rows.some(trimmed) || rows.length !== clips.length || rows.some((r, i) => r.key !== clips[i]?.key)
 
   const done = async () => {
     if (!ready || busy) return
-    if (!changed) {
+    if (!needsCompose) {
       onClose()
       return
     }
@@ -478,7 +480,7 @@ export function Composer({
   /** 変えていれば、確認してから閉じる（作っている間は閉じない） */
   const requestClose = () => {
     if (busy) return
-    if (changed) setConfirmClose(true)
+    if (dirty) setConfirmClose(true)
     else onClose()
   }
 
