@@ -43,6 +43,42 @@ export function canSplitAt(start: number, end: number, at: number): boolean {
   return at - start >= MIN_CLIP_SECONDS - EPSILON && end - at >= MIN_CLIP_SECONDS - EPSILON
 }
 
+/** 動画の 1 区間（key は元の動画）。外した区間も、同じ形で持つ */
+export interface Span {
+  id: string
+  key: string
+  start: number
+  end: number
+}
+
+/**
+ * 区間 id の start / end を value へ動かした結果（変わる区間だけ）を返す。
+ * 同じ動画で、境目がつながっている隣の区間（外した区間も含む）の端も、一緒に動かす。
+ * 分割した区間を別々に動かすと、隣と重なって同じ場所が 2 回再生・書き出しされるため、境目は 1 つの値で持つ。
+ * 隣の区間も、最短の長さ（MIN_CLIP_SECONDS）を割らない。動画の両端（隣がない側）は、0〜duration の中
+ */
+export function moveEdge(
+  spans: Span[],
+  id: string,
+  edge: 'start' | 'end',
+  value: number,
+  duration: number,
+): { id: string; start: number; end: number }[] {
+  const t = spans.find((s) => s.id === id)
+  if (!t) return []
+  const near = (a: number, b: number) => Math.abs(a - b) < EPSILON
+  const nb =
+    edge === 'start'
+      ? spans.find((s) => s.id !== id && s.key === t.key && near(s.end, t.start))
+      : spans.find((s) => s.id !== id && s.key === t.key && near(s.start, t.end))
+  if (edge === 'start') {
+    const v = Math.min(t.end - MIN_CLIP_SECONDS, Math.max(nb ? nb.start + MIN_CLIP_SECONDS : 0, value))
+    return [{ id, start: v, end: t.end }, ...(nb ? [{ id: nb.id, start: nb.start, end: v }] : [])]
+  }
+  const v = Math.max(t.start + MIN_CLIP_SECONDS, Math.min(nb ? nb.end - MIN_CLIP_SECONDS : duration, value))
+  return [{ id, start: t.start, end: v }, ...(nb ? [{ id: nb.id, start: v, end: nb.end }] : [])]
+}
+
 export function canCompose(): boolean {
   return usesFiles
 }

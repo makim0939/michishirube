@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import { BUNDLED_BGM, bgmBlob, bgmExtension, bgmTitle, type BgmChoice } from '../data/bgm'
-import { canSplitAt, composeClips, MIN_CLIP_SECONDS } from '../data/compose'
+import { canSplitAt, composeClips, moveEdge } from '../data/compose'
 import { inMemory, probeDuration } from '../data/mediaPrep'
 import type { VideoQuality } from '../data/videoStorage'
 import { BackIcon, ForwardIcon, MusicIcon, PauseIcon, PlayIcon, SpeakerIcon } from './icons'
@@ -16,7 +16,7 @@ export interface ComposerClip {
   file?: string
 }
 
-/** 並びの 1 つ分（動画の 1 区間）。分割すると、同じ動画（key）から区間が増える */
+/** 並びの 1 つ分（動画の 1 区間）。分割すると、同じ動画（key）から区間が増える。同じ動画の区間は、境目で隣とつながる（重ならない） */
 interface Row {
   /** 並びの中での名前（最初は動画の key と同じ。分割で増えた区間は、別の名前） */
   id: string
@@ -49,7 +49,7 @@ const trimmed = (r: Row) => r.duration > 0 && (r.start > 0.05 || r.end < r.durat
 
 /**
  * 動画をつなぐ（iPhone の写真アプリのように）。下に動画を並べ、選んだ1本の両端の取っ手で範囲を決める。
- * 並べ替え・分割（白い線の位置で 2 つに分ける）・外すも、選んだ1本に対して行う。「完了」で、並べた順につなぎ、onDone に渡す（つなぎ目はカットのみ）。
+ * 並べ替え・分割（白い線の位置で 2 つに分ける）・外す（フィルムで斜線になり、「戻す」で戻せる）も、選んだ1本に対して行う。分割した区間の取っ手は、隣との境目を動かす。「完了」で、並べた順につなぎ、onDone に渡す（つなぎ目はカットのみ）。
  * 作っている間は閉じられない（途中で止めると、元の動画と見分けがつかなくなるため）
  */
 export function Composer({
@@ -77,6 +77,8 @@ export function Composer({
   const playUntil = useRef<number | null>(null)
   const [rows, setRows] = useState<Row[]>(() => clips.map((c) => ({ id: c.key, key: c.key, duration: 0, start: 0, end: 0 })))
   const [selected, setSelected] = useState(0)
+  /** 外した区間（新しい順に、末尾へ）。並びからは消えるが、動画の中ではそこに残り（フィルムで斜線）、「戻す」で元の位置へ戻せる。index は、外す前の並びの中の位置 */
+  const [removed, setRemoved] = useState<{ row: Row; index: number }[]>([])
   const [url, setUrl] = useState<string>()
   const [frames, setFrames] = useState<Record<string, string[]>>({})
   const [current, setCurrent] = useState(0)
@@ -296,7 +298,21 @@ export function Composer({
     // 区間を選び直したときだけ（取っ手を動かすたびには、動かさない）
   }, [row?.id])
 
-  const patch = (id: string, p: Partial<Row>) => setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...p } : r)))
+  /** 外した区間も含む、いまの全区間（境目を動かすとき、隣を探すため） */
+  const spans: Row[] = [...rows, ...removed.map((x) => x.row)]
+
+  /** 区間の端を動かす。同じ動画の隣の区間の端も一緒に動く（外した区間も）ので、重ならない */
+  const moveSpanEdge = (r: Row, edge: 'start' | 'end', value: number) => {
+    const moves = moveEdge(spans, r.id, edge, value, r.duration)
+    const apply = (x: Row) => {
+      const m = moves.find((v) => v.id === x.id)
+      return m ? { ...x, start: m.start, end: m.end } : x
+    }
+    setRows((prev) => prev.map(apply))
+    setRemoved((prev) => prev.map((x) => ({ ...x, row: apply(x.row) })))
+    const m = moves.find((v) => v.id === r.id)
+    return m ? m[edge] : value
+  }
 
   const seek = (time: number) => {
     const v = video.current
@@ -407,15 +423,9 @@ export function Composer({
     const which = dragging.current
     if (!which || !row) return
     const time = timeAt(e.clientX)
-    if (which === 'start') {
-      const start = Math.max(0, Math.min(time, row.end - MIN_CLIP_SECONDS))
-      patch(row.id, { start })
-      seek(start)
-    } else if (which === 'end') {
-      const end = Math.min(duration, Math.max(time, row.start + MIN_CLIP_SECONDS))
-      patch(row.id, { end })
-      seek(end)
-    } else {
+    if (which === 'start') seek(moveSpanEdge(row, 'start', time))
+    else if (which === 'end') seek(moveSpanEdge(row, 'end', time))
+    else {
       seek(Math.min(row.end, Math.max(row.start, time)))
     }
   }
@@ -430,15 +440,7 @@ export function Composer({
     const step = e.key === 'ArrowRight' || e.key === 'ArrowUp' ? 0.1 : e.key === 'ArrowLeft' || e.key === 'ArrowDown' ? -0.1 : 0
     if (!step) return
     e.preventDefault()
-    if (which === 'start') {
-      const start = Math.max(0, Math.min(row.start + step, row.end - MIN_CLIP_SECONDS))
-      patch(row.id, { start })
-      seek(start)
-    } else {
-      const end = Math.min(duration, Math.max(row.end + step, row.start + MIN_CLIP_SECONDS))
-      patch(row.id, { end })
-      seek(end)
-    }
+    seek(moveSpanEdge(row, which, row[which] + step))
   }
 
   const move = (delta: -1 | 1) => {
@@ -465,21 +467,34 @@ export function Composer({
     setSelected(selected + 1)
   }
 
+  /** 選んだ区間を外す。並びからは消え、フィルムでは斜線になる（残りが 1 つだけのときは外せない） */
   const remove = () => {
-    if (rows.length <= 1) return
+    if (rows.length <= 1 || !row || row.duration <= 0) return
     stopAll()
+    setRemoved((prev) => [...prev, { row, index: selected }])
     setRows((prev) => prev.filter((_, i) => i !== selected))
     setSelected((s) => Math.max(0, Math.min(s, rows.length - 2)))
+  }
+
+  /** 最後に外した区間を、外す前の位置へ戻す */
+  const restore = () => {
+    const last = removed[removed.length - 1]
+    if (!last) return
+    stopAll()
+    const at = Math.min(last.index, rows.length)
+    setRemoved((prev) => prev.slice(0, -1))
+    setRows((prev) => [...prev.slice(0, at), last.row, ...prev.slice(at)])
+    setSelected(at)
   }
 
   const ready = rows.every((r) => r.duration > 0)
   const total = rows.reduce((sum, r) => sum + Math.max(0, r.end - r.start), 0)
   /** 有料の操作（2 本以上をつなぐ・BGM）。切り取りと音を消すだけなら、いつでも無料 */
   const paid = rows.length > 1 || !!bgm
-  /** 書き出しが要るか（複数をつなぐ・BGM・音を消す・切り取り） */
-  const needsCompose = paid || muted || rows.some(trimmed)
+  /** 書き出しが要るか（複数をつなぐ・BGM・音を消す・切り取り・区間や動画を外す） */
+  const needsCompose = paid || muted || removed.length > 0 || rows.some(trimmed)
   /** 開いたときから、手を加えたか（やめるとき、確認を出すかの判断。開いただけでは、変えていない） */
-  const dirty = !!bgm || muted || rows.some(trimmed) || rows.length !== clips.length || rows.some((r, i) => r.id !== clips[i]?.key)
+  const dirty = !!bgm || muted || removed.length > 0 || rows.some(trimmed) || rows.length !== clips.length || rows.some((r, i) => r.id !== clips[i]?.key)
 
   const done = async () => {
     if (!ready || busy) return
@@ -540,6 +555,11 @@ export function Composer({
   const pct = (time: number) => `${(duration > 0 ? time / duration : 0) * 100}%`
   const length = row ? row.end - row.start : 0
   const film = selectedKey ? frames[selectedKey] : undefined
+  // 選んだ動画の区間（残した・外した）を、動画の中の位置の順に。両端の外（切り取った部分）と、外した区間は暗くする。区間のあいだの境目に線を引く
+  const sameClip = spans.filter((r) => r.key === selectedKey).sort((a, b) => a.start - b.start)
+  const keptIds = new Set(rows.map((r) => r.id))
+  const clipStart = sameClip[0]?.start ?? 0
+  const clipEnd = sameClip[sameClip.length - 1]?.end ?? 0
 
   return (
     <div className="recorder editor" role="dialog" aria-modal="true" aria-label={t.compose.title}>
@@ -605,8 +625,16 @@ export function Composer({
                   ? film.map((f, i) => <img key={i} src={f} alt="" />)
                   : Array.from({ length: FRAMES }, (_, i) => <span key={i} />)}
               </div>
-              <div className="filmstrip-shade" style={{ left: 0, width: pct(row.start) }} />
-              <div className="filmstrip-shade" style={{ left: pct(row.end), right: 0 }} />
+              <div className="filmstrip-shade" style={{ left: 0, width: pct(clipStart) }} />
+              <div className="filmstrip-shade" style={{ left: pct(clipEnd), right: 0 }} />
+              {sameClip
+                .filter((r) => !keptIds.has(r.id))
+                .map((r) => (
+                  <div key={r.id} className="filmstrip-shade removed" style={{ left: pct(r.start), width: pct(r.end - r.start) }} />
+                ))}
+              {sameClip.slice(1).map((r) => (
+                <div key={r.id} className="filmstrip-cut" style={{ left: pct(r.start) }} aria-hidden="true" />
+              ))}
               <div className="filmstrip-frame" style={{ left: pct(row.start), width: pct(length) }}>
                 <span
                   className="filmstrip-handle start"
@@ -756,6 +784,11 @@ export function Composer({
             <button type="button" className="editor-text-button" disabled={rows.length <= 1} onClick={remove}>
               {t.compose.remove}
             </button>
+            {removed.length > 0 && (
+              <button type="button" className="editor-text-button" onClick={restore}>
+                {t.compose.restore}
+              </button>
+            )}
           </div>
         )}
       </div>

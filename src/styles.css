@@ -3720,3 +3720,20 @@ h1.wordmark {
 .editor-confirm-button.danger {
   color: #ff7a6b;
 }
+
+/* 外した区間：暗くして、斜線を重ねる。区間のあいだの境目は、細い白線 */
+.filmstrip-shade.removed {
+  background:
+    repeating-linear-gradient(135deg, rgb(255 255 255 / 22%) 0 2px, transparent 2px 7px),
+    rgb(0 0 0 / 68%);
+}
+
+.filmstrip-cut {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  margin-left: -1px;
+  background: rgb(255 255 255 / 85%);
+  pointer-events: none;
+}
