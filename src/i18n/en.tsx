@@ -495,6 +495,7 @@ export const en: Messages = {
     clips: 'Videos to join',
     earlier: 'Move earlier',
     later: 'Move later',
+    split: 'Split',
     remove: 'Remove',
     failed: "Couldn't join the videos. Please try again. The originals are unchanged",
     failedWith: (detail: string) => `Couldn't join the videos (${detail}). The originals are unchanged`,

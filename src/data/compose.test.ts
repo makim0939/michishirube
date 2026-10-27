@@ -10,7 +10,7 @@ const files = vi.hoisted(() => ({
 }))
 vi.mock('./files', () => files)
 
-import { checkClips, composeClips, totalSeconds } from './compose'
+import { canSplitAt, checkClips, composeClips, totalSeconds } from './compose'
 
 const source = { file: 'media/a.mp4' }
 
@@ -72,6 +72,46 @@ describe('動画をつなぐ', () => {
   })
 })
 
+describe('同じ動画から何区間も切り出す（分割）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    files.readBlobFile.mockResolvedValue(new Blob(['mp4'], { type: 'video/mp4' }))
+    files.composeVideoFiles.mockResolvedValue({ size: 3, duration: 1 })
+  })
+
+  it('メモリの動画は、一度だけ一時ファイルに書き、区間ごとに同じ入力を渡す', async () => {
+    const blob = new Blob(['x'], { type: 'video/mp4' })
+    await composeClips(
+      [
+        { source: { blob }, start: 0, end: 2 },
+        { source: { blob }, start: 4, end: 6 },
+      ],
+      'standard',
+      'a.mp4',
+    )
+    expect(files.writeBlobFile).toHaveBeenCalledTimes(1)
+    const clips = files.composeVideoFiles.mock.calls[0][0] as { input: string; start: number; end?: number }[]
+    expect(clips).toHaveLength(2)
+    expect(clips[0].input).toBe(clips[1].input)
+    expect(clips.map((c) => [c.start, c.end])).toEqual([
+      [0, 2],
+      [4, 6],
+    ])
+  })
+
+  it('別々の動画は、それぞれ書く', async () => {
+    await composeClips(
+      [
+        { source: { blob: new Blob(['a']) }, start: 0 },
+        { source: { blob: new Blob(['b']) }, start: 0 },
+      ],
+      'standard',
+      'a.mp4',
+    )
+    expect(files.writeBlobFile).toHaveBeenCalledTimes(2)
+  })
+})
+
 describe('BGM つきで書き出す', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -117,6 +157,22 @@ describe('元の動画の音', () => {
   it('既定では、元の音を残す', async () => {
     await composeClips([{ source: { file: 'media/a.mp4' }, start: 0 }], 'standard', 'a.mp4')
     expect(files.composeVideoFiles.mock.calls[0][4]).toBeFalsy()
+  })
+})
+
+describe('区間を分けられるか', () => {
+  it('分けたどちらも最短（0.3 秒）以上あれば分けられる', () => {
+    expect(canSplitAt(1, 5, 3)).toBe(true)
+    expect(canSplitAt(1, 5, 1.3)).toBe(true)
+    expect(canSplitAt(1, 5, 4.7)).toBe(true)
+  })
+
+  it('始め・終わりに近すぎる位置、範囲の外では分けられない', () => {
+    expect(canSplitAt(1, 5, 1)).toBe(false)
+    expect(canSplitAt(1, 5, 1.2)).toBe(false)
+    expect(canSplitAt(1, 5, 4.8)).toBe(false)
+    expect(canSplitAt(1, 5, 0)).toBe(false)
+    expect(canSplitAt(1, 5, 9)).toBe(false)
   })
 })
 

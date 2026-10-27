@@ -38,6 +38,11 @@ export const MIN_CLIP_SECONDS = 0.3
 /** 5.3 - 5 のような引き算の誤差（0.2999…）で、ちょうど最小の範囲を弾かないための余裕 */
 const EPSILON = 1e-6
 
+/** 区間（start〜end）を、at で分けられるか。分けたどちらも、最短の長さ以上あるときだけ */
+export function canSplitAt(start: number, end: number, at: number): boolean {
+  return at - start >= MIN_CLIP_SECONDS - EPSILON && end - at >= MIN_CLIP_SECONDS - EPSILON
+}
+
 export function canCompose(): boolean {
   return usesFiles
 }
@@ -87,14 +92,22 @@ export async function composeClips(
   const output = `${dir}/out.mp4`
   try {
     const inputs: { input: string; start: number; end?: number }[] = []
+    const blobInputs = new Map<Blob, string>()
     for (const [i, c] of clips.entries()) {
       let input: string
       if ('file' in c.source) {
         input = c.source.file
       } else {
-        input = `${dir}/in-${i}.${c.source.blob.type.includes('webm') ? 'webm' : 'mp4'}`
-        temps.push(input)
-        await writeBlobFile(input, c.source.blob)
+        // 同じ動画から何区間も切り出す（分割）ときは、一度だけ書く
+        const written = blobInputs.get(c.source.blob)
+        if (written) {
+          input = written
+        } else {
+          input = `${dir}/in-${i}.${c.source.blob.type.includes('webm') ? 'webm' : 'mp4'}`
+          temps.push(input)
+          await writeBlobFile(input, c.source.blob)
+          blobInputs.set(c.source.blob, input)
+        }
       }
       inputs.push({ input, start: c.start, ...(c.end === undefined ? {} : { end: c.end }) })
     }
