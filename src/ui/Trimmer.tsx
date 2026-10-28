@@ -67,11 +67,14 @@ export function makeFilmstrip(
  */
 export function Trimmer({
   file,
+  src,
   name,
   onDone,
   onClose,
 }: {
-  file: Blob
+  /** 動画の中身。ファイルの URL（src）があれば、メモリに写さずにそれを使う */
+  file?: Blob
+  src?: string
   name: string
   onDone: (file: File) => void
   onClose: () => void
@@ -100,11 +103,19 @@ export function Trimmer({
     return true
   })
 
-  // メモリに写してから再生する（iPhone で IndexedDB の動画を直接再生できないことがあるため）
+  // メモリに写してから再生する（iPhone で IndexedDB の動画を直接再生できないことがあるため）。
+  // アプリのファイルにある動画は、写さずにファイルの URL のまま使う（長い動画で、メモリに何倍も載らないように）
   useEffect(() => {
+    if (src) {
+      setUrl(src)
+      return () => {
+        job.current?.cancel()
+        void audio.current?.close()
+      }
+    }
     let revoked = false
     let u: string | undefined
-    inMemory(file)
+    inMemory(file!)
       .then((b) => {
         if (revoked) return
         u = URL.createObjectURL(b)
@@ -117,7 +128,7 @@ export function Trimmer({
       job.current?.cancel()
       void audio.current?.close()
     }
-  }, [file])
+  }, [file, src])
 
   useEffect(() => {
     const v = video.current

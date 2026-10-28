@@ -27,13 +27,15 @@ import { t } from '../i18n'
 /** つなぐ動画 1 本。file は、アプリのファイルにある元の動画の場所（あれば、そのまま書き出しに渡す） */
 export interface ComposerClip {
   key: string
-  blob: Blob
+  /** メモリ上の動画。src があれば、無くてよい */
+  blob?: Blob
+  /** アプリのファイルの URL（iPhone）。あれば、メモリに写さずに、再生・長さ・帯の絵に使う */
+  src?: string
   file?: string
 }
 
 /** 動画の長さだけを読み取る（画面には出さない video で、メタデータだけ読む） */
-async function blobDuration(blob: Blob): Promise<number> {
-  const url = URL.createObjectURL(await inMemory(blob))
+async function urlDuration(url: string): Promise<number> {
   const video = document.createElement('video')
   try {
     video.muted = true
@@ -44,7 +46,6 @@ async function blobDuration(blob: Blob): Promise<number> {
   } finally {
     video.removeAttribute('src')
     video.load()
-    URL.revokeObjectURL(url)
   }
 }
 
@@ -199,7 +200,7 @@ export function Composer({
     void (async () => {
       for (const c of clips) {
         try {
-          const d = await blobDuration(c.blob)
+          const d = await urlDuration(await urlFor(c.key))
           if (cancelled) return
           setDurs((p) => ({ ...p, [c.key]: d }))
           setHist((h) => (h.doc.segs[c.key] ? h : { ...h, doc: { ...h.doc, segs: { ...h.doc.segs, [c.key]: initSegs(c.key, d) } } }))
@@ -225,8 +226,8 @@ export function Composer({
   const urlFor = (key: string): Promise<string> => {
     let p = urlPromises.current.get(key)
     if (!p) {
-      p = inMemory(clipOf(key).blob).then((b) => {
-        const u = URL.createObjectURL(b)
+      const c = clipOf(key)
+      p = (c.src ? Promise.resolve(c.src) : inMemory(c.blob!).then((b) => URL.createObjectURL(b))).then((u) => {
         urls.current.set(key, u)
         return u
       })
@@ -259,7 +260,8 @@ export function Composer({
     const promises = urlPromises.current
     const cache = urls.current
     return () => {
-      for (const p of promises.values()) void p.then((u) => URL.revokeObjectURL(u)).catch(() => {})
+      // ファイルの URL（src）は、解放するものではない
+      for (const p of promises.values()) void p.then((u) => u.startsWith('blob:') && URL.revokeObjectURL(u)).catch(() => {})
       promises.clear()
       cache.clear()
     }
@@ -595,7 +597,7 @@ export function Composer({
         ranges.map((r) => {
           const c = clipOf(r.key)
           return {
-            source: c.file ? { file: c.file } : { blob: c.blob },
+            source: c.file ? { file: c.file } : { blob: c.blob! },
             start: r.start,
             // 動画の終わりまで使うときは end を送らない（長さの誤差で、終わりを超えないように）
             ...(r.end >= r.duration - 0.05 ? {} : { end: r.end }),

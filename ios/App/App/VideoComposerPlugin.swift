@@ -58,16 +58,117 @@ public class VideoComposerPlugin: CAPPlugin, CAPBridgedPlugin {
             bgm = Bgm(url: docs.appendingPathComponent(input), volume: max(0, min(1, volume)))
         }
 
+        let watchdog = Watchdog()
+        let once = Once()
         Task {
             do {
                 let result = try await Self.run(
                     clips: clips, bgm: bgm, muteOriginal: muteOriginal, outURL: outURL, maxShortSide: maxShortSide,
-                    videoBitrate: videoBitrate, audioBitrate: audioBitrate, queue: queue)
-                call.resolve(result)
+                    videoBitrate: videoBitrate, audioBitrate: audioBitrate, queue: queue, watchdog: watchdog)
+                watchdog.enter(.done)
+                once.run { call.resolve(result) }
             } catch {
+                watchdog.enter(.done)
                 try? FileManager.default.removeItem(at: outURL)
-                call.reject("動画をつなげませんでした: \(error.localizedDescription)")
+                let reason = watchdog.timedOut ? "進まなくなったので止めました" : error.localizedDescription
+                once.run { call.reject("動画をつなげませんでした: \(reason)") }
             }
+        }
+        // 見張り：進みが止まったら、読み込み・書き出しをやめさせる。それでも戻らなければ、こちらから失敗を返す
+        Task {
+            var expiredAt: Date?
+            while true {
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                if let at = expiredAt {
+                    if Date().timeIntervalSince(at) > 20 {
+                        try? FileManager.default.removeItem(at: outURL)
+                        once.run { call.reject("動画をつなげませんでした: 進まなくなったので止めました") }
+                        return
+                    }
+                } else if watchdog.expired(finishLimit: 180) {
+                    expiredAt = Date()
+                    // 止める処理が戻らないこともあるので、見張りは待たない（20 秒たったら、こちらから失敗を返す）
+                    DispatchQueue.global().async { watchdog.abort() }
+                }
+                if watchdog.isDone { return }
+            }
+        }
+    }
+
+    /// 書き出しの進みを見張る。サンプルを書き進めるたびに touch() し、一定時間進まなければ止める
+    /// （長い動画で、書き出しが戻らないまま、画面から抜けられなくなるのを防ぐ）
+    private final class Watchdog {
+        enum Phase { case writing, finishing, done }
+        private let lock = NSLock()
+        private var last = Date()
+        private var phase = Phase.writing
+        private var expiredFlag = false
+
+        var timedOut: Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            return expiredFlag
+        }
+        private var stop: (() -> Void)?
+
+        /// 止める処理（読み込み・書き出しをやめる）。読み込みを始める前に入れる
+        func setAbort(_ body: @escaping () -> Void) {
+            lock.lock()
+            stop = body
+            lock.unlock()
+        }
+
+        func abort() {
+            lock.lock()
+            let body = stop
+            lock.unlock()
+            body?()
+        }
+
+        func touch() {
+            lock.lock()
+            last = Date()
+            lock.unlock()
+        }
+
+        var isDone: Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            return phase == .done
+        }
+
+        func enter(_ next: Phase) {
+            lock.lock()
+            phase = next
+            last = Date()
+            lock.unlock()
+        }
+
+        /// 進みが止まっていれば true（1 回だけ）。書き込み中は、サンプルが 60 秒進まないとき。
+        /// 仕上げ（finishWriting。ファイルの並べ替えを含む）は、書き出した動画の大きさで時間が変わるので長めに待つ
+        func expired(finishLimit: TimeInterval) -> Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            guard !expiredFlag, phase != .done else { return false }
+            let limit = phase == .writing ? 60 : finishLimit
+            if Date().timeIntervalSince(last) > limit {
+                expiredFlag = true
+                return true
+            }
+            return false
+        }
+    }
+
+    /// 結果を 1 回だけ返す（書き出しの完了と、見張りの時間切れが、どちらが先でも）
+    private final class Once {
+        private let lock = NSLock()
+        private var settled = false
+        func run(_ body: () -> Void) {
+            lock.lock()
+            defer { lock.unlock() }
+            if settled { return }
+            settled = true
+            body()
         }
     }
 
@@ -76,7 +177,8 @@ public class VideoComposerPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     private static func run(
-        clips: [Clip], bgm: Bgm?, muteOriginal: Bool, outURL: URL, maxShortSide: CGFloat, videoBitrate: Int, audioBitrate: Int, queue: DispatchQueue
+        clips: [Clip], bgm: Bgm?, muteOriginal: Bool, outURL: URL, maxShortSide: CGFloat, videoBitrate: Int, audioBitrate: Int, queue: DispatchQueue,
+        watchdog: Watchdog
     ) async throws -> [String: Any] {
         let timescale: CMTimeScale = 600
         let composition = AVMutableComposition()
@@ -254,6 +356,11 @@ public class VideoComposerPlugin: CAPPlugin, CAPBridgedPlugin {
             pairs.append((audioOut, audioIn))
         }
 
+        // 進みが止まったら、まず読み込みをやめさせる（コマの取り出しが戻り、書き込みの輪が終わる）。仕上げで止まったら、書き出しをやめる
+        watchdog.setAbort { [weak reader, weak writer] in
+            reader?.cancelReading()
+            if writer?.status == .writing { writer?.cancelWriting() }
+        }
         guard reader.startReading() else { throw reader.error ?? fail(5, "読み込みを始められません") }
         guard writer.startWriting() else { throw writer.error ?? fail(6, "書き出しを始められません") }
         writer.startSession(atSourceTime: .zero)
@@ -267,6 +374,7 @@ public class VideoComposerPlugin: CAPPlugin, CAPBridgedPlugin {
                             while input.isReadyForMoreMediaData && !finished {
                                 if writer.status == .writing, reader.status == .reading, let sample = out.copyNextSampleBuffer() {
                                     if !input.append(sample) { finished = true }
+                                    watchdog.touch()
                                 } else {
                                     finished = true
                                 }
@@ -281,11 +389,18 @@ public class VideoComposerPlugin: CAPPlugin, CAPBridgedPlugin {
             }
         }
 
+        if watchdog.timedOut {
+            // 読み込みをやめさせたので、書けた分は途中まで。できあがりとして返さない
+            writer.cancelWriting()
+            throw fail(10, "進まなくなったので止めました")
+        }
         if reader.status == .failed {
             writer.cancelWriting()
             throw reader.error ?? fail(7, "読み込みに失敗しました")
         }
+        watchdog.enter(.finishing)
         await writer.finishWriting()
+        if watchdog.timedOut { throw fail(10, "進まなくなったので止めました") }
         if writer.status != .completed { throw writer.error ?? fail(8, "書き出しに失敗しました") }
 
         let size = (try? FileManager.default.attributesOfItem(atPath: outURL.path)[.size] as? Int) ?? 0
