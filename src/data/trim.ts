@@ -323,9 +323,9 @@ export function startTrim(
  * iPhone の Safari は、データを読み込む前に今と同じ位置へ移動させると seeking だけ起きて seeked が来ないことがあるので、
  * イベントだけに頼らず状態を見て判断する（5秒たったら先へ進む）
  */
-export function waitUntilSeekable(video: HTMLVideoElement, target: number, timeoutMs = 5000): Promise<void> {
+export function waitUntilSeekable(video: HTMLVideoElement, target: number, timeoutMs = 5000, tolerance = 0.25): Promise<void> {
   const ready = () =>
-    !video.seeking && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && Math.abs(video.currentTime - target) < 0.25
+    !video.seeking && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && Math.abs(video.currentTime - target) < tolerance
   if (ready()) return Promise.resolve()
   return new Promise((resolve) => {
     const events = ['seeked', 'loadeddata', 'canplay', 'timeupdate']

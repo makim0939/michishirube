@@ -16,8 +16,8 @@ export function formatTime(sec: number) {
   return `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`
 }
 
-/** 動画の、決めた時刻のコマを小さく作る（別の video で順に移動して描く）。isCancelled が true になったら止める */
-export async function makeFramesAt(url: string, times: number[], isCancelled: () => boolean): Promise<string[]> {
+/** 動画の、決めた時刻のコマを小さく作る（別の video で順に移動して描く）。isCancelled が true になったら止める。fast なら、キーフレームへ飛ぶ（速いが、時刻はおおまか） */
+export async function makeFramesAt(url: string, times: number[], isCancelled: () => boolean, fast = false): Promise<string[]> {
   const video = document.createElement('video')
   video.muted = true
   video.playsInline = true
@@ -32,8 +32,10 @@ export async function makeFramesAt(url: string, times: number[], isCancelled: ()
     for (const time of times) {
       // 編集を閉じたら、残りのコマは作らない（裏で動画を読み続けないように）
       if (isCancelled()) break
-      video.currentTime = time
-      await waitUntilSeekable(video, time, 3000)
+      // fast：いちばん近いキーフレームへ飛ぶ（正確ではないが、速い。粗い絵を、まず早く出すため）
+      if (fast && typeof video.fastSeek === 'function') video.fastSeek(time)
+      else video.currentTime = time
+      await waitUntilSeekable(video, time, 3000, fast ? 1.5 : undefined)
       const canvas = document.createElement('canvas')
       canvas.height = height
       canvas.width = Math.round((height * (video.videoWidth || 9)) / (video.videoHeight || 16))
@@ -53,9 +55,10 @@ export function makeFilmstrip(
   duration: number,
   count: number,
   isCancelled: () => boolean,
+  fast = false,
 ): Promise<string[]> {
   const times = Array.from({ length: count }, (_, i) => Math.min(duration - 0.05, ((i + 0.5) / count) * duration))
-  return makeFramesAt(url, times, isCancelled)
+  return makeFramesAt(url, times, isCancelled, fast)
 }
 
 /**

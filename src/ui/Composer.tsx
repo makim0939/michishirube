@@ -1,11 +1,26 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
 import { BUNDLED_BGM, bgmBlob, bgmExtension, bgmTitle, type BgmChoice } from '../data/bgm'
-import { canSplitAt, composeClips, moveEdge } from '../data/compose'
+import { composeClips } from '../data/compose'
 import { inMemory, probeDuration } from '../data/mediaPrep'
 import type { VideoQuality } from '../data/videoStorage'
-import { BackIcon, ForwardIcon, MusicIcon, PauseIcon, PlayIcon, SpeakerIcon } from './icons'
+import {
+  hasKept,
+  initSegs,
+  isUntouched,
+  keptRanges,
+  moveClip,
+  segKey,
+  splitAt,
+  toggleOff,
+  totalSeconds,
+  trimEdge,
+  MIN_SEG,
+  type Doc,
+  type Seg,
+} from '../domain/clipEdit'
+import { BackIcon, ForwardIcon, MusicIcon, PauseIcon, PlayIcon, RedoIcon, ScissorsIcon, SpeakerIcon, TrashIcon, UndoIcon } from './icons'
 import { PlusSheet } from './PlusSheet'
-import { FRAMES, formatTime, makeFilmstrip, makeFramesAt } from './Trimmer'
+import { formatTime, makeFilmstrip } from './Trimmer'
 import { useBackHandler } from './useBackHandler'
 import { t } from '../i18n'
 
@@ -14,18 +29,6 @@ export interface ComposerClip {
   key: string
   blob: Blob
   file?: string
-}
-
-/** 並びの 1 つ分（動画の 1 区間）。分割すると、同じ動画（key）から区間が増える。同じ動画の区間は、境目で隣とつながる（重ならない） */
-interface Row {
-  /** 並びの中での名前（最初は動画の key と同じ。分割で増えた区間は、別の名前） */
-  id: string
-  /** 元の動画（clips の key） */
-  key: string
-  /** 動画の長さ（秒）。読み取るまでは 0 */
-  duration: number
-  start: number
-  end: number
 }
 
 /** 動画の長さだけを読み取る（画面には出さない video で、メタデータだけ読む） */
@@ -45,73 +48,152 @@ async function blobDuration(blob: Blob): Promise<number> {
   }
 }
 
-const trimmed = (r: Row) => r.duration > 0 && (r.start > 0.05 || r.end < r.duration - 0.05)
+/** 帯の絵 1 枚の幅（px） */
+const TILE = 34
+/** 最初に作る粗い絵の数と、あとから作る細かい絵の数（1 本あたり。取得は、粗い順に全部、そのあと細かく） */
+const COARSE = 10
+const FINE = 40
+/** 拡大の段の倍率（1 秒あたりの px）。ピンチで変える */
+const ZOOM_MIN = 24
+const ZOOM_MAX = 220
+const ZOOM_DEFAULT = 60
+/** 再生ヘッドが区間の境目に吸い付く距離（px） */
+const SNAP_PX = 7
+
+interface Hist {
+  doc: Doc
+  past: Doc[]
+  future: Doc[]
+}
+
+/** 区間の絵を、幅に合わせて並べる。絵は、動画から取った 10〜40 コマのうち、いちばん近いものを使う */
+function Tiles({ frames, start, end, duration, width }: { frames?: string[]; start: number; end: number; duration: number; width: number }) {
+  const n = Math.max(1, Math.round(width / TILE))
+  return (
+    <div className="cmp-tiles" aria-hidden="true">
+      {Array.from({ length: n }, (_, i) => {
+        const at = start + ((i + 0.5) / n) * (end - start)
+        const f = frames && frames.length > 0 && duration > 0 ? frames[Math.min(frames.length - 1, Math.floor((at / duration) * frames.length))] : undefined
+        return f ? <img key={i} src={f} alt="" /> : <span key={i} />
+      })}
+    </div>
+  )
+}
 
 /**
- * 動画をつなぐ（iPhone の写真アプリのように）。下に動画を並べ、選んだ1本の両端の取っ手で範囲を決める。
- * 並べ替え・分割（白い線の位置で 2 つに分ける）・外す（フィルムで斜線になり、「戻す」で戻せる）も、選んだ1本に対して行う。分割した区間の取っ手は、隣との境目を動かす。「完了」で、並べた順につなぎ、onDone に渡す（つなぎ目はカットのみ）。
- * 作っている間は閉じられない（途中で止めると、元の動画と見分けがつかなくなるため）
+ * 動画を仕上げる（iPhone の写真アプリの見た目で、DaVinci Resolve の Cut ページのように操作する）。
+ * 2 段のタイムライン：上は全体（なぞると再生ヘッドが動く）、下は再生ヘッドの周りの拡大（再生ヘッドは中央に固定。2 本指で倍率）。
+ * 区間をタップして選び、分割・削除（斜線で残す）・戻す。選んだ区間の両端の取っ手でトリム（隣と重ならない）。
+ * 取り消し・やり直しが、操作の列にある。キャンセルは確認せず、すぐ閉じる（onDiscard が、トーストの「元に戻す」を出す）。
+ * 「完了」で、残す区間を並べた順につなぎ、onDone に渡す（つなぎ目はカットのみ）。作っている間は閉じられない
  */
 export function Composer({
   clips: initialClips,
   quality,
   fileName,
+  hidden = false,
   mayUsePaid,
   onDone,
   onClose,
+  onDiscard,
 }: {
   clips: ComposerClip[]
   quality: VideoQuality
   fileName: string
+  /** 閉じたあと、トーストの「元に戻す」が押されるまでの間、中身を持ったまま隠す */
+  hidden?: boolean
   /** 有料の操作（2 本以上をつなぐ・BGM）をしてよいか。Plus を買っている・無料の回数が残っている間は true */
   mayUsePaid: () => Promise<boolean>
-  /** order は、つないだ動画の並び順（clips の key）。使わなかった動画は含まない。paid は、有料の操作を使ったか（無料の回数に数える） */
+  /** order は、できあがりの並び（clips の key。分割した動画は、同じ key が何度も出る）。paid は、有料の操作を使ったか（無料の回数に数える） */
   onDone: (file: File, order: string[], paid: boolean) => void
+  /** 何も変えずに閉じる */
   onClose: () => void
+  /** 変えたあとに、キャンセルして閉じる */
+  onDiscard: () => void
 }) {
   // 開いた時点の動画を使い続ける（親の再描画のたびに、新しい配列が渡されても、長さを読み直さない）
   const [clips] = useState(initialClips)
+  const originalOrder = useMemo(() => clips.map((c) => c.key), [clips])
+  const clipOf = (key: string) => clips.find((c) => c.key === key)!
   const video = useRef<HTMLVideoElement>(null)
-  const strip = useRef<HTMLDivElement>(null)
-  const dragging = useRef<'start' | 'end' | 'head' | null>(null)
-  const playUntil = useRef<number | null>(null)
-  const [rows, setRows] = useState<Row[]>(() => clips.map((c) => ({ id: c.key, key: c.key, duration: 0, start: 0, end: 0 })))
-  const [selected, setSelected] = useState(0)
-  /** 外した区間（新しい順に、末尾へ）。並びからは消えるが、動画の中ではそこに残り（フィルムで斜線）、「戻す」で元の位置へ戻せる。index は、外す前の並びの中の位置 */
-  const [removed, setRemoved] = useState<{ row: Row; index: number }[]>([])
+  const root = useRef<HTMLDivElement>(null)
+  const [hist, setHist] = useState<Hist>({ doc: { order: originalOrder, segs: {} }, past: [], future: [] })
+  const doc = hist.doc
+  const [durs, setDurs] = useState<Record<string, number>>({})
+  /** 選んだ区間（タップで選ぶ。選んでいなければ、再生ヘッドの下の区間） */
+  const [sel, setSel] = useState<string>()
+  /** 再生ヘッドの位置（つないだ並びの、先頭からの秒） */
+  const [g, setG] = useState(0)
+  const [curKey, setCurKey] = useState(originalOrder[0])
   const [url, setUrl] = useState<string>()
-  const [frames, setFrames] = useState<Record<string, string[]>>({})
-  const [current, setCurrent] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string>()
+  const [plusSheet, setPlusSheet] = useState(false)
+  const [frames, setFrames] = useState<Record<string, string[]>>({})
+  const [zoom, setZoom] = useState(ZOOM_DEFAULT)
+  const [W, setW] = useState(362)
+  /** 元の動画の音を使わない */
+  const [muted, setMuted] = useState(false)
   /** 選んだ BGM と音量（0〜1。元の動画の音とは別に決める） */
   const [bgm, setBgm] = useState<BgmChoice>()
   const [bgmVolume, setBgmVolume] = useState(0.3)
   const [bgmListOpen, setBgmListOpen] = useState(false)
   const bgmInput = useRef<HTMLInputElement>(null)
   const bgmVolumeRef = useRef(0.3)
-  /** 元の動画の音を使わない */
-  const [muted, setMuted] = useState(false)
-  /** 並べた順に続けて再生している（取っ手を動かす・止めると、やめる） */
-  const [sequence, setSequence] = useState(false)
-  const sequenceRef = useRef(false)
-  /** 次の動画を読み込んだら、続けて再生する */
-  const resume = useRef(false)
+  const bgmAudio = useRef<{ el: HTMLAudioElement; ctx: AudioContext; gain: GainNode } | null>(null)
+  /** 読み込み直しのあとに、動かす位置（動画の中の秒）と、続けて再生するか */
+  const pendingSeek = useRef<number | null>(null)
+  const wantPlay = useRef(false)
   /** 動画ごとの読み込み済みの URL（続けて再生するとき、次の動画をすぐ出すため） */
   const urls = useRef(new Map<string, string>())
   const urlPromises = useRef(new Map<string, Promise<string>>())
-  const [thumbs, setThumbs] = useState<Record<string, string>>({})
-  const [plusSheet, setPlusSheet] = useState(false)
-  const [confirmClose, setConfirmClose] = useState(false)
-  const bgmAudio = useRef<{ el: HTMLAudioElement; ctx: AudioContext; gain: GainNode } | null>(null)
 
-  const row = rows[selected]
-  const clipOf = (key: string) => clips.find((c) => c.key === key)!
-  const selectedKey = row?.key
-  const duration = row?.duration ?? 0
+  /** 変えたか（キャンセルのとき、すぐ閉じるか、トーストで戻せるようにするか） */
+  const dirty = hist.past.length > 0 || !!bgm || muted
 
-  // 全部の動画の長さを読み取る（つなぐ長さを出すため）
+  // 履歴に積んで変える。ドラッグ中の細かい更新は、積まない（始めに 1 回だけ積む）
+  const commit = (fn: (d: Doc) => Doc, record = true) =>
+    setHist((h) => {
+      const next = fn(h.doc)
+      if (next === h.doc) return h
+      return { doc: next, past: record ? [...h.past, h.doc] : h.past, future: record ? [] : h.future }
+    })
+  const checkpoint = () => setHist((h) => ({ ...h, past: [...h.past, h.doc], future: [] }))
+  const undo = () => setHist((h) => (h.past.length ? { doc: h.past[h.past.length - 1], past: h.past.slice(0, -1), future: [h.doc, ...h.future] } : h))
+  const redo = () => setHist((h) => (h.future.length ? { doc: h.future[0], past: [...h.past, h.doc], future: h.future.slice(1) } : h))
+
+  // ---- 並びの形（動画の長さが分かったものから） ----
+  const lay = useMemo(() => {
+    let off = 0
+    return doc.order.map((key) => {
+      const d = durs[key] ?? 0
+      const c = { key, off, d, segs: doc.segs[key] ?? [] }
+      off += d
+      return c
+    })
+  }, [doc, durs])
+  const T = lay.reduce((n, c) => n + c.d, 0)
+  const ready = clips.every((c) => (durs[c.key] ?? 0) > 0) && lay.every((c) => c.segs.length > 0)
+  const ranges = useMemo(() => keptRanges(doc, durs), [doc, durs])
+  const total = totalSeconds(ranges)
+  const paid = ranges.length > 1 || !!bgm
+  const needsCompose = paid || muted || !isUntouched(ranges, originalOrder, durs)
+
+  const locate = (gg: number) => {
+    const c = lay.find((x) => gg >= x.off && gg < x.off + x.d) ?? lay[lay.length - 1]
+    return { c, local: Math.min(c.d, Math.max(0, gg - c.off)) }
+  }
+  const segAtG = (gg: number): Seg | undefined => {
+    const { c, local } = locate(gg)
+    return c?.segs.find((s) => local >= s.start && local < s.end) ?? c?.segs[c.segs.length - 1]
+  }
+  const under = ready ? segAtG(g) : undefined
+  const allSegs = lay.flatMap((c) => c.segs)
+  const target = (sel ? allSegs.find((s) => s.id === sel) : undefined) ?? under
+  const targetClip = target ? lay.find((c) => c.key === segKey(target.id)) : undefined
+
+  // 全部の動画の長さを読み取り、区間を初期化する（頭から尻まで、ひとつの残す区間）
   useEffect(() => {
     let cancelled = false
     void (async () => {
@@ -119,7 +201,8 @@ export function Composer({
         try {
           const d = await blobDuration(c.blob)
           if (cancelled) return
-          setRows((prev) => prev.map((r) => (r.key === c.key && r.duration === 0 ? { ...r, duration: d, end: d } : r)))
+          setDurs((p) => ({ ...p, [c.key]: d }))
+          setHist((h) => (h.doc.segs[c.key] ? h : { ...h, doc: { ...h.doc, segs: { ...h.doc.segs, [c.key]: initSegs(c.key, d) } } }))
         } catch {
           if (!cancelled) setError(t.editor.durationFailed)
         }
@@ -130,8 +213,15 @@ export function Composer({
     }
   }, [clips])
 
+  useEffect(() => {
+    const measure = () => root.current && setW(Math.max(200, root.current.clientWidth - 28))
+    measure()
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
+  }, [])
+
   /** 動画を、メモリに写して再生できるようにした URL（iPhone で IndexedDB の動画を直接再生できないことがあるため）。
-   * 一度写したものは取っておく（続けて再生するとき、並びの絵を作るとき、すぐ使えるように）。画面を閉じるときにまとめて解放する */
+   * 一度写したものは取っておく（続けて再生するとき、帯の絵を作るとき、すぐ使えるように）。画面を閉じるときにまとめて解放する */
   const urlFor = (key: string): Promise<string> => {
     let p = urlPromises.current.get(key)
     if (!p) {
@@ -145,19 +235,16 @@ export function Composer({
     return p
   }
 
-  // 選んだ動画を、再生できるようにする
+  // プレビューの動画を、再生できるようにする
   useEffect(() => {
-    if (!selectedKey) return
     let cancelled = false
-    setPlaying(false)
-    setCurrent(0)
-    const cached = urls.current.get(selectedKey)
+    const cached = urls.current.get(curKey)
     if (cached) {
       setUrl(cached)
       return
     }
     setUrl(undefined)
-    urlFor(selectedKey)
+    urlFor(curKey)
       .then((u) => {
         if (!cancelled) setUrl(u)
       })
@@ -165,8 +252,8 @@ export function Composer({
     return () => {
       cancelled = true
     }
-    // urlFor は clips から引くだけなので、選んだ動画が変わったときだけ読み直す
-  }, [selectedKey])
+    // urlFor は clips から引くだけなので、動画が変わったときだけ読み直す
+  }, [curKey])
 
   useEffect(() => {
     const promises = urlPromises.current
@@ -178,30 +265,31 @@ export function Composer({
     }
   }, [])
 
-  // 並びの小さな絵（区間の始めのコマ。保存済みの絵は、できあがりの最後のコマなので使わない）。分割で増えた区間の分も作る
-  const thumbBusy = useRef(new Set<string>())
+  // 帯の絵：まず全部の動画の粗い絵（すぐ見えるように）、そのあと細かい絵（短い区間も、絵で見分けられるように）
   useEffect(() => {
+    if (!ready) return
     let cancelled = false
     void (async () => {
-      for (const r of rows) {
-        if (r.duration <= 0 || thumbs[r.id] || thumbBusy.current.has(r.id)) continue
-        thumbBusy.current.add(r.id)
-        try {
-          const u = await urlFor(r.key)
-          const [frame] = await makeFramesAt(u, [Math.min(r.start + 0.1, r.duration - 0.05)], () => cancelled)
-          if (frame && !cancelled) setThumbs((prev) => ({ ...prev, [r.id]: frame }))
-        } catch {
-          // 絵が作れなくても、番号と長さで見分けられる
-        } finally {
-          thumbBusy.current.delete(r.id)
+      for (const n of [COARSE, FINE]) {
+        for (const key of originalOrder) {
+          try {
+            const u = await urlFor(key)
+            // 粗い絵は、キーフレームへ飛んで速く作る（すぐ見えるように）。細かい絵は、正確な位置で作る
+            const list = await makeFilmstrip(u, durs[key], n, () => cancelled, n === COARSE)
+            if (cancelled) return
+            if (list.length === n) setFrames((p) => ({ ...p, [key]: list }))
+          } catch {
+            // 絵が作れなくても、区間の枠と長さで操作できる
+          }
         }
       }
     })()
     return () => {
       cancelled = true
     }
-    // 区間が増えたとき・長さが分かったときだけ（取っ手を動かすたびには、作り直さない）
-  }, [rows.map((r) => `${r.id}:${r.duration > 0}`).join()])
+    // 長さが全部分かったとき（区間が増えても、作り直さない）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready])
 
   // BGM を、画面で聞けるようにする（iPhone は audio 要素の音量を変えられないので、GainNode で音量を決める）
   useEffect(() => {
@@ -242,259 +330,250 @@ export function Composer({
     if (video.current) video.current.muted = muted
   }, [muted])
 
-  // フィルムのコマ（選んだ動画の分を、一度だけ作る）
-  useEffect(() => {
-    if (!url || !selectedKey || duration <= 0 || frames[selectedKey]) return
-    let cancelled = false
-    const key = selectedKey
-    makeFilmstrip(url, duration, FRAMES, () => cancelled)
-      .then((film) => {
-        if (!cancelled) setFrames((prev) => ({ ...prev, [key]: film }))
-      })
-      .catch(() => {})
-    return () => {
-      cancelled = true
-    }
-    // frames は、作り終えたかの確認にだけ使う（作るたびに読み直さない）
-  }, [url, selectedKey, duration])
+  // ---- 再生 ----
+  // 描画のたびに最新の値を入れておく（再生中の細かい確認が、古い値を見ないように）
+  const L = useRef({ lay, curKey, seekGlobal: (_gg: number, _play: boolean) => {}, stopAll: () => {} })
 
-  // iPhone は、タップするまで動画のデータを読み込まず、最初のコマが出ない。音なしで一度再生して止め、先頭のコマを出す。
-  // 続けて再生している途中なら、止めずに、この動画の範囲の始めから再生する
+  /** 再生ヘッドを動かす。別の動画なら、その動画を読み込み直す（読み込んだら、動かして、続けて再生する） */
+  function seekGlobal(gg: number, play: boolean) {
+    const { c, local } = locate(Math.min(Math.max(0, gg), Math.max(0, T - 0.001)))
+    if (!c) return
+    setG(c.off + local)
+    wantPlay.current = play
+    if (c.key !== curKey) {
+      pendingSeek.current = local
+      setCurKey(c.key)
+      return
+    }
+    const v = video.current
+    if (!v) return
+    v.currentTime = local
+    if (play) void v.play().catch(() => {})
+  }
+
+  /** 再生を止める（BGM も） */
+  function stopAll() {
+    video.current?.pause()
+    bgmAudio.current?.el.pause()
+    wantPlay.current = false
+  }
+  L.current = { lay, curKey, seekGlobal, stopAll }
+
+  // 動画を設定したら、決めた位置へ動かす。iPhone は、タップするまで動画のデータを読み込まず（loadeddata も来ない）、最初のコマが出ないので、
+  // 音なしで一度再生して、コマを出す。続けて再生するときは、そのまま再生を続ける
   useEffect(() => {
     const v = video.current
-    if (!v || !url || duration <= 0) return
+    if (!v || !url) return
     let cancelled = false
     void (async () => {
-      const r = rows[selected]
-      if (resume.current) {
-        resume.current = false
-        v.muted = true
-        await v.play().catch(() => {})
-        if (cancelled || !r) return
-        v.currentTime = r.start
-        playUntil.current = r.end
-        v.muted = muted
-        return
-      }
+      const keep = wantPlay.current
       v.muted = true
       await v.play().catch(() => {})
-      v.pause()
       if (cancelled) return
-      v.currentTime = r?.start ?? 0
+      const at = pendingSeek.current ?? 0
+      pendingSeek.current = null
+      if (!keep) v.pause()
+      v.currentTime = at
       v.muted = muted
     })()
     return () => {
       cancelled = true
     }
-    // 動画を読み込んだとき（選んだ動画が変わったとき）だけ。取っ手を動かすたびには、やり直さない
-  }, [url, duration > 0])
+    // 動画を読み込み直したときだけ（再生・音の切り替えのたびには、やり直さない）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [url])
 
-  // 同じ動画の別の区間を選んだとき（分割したあと）は、動画を読み込み直さないので、その区間の始めへ移る
-  useEffect(() => {
+  /** 再生中の確認：外した区間・動画の終わりに来たら、次に残る区間へ（別の動画なら、そちらへ）。なければ止める */
+  const checkPlay = () => {
     const v = video.current
-    if (!v || !row || sequenceRef.current) return
-    v.currentTime = row.start
-    setCurrent(row.start)
-    // 区間を選び直したときだけ（取っ手を動かすたびには、動かさない）
-  }, [row?.id])
-
-  /** 外した区間も含む、いまの全区間（境目を動かすとき、隣を探すため） */
-  const spans: Row[] = [...rows, ...removed.map((x) => x.row)]
-
-  /** 区間の端を動かす。同じ動画の隣の区間の端も一緒に動く（外した区間も）ので、重ならない */
-  const moveSpanEdge = (r: Row, edge: 'start' | 'end', value: number) => {
-    const moves = moveEdge(spans, r.id, edge, value, r.duration)
-    const apply = (x: Row) => {
-      const m = moves.find((v) => v.id === x.id)
-      return m ? { ...x, start: m.start, end: m.end } : x
-    }
-    setRows((prev) => prev.map(apply))
-    setRemoved((prev) => prev.map((x) => ({ ...x, row: apply(x.row) })))
-    const m = moves.find((v) => v.id === r.id)
-    return m ? m[edge] : value
-  }
-
-  const seek = (time: number) => {
-    const v = video.current
-    if (!v) return
-    v.currentTime = time
-    setCurrent(time)
-  }
-
-  /** 再生を止める（BGM も） */
-  const stopAll = () => {
-    video.current?.pause()
-    bgmAudio.current?.el.pause()
-    sequenceRef.current = false
-    resume.current = false
-    playUntil.current = null
-    setSequence(false)
-  }
-
-  /** この動画の範囲の終わりに来たら、続けて再生しているときは次の動画へ、そうでなければ止める */
-  const checkEnd = () => {
-    const v = video.current
-    if (!v || playUntil.current === null || v.currentTime < playUntil.current) return
-    playUntil.current = null
-    const next = rows[selected + 1]
-    if (sequenceRef.current && next && next.key === row?.key) {
-      // 同じ動画の次の区間（分割したもの）：読み込み直さず、その位置へ飛ぶ
+    const { lay: ls, curKey: ck } = L.current
+    if (!v || v.paused) return
+    const ci = ls.findIndex((c) => c.key === ck)
+    const c = ls[ci]
+    // 別の動画を読み込み中は、確認しない（前の動画の位置を見てしまうため）
+    if (!c || v.seeking || pendingSeek.current !== null) return
+    const local = v.currentTime
+    setG(c.off + local)
+    const seg = c.segs.find((s) => local >= s.start && local < s.end)
+    const atEnd = local >= c.d - 0.04
+    if (seg && !seg.off && !atEnd) return
+    const next = atEnd ? undefined : c.segs.find((s) => !s.off && s.start >= (seg?.end ?? c.d) - 1e-6)
+    if (next) {
       v.currentTime = next.start
-      playUntil.current = next.end
-      setSelected(selected + 1)
-    } else if (sequenceRef.current && next) {
-      resume.current = true
-      v.pause()
-      setSelected(selected + 1)
-    } else {
-      stopAll()
+      return
     }
+    for (let j = ci + 1; j < ls.length; j++) {
+      const n = ls[j].segs.find((s) => !s.off)
+      if (n) {
+        L.current.seekGlobal(ls[j].off + n.start, true)
+        return
+      }
+    }
+    L.current.stopAll()
   }
 
-  const onTimeUpdate = () => {
-    const v = video.current
-    if (!v) return
-    setCurrent(v.currentTime)
-    checkEnd()
-  }
-
-  // timeupdate は 0.25 秒ごとなので、再生中は、範囲の終わりを細かく見る（つなぎ目を、書き出しに近づける）
   useEffect(() => {
     if (!playing) return
     let id = requestAnimationFrame(function tick() {
-      checkEnd()
+      checkPlay()
       id = requestAnimationFrame(tick)
     })
     return () => cancelAnimationFrame(id)
-  }, [playing, selected, rows.length])
+  }, [playing])
 
-  /** 選んだ動画の範囲から、並べた順に最後まで再生する。BGM も、つないだときと同じ位置から流す */
+  /** 再生ヘッドの位置から、残す区間の中へ（外した区間・動画の終わりなら、次に残る区間の頭へ）。なければ最初の残す区間 */
+  const snapToKept = (gg: number): number | undefined => {
+    const all = lay.flatMap((c) => c.segs.filter((s) => !s.off).map((s) => ({ at: c.off + s.start, to: c.off + s.end })))
+    if (all.some((x) => gg >= x.at && gg < x.to - 0.05)) return gg
+    return all.find((x) => x.at >= gg)?.at ?? all[0]?.at
+  }
+
+  /** 位置より前に、残す区間がどれだけあるか（BGM を、つないだときと同じ位置から流すため） */
+  const keptBefore = (gg: number) => {
+    let sum = 0
+    for (const c of lay) for (const s of c.segs) if (!s.off) sum += Math.max(0, Math.min(c.off + s.end, gg) - (c.off + s.start))
+    return sum
+  }
+
   const togglePlay = () => {
-    const v = video.current
-    if (!v || !row) return
-    if (playing || sequence) {
+    if (!ready || busy) return
+    if (playing) {
       stopAll()
       return
     }
-    if (v.currentTime < row.start || v.currentTime >= row.end - 0.05) v.currentTime = row.start
-    playUntil.current = row.end
-    v.muted = muted
-    sequenceRef.current = true
-    setSequence(true)
-    void v.play()
+    const at = snapToKept(g)
+    if (at === undefined) return
+    seekGlobal(at, true)
     const a = bgmAudio.current
     if (a) {
-      const before = rows.slice(0, selected).reduce((sum, r) => sum + (r.end - r.start), 0)
-      const at = before + Math.max(0, v.currentTime - row.start)
       if (a.ctx.state === 'suspended') void a.ctx.resume()
-      a.el.currentTime = a.el.duration > 0 && Number.isFinite(a.el.duration) ? at % a.el.duration : 0
+      a.el.currentTime = a.el.duration > 0 && Number.isFinite(a.el.duration) ? keptBefore(at) % a.el.duration : 0
       void a.el.play().catch(() => {})
     }
   }
 
-  /** 並びの動画を選ぶ（再生中なら止める） */
-  const choose = (i: number) => {
-    if (i === selected) return
+  // 隠したら（キャンセルして、トーストが出ている間）、再生を止める
+  useEffect(() => {
+    if (hidden) stopAll()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hidden])
+
+  // ---- タイムライン ----
+  /** 上の段は、両端の取っ手（フィルムの外に出る）が画面の端で欠けたり、端のジェスチャーと重ならないよう、少し内側に置く */
+  const ovW = W - 20
+  const pxs1 = ovW / Math.max(T, 0.1)
+  const snap = (gg: number, pxs: number) => {
+    for (const c of lay) for (const s of c.segs.slice(1)) if (Math.abs(c.off + s.start - gg) * pxs < SNAP_PX) return c.off + s.start
+    return gg
+  }
+  const scrubTo = (gg: number, pxs: number) => {
     stopAll()
-    setSelected(i)
+    seekGlobal(Math.min(T - 0.001, Math.max(0, snap(gg, pxs))), false)
+  }
+  const selectAt = (gg: number) => setSel(segAtG(Math.min(T - 0.001, Math.max(0, gg)))?.id)
+
+  const ov = useRef<HTMLDivElement>(null)
+  const ovAt = (e: PointerEvent) => {
+    const r = ov.current!.getBoundingClientRect()
+    return ((e.clientX - r.left) / r.width) * T
+  }
+  const ovDown = (e: PointerEvent) => {
+    e.currentTarget.setPointerCapture(e.pointerId)
+    const gg = ovAt(e)
+    scrubTo(gg, pxs1)
+    selectAt(gg)
   }
 
-  // ---- フィルムの取っ手（Trimmer と同じ動き） ----
-  const timeAt = (clientX: number) => {
-    const rect = strip.current?.getBoundingClientRect()
-    if (!rect || rect.width === 0) return 0
-    return Math.min(duration, Math.max(0, ((clientX - rect.left) / rect.width) * duration))
+  // 下の段：再生ヘッドは中央に固定、なぞると流れる。2 本指で倍率
+  const pts = useRef(new Map<number, number>())
+  const cu = useRef<{ x0: number; g0: number; dist0: number; z0: number } | null>(null)
+  const cuDown = (e: PointerEvent) => {
+    e.currentTarget.setPointerCapture(e.pointerId)
+    pts.current.set(e.pointerId, e.clientX)
+    const xs = [...pts.current.values()]
+    cu.current = { x0: e.clientX, g0: g, dist0: xs.length === 2 ? Math.abs(xs[0] - xs[1]) : 0, z0: zoom }
+    stopAll()
+    if (xs.length === 1) {
+      const rect = e.currentTarget.getBoundingClientRect()
+      selectAt(g + (e.clientX - rect.left - W / 2) / zoom)
+    }
+  }
+  const cuMove = (e: PointerEvent) => {
+    if (!pts.current.has(e.pointerId) || !cu.current) return
+    pts.current.set(e.pointerId, e.clientX)
+    const xs = [...pts.current.values()]
+    if (xs.length === 2) {
+      const d = Math.abs(xs[0] - xs[1])
+      if (cu.current.dist0 > 0) setZoom(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, (cu.current.z0 * d) / cu.current.dist0)))
+      else cu.current.dist0 = d
+      return
+    }
+    scrubTo(cu.current.g0 - (e.clientX - cu.current.x0) / zoom, zoom)
+  }
+  const cuUp = (e: PointerEvent) => {
+    pts.current.delete(e.pointerId)
+    cu.current = null
   }
 
-  const onPointerDown = (which: 'start' | 'end' | 'head') => (e: PointerEvent) => {
-    e.preventDefault()
+  // ---- 区間の端（取っ手）を引く ----
+  const hd = useRef<{ id: string; edge: 'start' | 'end'; x0: number; t0: number; pxs: number; recorded: boolean } | null>(null)
+  const handleDown = (edge: 'start' | 'end', pxs: number) => (e: PointerEvent) => {
+    if (!target) return
     e.stopPropagation()
-    try {
-      e.currentTarget.setPointerCapture(e.pointerId)
-    } catch {
-      // 取れなくても、フィルムの上で動かす分には動く
-    }
+    e.currentTarget.setPointerCapture(e.pointerId)
     stopAll()
-    dragging.current = which
-    if (which === 'head' && row) seek(Math.min(row.end, Math.max(row.start, timeAt(e.clientX))))
+    // 引いている間に再生ヘッドが動いても、対象が変わらないよう、選んだ状態にする
+    setSel(target.id)
+    hd.current = { id: target.id, edge, x0: e.clientX, t0: target[edge], pxs, recorded: false }
   }
-
-  const onPointerMove = (e: PointerEvent) => {
-    const which = dragging.current
-    if (!which || !row) return
-    const time = timeAt(e.clientX)
-    if (which === 'start') seek(moveSpanEdge(row, 'start', time))
-    else if (which === 'end') seek(moveSpanEdge(row, 'end', time))
-    else {
-      seek(Math.min(row.end, Math.max(row.start, time)))
+  const handleMove = (e: PointerEvent) => {
+    const d = hd.current
+    if (!d || !targetClip) return
+    e.stopPropagation()
+    // 動かし始めたときに、取り消しの 1 手として積む（触れただけでは、積まない）
+    if (!d.recorded) {
+      d.recorded = true
+      checkpoint()
     }
+    const key = segKey(d.id)
+    const t = Math.min(targetClip.d, Math.max(0, d.t0 + (e.clientX - d.x0) / d.pxs))
+    commit((doc0) => ({ ...doc0, segs: { ...doc0.segs, [key]: trimEdge(doc0.segs[key], key, d.id, d.edge, t, durs[key]) } }), false)
+    seekGlobal(targetClip.off + Math.min(targetClip.d - 0.01, t), false)
+  }
+  const handleUp = () => {
+    hd.current = null
   }
 
-  const onPointerUp = () => {
-    dragging.current = null
-  }
-
-  /** 取っ手を、キーボードや読み上げ（上下のスワイプ）でも0.1秒ずつ動かせるようにする */
-  const nudge = (which: 'start' | 'end') => (e: KeyboardEvent) => {
-    if (!row) return
-    const step = e.key === 'ArrowRight' || e.key === 'ArrowUp' ? 0.1 : e.key === 'ArrowLeft' || e.key === 'ArrowDown' ? -0.1 : 0
-    if (!step) return
-    e.preventDefault()
-    seek(moveSpanEdge(row, which, row[which] + step))
-  }
-
-  const move = (delta: -1 | 1) => {
-    const to = selected + delta
-    if (to < 0 || to >= rows.length) return
-    stopAll()
-    setRows((prev) => {
-      const next = [...prev]
-      ;[next[selected], next[to]] = [next[to], next[selected]]
-      return next
-    })
-    setSelected(to)
-  }
-
-  /** いまの位置（白い線）で、選んだ区間を 2 つに分ける。どちらも最短の長さ以上あるときだけ */
-  const canSplit = !!row && canSplitAt(row.start, row.end, current)
-  const splitCount = useRef(0)
+  // ---- 操作 ----
+  const inTarget = !!target && !!targetClip && g - targetClip.off - target.start >= MIN_SEG && targetClip.off + target.end - g >= MIN_SEG
+  const canSplit = ready && !busy && inTarget
+  /** 外せるのは、残す区間が 1 つ以上残るとき（ぜんぶ外すと、できあがりが空になる） */
+  const canDelete = (() => {
+    if (!ready || busy || !target) return false
+    if (target.off) return true
+    const key = segKey(target.id)
+    return hasKept({ ...doc, segs: { ...doc.segs, [key]: toggleOff(doc.segs[key], target.id) } })
+  })()
   const split = () => {
-    if (!row || !canSplit) return
+    if (!target || !canSplit) return
     stopAll()
-    const at = current
-    const added: Row = { ...row, id: `${row.key}#${++splitCount.current}`, start: at }
-    setRows((prev) => prev.flatMap((r) => (r.id === row.id ? [{ ...r, end: at }, added] : [r])))
-    setSelected(selected + 1)
+    const key = segKey(target.id)
+    const at = g - targetClip!.off
+    commit((d) => ({ ...d, segs: { ...d.segs, [key]: splitAt(d.segs[key], key, at) } }))
   }
-
-  /** 選んだ区間を外す。並びからは消え、フィルムでは斜線になる（残りが 1 つだけのときは外せない） */
   const remove = () => {
-    if (rows.length <= 1 || !row || row.duration <= 0) return
+    if (!target || !canDelete) return
     stopAll()
-    setRemoved((prev) => [...prev, { row, index: selected }])
-    setRows((prev) => prev.filter((_, i) => i !== selected))
-    setSelected((s) => Math.max(0, Math.min(s, rows.length - 2)))
+    const key = segKey(target.id)
+    commit((d) => ({ ...d, segs: { ...d.segs, [key]: toggleOff(d.segs[key], target.id) } }))
+    setSel(undefined)
   }
-
-  /** 最後に外した区間を、外す前の位置へ戻す */
-  const restore = () => {
-    const last = removed[removed.length - 1]
-    if (!last) return
+  const move = (delta: -1 | 1) => {
+    if (!target) return
     stopAll()
-    const at = Math.min(last.index, rows.length)
-    setRemoved((prev) => prev.slice(0, -1))
-    setRows((prev) => [...prev.slice(0, at), last.row, ...prev.slice(at)])
-    setSelected(at)
+    commit((d) => ({ ...d, order: moveClip(d.order, segKey(target.id), delta) }))
   }
-
-  const ready = rows.every((r) => r.duration > 0)
-  const total = rows.reduce((sum, r) => sum + Math.max(0, r.end - r.start), 0)
-  /** 有料の操作（2 本以上をつなぐ・BGM）。切り取りと音を消すだけなら、いつでも無料 */
-  const paid = rows.length > 1 || !!bgm
-  /** 書き出しが要るか（複数をつなぐ・BGM・音を消す・切り取り・区間や動画を外す） */
-  const needsCompose = paid || muted || removed.length > 0 || rows.some(trimmed)
-  /** 開いたときから、手を加えたか（やめるとき、確認を出すかの判断。開いただけでは、変えていない） */
-  const dirty = !!bgm || muted || removed.length > 0 || rows.some(trimmed) || rows.length !== clips.length || rows.some((r, i) => r.id !== clips[i]?.key)
+  const orderIndex = target ? doc.order.indexOf(segKey(target.id)) : -1
 
   const done = async () => {
     if (!ready || busy) return
@@ -502,6 +581,7 @@ export function Composer({
       onClose()
       return
     }
+    if (ranges.length === 0) return
     stopAll()
     setError(undefined)
     setBusy(true)
@@ -512,7 +592,7 @@ export function Composer({
         return
       }
       const file = await composeClips(
-        rows.map((r) => {
+        ranges.map((r) => {
           const c = clipOf(r.key)
           return {
             source: c.file ? { file: c.file } : { blob: c.blob },
@@ -529,7 +609,7 @@ export function Composer({
       )
       onDone(
         file,
-        rows.map((r) => r.key),
+        ranges.map((r) => r.key),
         paid,
       )
     } catch (e) {
@@ -539,32 +619,76 @@ export function Composer({
     }
   }
 
-  /** 変えていれば、確認してから閉じる（作っている間は閉じない） */
-  const requestClose = () => {
+  /** キャンセル：変えていなければ、そのまま閉じる。変えていれば、確認せず閉じ、親が「元に戻す」のトーストを出す（作っている間は閉じない） */
+  const cancel = () => {
     if (busy) return
-    if (dirty) setConfirmClose(true)
+    if (dirty) onDiscard()
     else onClose()
   }
-
   useBackHandler(() => {
-    if (confirmClose) setConfirmClose(false)
-    else requestClose()
+    if (hidden) return false
+    cancel()
     return true
   })
 
-  const pct = (time: number) => `${(duration > 0 ? time / duration : 0) * 100}%`
-  const length = row ? row.end - row.start : 0
-  const film = selectedKey ? frames[selectedKey] : undefined
-  // 選んだ動画の区間（残した・外した）を、動画の中の位置の順に。両端の外（切り取った部分）と、外した区間は暗くする。区間のあいだの境目に線を引く
-  const sameClip = spans.filter((r) => r.key === selectedKey).sort((a, b) => a.start - b.start)
-  const keptIds = new Set(rows.map((r) => r.id))
-  const clipStart = sameClip[0]?.start ?? 0
-  const clipEnd = sameClip[sameClip.length - 1]?.end ?? 0
+  // ---- 帯の描き方 ----
+  const frame = (pxs: number) => {
+    if (!target || !targetClip) return null
+    return (
+      <div className="filmstrip-frame" style={{ left: (targetClip.off + target.start) * pxs, width: Math.max(2, (target.end - target.start) * pxs) }}>
+        <span
+          className="filmstrip-handle cmp-handle start"
+          role="slider"
+          aria-label={t.editor.start}
+          aria-valuenow={target.start}
+          onPointerDown={handleDown('start', pxs)}
+          onPointerMove={handleMove}
+          onPointerUp={handleUp}
+          onPointerCancel={handleUp}
+        />
+        <span
+          className="filmstrip-handle cmp-handle end"
+          role="slider"
+          aria-label={t.editor.end}
+          aria-valuenow={target.end}
+          onPointerDown={handleDown('end', pxs)}
+          onPointerMove={handleMove}
+          onPointerUp={handleUp}
+          onPointerCancel={handleUp}
+        />
+      </div>
+    )
+  }
+  const buildTrack = (pxs: number) =>
+    lay.flatMap((c) =>
+      c.segs.map((s, i) => (
+        <div
+          key={s.id}
+          className={`cmp-seg${s.off ? ' off' : ''}${i === 0 && c.off > 0 ? ' first' : ''}`}
+          style={{ left: (c.off + s.start) * pxs, width: (s.end - s.start) * pxs }}
+        >
+          <Tiles frames={frames[c.key]} start={s.start} end={s.end} duration={c.d} width={(s.end - s.start) * pxs} />
+        </div>
+      )),
+    )
+
+  // 帯の絵は、再生ヘッドが動くたびには作り直さない（再生中は毎コマ描き直すので、重くなる）
+  const ovTrack = useMemo(() => buildTrack(pxs1), [lay, frames, pxs1])
+  const cuTrack = useMemo(() => buildTrack(zoom), [lay, frames, zoom])
+
+  const delLabel = target?.off ? t.compose.restore : t.compose.remove
 
   return (
-    <div className="recorder editor" role="dialog" aria-modal="true" aria-label={t.compose.title}>
+    <div
+      ref={root}
+      className="recorder editor cmp"
+      role="dialog"
+      aria-modal="true"
+      aria-label={t.compose.title}
+      style={hidden ? { display: 'none' } : undefined}
+    >
       <div className="editor-top">
-        <button className="editor-text-button" onClick={requestClose} disabled={busy}>
+        <button className="editor-text-button" onClick={cancel} disabled={busy}>
           {t.editor.cancel}
         </button>
         <span className="editor-title">{ready ? formatTime(total) : ''}</span>
@@ -580,13 +704,12 @@ export function Composer({
           src={url}
           playsInline
           preload="auto"
-          onTimeUpdate={onTimeUpdate}
           onPlay={() => setPlaying(true)}
           onPause={() => setPlaying(false)}
           onClick={busy ? undefined : togglePlay}
         />
-        {duration > 0 && !playing && !sequence && !busy && (
-          <button className="editor-play" aria-label={t.editor.playRange} onClick={togglePlay}>
+        {ready && !playing && !busy && (
+          <button className="editor-play" aria-label={t.player.play} onClick={togglePlay}>
             <PlayIcon size={30} />
           </button>
         )}
@@ -603,193 +726,134 @@ export function Composer({
             </div>
           </div>
         )}
-        {duration > 0 && !busy && (
-          <div className="editor-tools">
-            <button
-              className="editor-play-small"
-              aria-label={playing || sequence ? t.player.pause : t.editor.playRange}
-              onClick={togglePlay}
-            >
-              {playing || sequence ? <PauseIcon size={20} /> : <PlayIcon size={20} />}
-            </button>
-            <div
-              className="filmstrip"
-              ref={strip}
-              onPointerDown={onPointerDown('head')}
-              onPointerMove={onPointerMove}
-              onPointerUp={onPointerUp}
-              onPointerCancel={onPointerUp}
-            >
-              <div className="filmstrip-frames" aria-hidden="true">
-                {film && film.length > 0
-                  ? film.map((f, i) => <img key={i} src={f} alt="" />)
-                  : Array.from({ length: FRAMES }, (_, i) => <span key={i} />)}
-              </div>
-              <div className="filmstrip-shade" style={{ left: 0, width: pct(clipStart) }} />
-              <div className="filmstrip-shade" style={{ left: pct(clipEnd), right: 0 }} />
-              {sameClip
-                .filter((r) => !keptIds.has(r.id))
-                .map((r) => (
-                  <div key={r.id} className="filmstrip-shade removed" style={{ left: pct(r.start), width: pct(r.end - r.start) }} />
-                ))}
-              {sameClip.slice(1).map((r) => (
-                <div key={r.id} className="filmstrip-cut" style={{ left: pct(r.start) }} aria-hidden="true" />
-              ))}
-              <div className="filmstrip-frame" style={{ left: pct(row.start), width: pct(length) }}>
-                <span
-                  className="filmstrip-handle start"
-                  role="slider"
-                  aria-label={t.editor.start}
-                  aria-valuemin={0}
-                  aria-valuemax={duration}
-                  aria-valuenow={row.start}
-                  aria-valuetext={formatTime(row.start)}
-                  tabIndex={0}
-                  onKeyDown={nudge('start')}
-                  onPointerDown={onPointerDown('start')}
-                  onPointerMove={onPointerMove}
-                  onPointerUp={onPointerUp}
-                  onPointerCancel={onPointerUp}
-                />
-                <span
-                  className="filmstrip-handle end"
-                  role="slider"
-                  aria-label={t.editor.end}
-                  aria-valuemin={0}
-                  aria-valuemax={duration}
-                  aria-valuenow={row.end}
-                  aria-valuetext={formatTime(row.end)}
-                  tabIndex={0}
-                  onKeyDown={nudge('end')}
-                  onPointerDown={onPointerDown('end')}
-                  onPointerMove={onPointerMove}
-                  onPointerUp={onPointerUp}
-                  onPointerCancel={onPointerUp}
-                />
-              </div>
-              <div className="filmstrip-head" style={{ left: pct(current) }} aria-hidden="true" />
-            </div>
-            <button
-              type="button"
-              className={`editor-sound${muted ? ' off' : ''}`}
-              aria-pressed={muted}
-              aria-label={muted ? t.editor.mutedLabel : t.editor.soundLabel}
-              onClick={() => setMuted((m) => !m)}
-            >
-              <SpeakerIcon size={22} off={muted} />
-            </button>
-          </div>
-        )}
 
-        {/* つなぐ動画の並び。押して選び、選んだ1本を並べ替え・外す */}
-        <ul className="clip-row" aria-label={t.compose.clips}>
-          {rows.map((r, i) => (
-            <li key={r.id}>
+        {ready && !busy && (
+          <>
+            {/* 音：元の音のあり・なし（スピーカー 1 つ）。BGM は、同梱の曲が入るまでは出さない（曲の持ち合わせがない人には使えないため） */}
+            <div className="cmp-sound">
               <button
                 type="button"
-                className={`clip-chip${i === selected ? ' selected' : ''}`}
-                aria-pressed={i === selected}
-                disabled={busy}
-                onClick={() => choose(i)}
+                className={`editor-sound${muted ? ' off' : ''}`}
+                aria-pressed={muted}
+                aria-label={muted ? t.editor.mutedLabel : t.editor.soundLabel}
+                onClick={() => setMuted((m) => !m)}
               >
-                {thumbs[r.id] && <img className="clip-thumb" src={thumbs[r.id]} alt="" />}
-                <span className="clip-index">{i + 1}</span>
-                <span className="clip-length">{r.duration > 0 ? formatTime(r.end - r.start) : '…'}</span>
+                <SpeakerIcon size={22} off={muted} />
               </button>
-            </li>
-          ))}
-        </ul>
-        {/* BGM（任意）。同梱の曲が入るまでは出さない（曲の持ち合わせがない人には使えないため）。選んだら、音量を出す。
-            曲の一覧の末尾から、ファイルも選べる */}
-        {!busy && BUNDLED_BGM.length > 0 && (
-          <div className="bgm-row">
-            <button
-              type="button"
-              className="editor-text-button bgm-button"
-              onClick={() => setBgmListOpen((o) => !o)}
-            >
-              <MusicIcon size={18} />
-              {bgm ? bgmTitle(bgm) : t.compose.bgm}
-            </button>
-            {bgm && (
-              <>
-                <input
-                  type="range"
-                  className="bgm-volume"
-                  min={0.05}
-                  max={1}
-                  step={0.05}
-                  value={bgmVolume}
-                  aria-label={t.compose.bgmVolume}
-                  onChange={(e) => setBgmVolume(Number(e.target.value))}
-                />
-                <button type="button" className="editor-text-button" onClick={() => setBgm(undefined)}>
-                  {t.compose.bgmOff}
-                </button>
-              </>
+              {BUNDLED_BGM.length > 0 && (
+                <>
+                  <button type="button" className="editor-text-button bgm-button" onClick={() => setBgmListOpen((o) => !o)}>
+                    <MusicIcon size={18} />
+                    {bgm ? bgmTitle(bgm) : t.compose.bgm}
+                  </button>
+                  {bgm && (
+                    <>
+                      <input
+                        type="range"
+                        className="bgm-volume"
+                        min={0.05}
+                        max={1}
+                        step={0.05}
+                        value={bgmVolume}
+                        aria-label={t.compose.bgmVolume}
+                        onChange={(e) => setBgmVolume(Number(e.target.value))}
+                      />
+                      <button type="button" className="editor-text-button" onClick={() => setBgm(undefined)}>
+                        {t.compose.bgmOff}
+                      </button>
+                    </>
+                  )}
+                  <input
+                    ref={bgmInput}
+                    hidden
+                    type="file"
+                    accept="audio/*,.m4a,.mp3,.wav,.aac"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) setBgm({ kind: 'file', file })
+                      e.target.value = ''
+                    }}
+                  />
+                </>
+              )}
+            </div>
+            {BUNDLED_BGM.length > 0 && bgmListOpen && (
+              <ul className="bgm-list">
+                {BUNDLED_BGM.map((track0) => (
+                  <li key={track0.id}>
+                    <button
+                      type="button"
+                      className="editor-text-button"
+                      onClick={() => {
+                        setBgm({ kind: 'bundled', track: track0 })
+                        setBgmListOpen(false)
+                      }}
+                    >
+                      {track0.title}
+                    </button>
+                  </li>
+                ))}
+                <li>
+                  <button type="button" className="editor-text-button" onClick={() => bgmInput.current?.click()}>
+                    {t.compose.bgmFile}
+                  </button>
+                </li>
+              </ul>
             )}
-            <input
-              ref={bgmInput}
-              hidden
-              type="file"
-              accept="audio/*,.m4a,.mp3,.wav,.aac"
-              onChange={(e) => {
-                const file = e.target.files?.[0]
-                if (file) setBgm({ kind: 'file', file })
-                e.target.value = ''
-              }}
-            />
-          </div>
-        )}
-        {!busy && bgmListOpen && (
-          <ul className="bgm-list">
-            {BUNDLED_BGM.map((track) => (
-              <li key={track.id}>
-                <button
-                  type="button"
-                  className="editor-text-button"
-                  onClick={() => {
-                    setBgm({ kind: 'bundled', track })
-                    setBgmListOpen(false)
-                  }}
-                >
-                  {track.title}
-                </button>
-              </li>
-            ))}
-            <li>
-              <button type="button" className="editor-text-button" onClick={() => bgmInput.current?.click()}>
-                {t.compose.bgmFile}
+
+            {/* 上の段：全体（なぞると、再生ヘッドが動く） */}
+            <div className="cmp-ov">
+              <div className="cmp-ov-in" ref={ov} style={{ width: ovW }} onPointerDown={ovDown} onPointerMove={(e) => e.buttons && !hd.current && scrubTo(ovAt(e), pxs1)}>
+                {ovTrack}
+                {frame(pxs1)}
+                <div className="filmstrip-head" style={{ left: g * pxs1 }} aria-hidden="true" />
+              </div>
+            </div>
+
+            {/* 下の段：再生ヘッドの周りの拡大（再生ヘッドは中央に固定。2 本指で倍率） */}
+            <div className="cmp-cu" onPointerDown={cuDown} onPointerMove={cuMove} onPointerUp={cuUp} onPointerCancel={cuUp}>
+              <div className="cmp-cu-in" style={{ width: T * zoom, transform: `translateX(${W / 2 - g * zoom}px)` }}>
+                {cuTrack}
+                {frame(zoom)}
+              </div>
+              <div className="filmstrip-head" style={{ left: W / 2 }} aria-hidden="true" />
+            </div>
+
+            {/* 操作：よく使う順 */}
+            <div className="cmp-tools">
+              <button className="cmp-tool" aria-label={playing ? t.player.pause : t.player.play} onClick={togglePlay}>
+                {playing ? <PauseIcon size={24} /> : <PlayIcon size={24} />}
               </button>
-            </li>
-          </ul>
-        )}
-        {!busy && (
-          <div className="clip-tools">
-            <button type="button" className="editor-sound" aria-label={t.compose.earlier} disabled={selected === 0} onClick={() => move(-1)}>
-              <BackIcon size={20} />
-            </button>
-            <button
-              type="button"
-              className="editor-sound"
-              aria-label={t.compose.later}
-              disabled={selected >= rows.length - 1}
-              onClick={() => move(1)}
-            >
-              <ForwardIcon size={20} />
-            </button>
-            <button type="button" className="editor-text-button" disabled={!canSplit} onClick={split}>
-              {t.compose.split}
-            </button>
-            <button type="button" className="editor-text-button" disabled={rows.length <= 1} onClick={remove}>
-              {t.compose.remove}
-            </button>
-            {removed.length > 0 && (
-              <button type="button" className="editor-text-button" onClick={restore}>
-                {t.compose.restore}
+              <button className="cmp-tool" aria-label={t.compose.split} disabled={!canSplit} onClick={split}>
+                <ScissorsIcon size={24} />
+                <span>{t.compose.split}</span>
               </button>
-            )}
-          </div>
+              <button className="cmp-tool" aria-label={delLabel} disabled={!canDelete} onClick={remove}>
+                <TrashIcon size={24} />
+                <span>{delLabel}</span>
+              </button>
+              <button className="cmp-tool" aria-label={t.compose.undo} disabled={hist.past.length === 0} onClick={undo}>
+                <UndoIcon size={24} />
+                <span>{t.compose.undo}</span>
+              </button>
+              <button className="cmp-tool" aria-label={t.compose.redo} disabled={hist.future.length === 0} onClick={redo}>
+                <RedoIcon size={24} />
+                <span>{t.compose.redo}</span>
+              </button>
+              {doc.order.length > 1 && (
+                <>
+                  <button className="cmp-tool" aria-label={t.compose.earlier} disabled={orderIndex <= 0} onClick={() => move(-1)}>
+                    <BackIcon size={24} />
+                    <span>{t.compose.earlier}</span>
+                  </button>
+                  <button className="cmp-tool" aria-label={t.compose.later} disabled={orderIndex < 0 || orderIndex >= doc.order.length - 1} onClick={() => move(1)}>
+                    <ForwardIcon size={24} />
+                    <span>{t.compose.later}</span>
+                  </button>
+                </>
+              )}
+            </div>
+          </>
         )}
       </div>
 
@@ -801,21 +865,6 @@ export function Composer({
           }}
           onClose={() => setPlusSheet(false)}
         />
-      )}
-      {confirmClose && !busy && (
-        <div className="editor-confirm-backdrop" onClick={() => setConfirmClose(false)}>
-          <div className="editor-confirm" role="alertdialog" onClick={(e) => e.stopPropagation()}>
-            <p>{t.compose.discardAsk}</p>
-            <div className="editor-confirm-actions">
-              <button type="button" className="editor-confirm-button danger" onClick={onClose}>
-                {t.compose.discard}
-              </button>
-              <button type="button" className="editor-confirm-button" onClick={() => setConfirmClose(false)}>
-                {t.compose.keepEditing}
-              </button>
-            </div>
-          </div>
-        </div>
       )}
     </div>
   )

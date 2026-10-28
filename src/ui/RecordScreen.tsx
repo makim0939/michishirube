@@ -201,7 +201,11 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
   const [recording, setRecording] = useState(false)
   const [trimming, setTrimming] = useState<string | null>(null)
   /** 「つなぐ」の画面を開いている */
-  const [joining, setJoining] = useState(false)
+  /** 仕上げる画面：開いている／キャンセルして隠している（トーストの「元に戻す」で、編集の内容に戻る） */
+  const [joining, setJoining] = useState<false | 'open' | 'hidden'>(false)
+  const discardTimer = useRef<number>(0)
+  // 早い return（記録が見つからないとき）より前に置く（フックの数が変わらないように）
+  useEffect(() => () => window.clearTimeout(discardTimer.current), [])
   const [pickingSkill, setPickingSkill] = useState(false)
   const videoInput = useRef<HTMLInputElement>(null)
   const photoInput = useRef<HTMLInputElement>(null)
@@ -451,6 +455,22 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
   /** つなぐ動画（端末に中身があるもの）。並びは、画面の並びのまま */
   const joinable = canJoinVideos ? items.filter((i) => isVideo({ type: itemType(i) }) && !!itemBlob(i)) : []
 
+  /**
+   * 仕上げる画面で、変えたあとにキャンセルした。確認は出さず、画面を隠して、トーストの「元に戻す」で編集の内容に戻れる。
+   * トーストが消えたら、確定（編集の内容を捨てる）
+   */
+  const discardJoin = () => {
+    setJoining('hidden')
+    window.clearTimeout(discardTimer.current)
+    toast.show(t.compose.discarded, 'ok', {
+      label: t.record.undoRemove,
+      onClick: () => {
+        window.clearTimeout(discardTimer.current)
+        setJoining('open')
+      },
+    })
+    discardTimer.current = window.setTimeout(() => setJoining((j) => (j === 'hidden' ? false : j)), toastDuration(t.compose.discarded, 'ok', true))
+  }
   /** 画面は誰でも開ける。有料の操作（2 本以上をつなぐ・BGM）は、「完了」を押したときに、回数を見る */
   const mayUsePaid = async () => {
     const { plus } = await loadProducts()
@@ -757,7 +777,7 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
         )}
         {/* 仕上げる（つなぐ・BGM）。動画があるときに出す */}
         {joinable.length >= 1 && (
-          <button type="button" className="btn small join-button" onClick={() => setJoining(true)}>
+          <button type="button" className="btn small join-button" onClick={() => setJoining('open')}>
             <FilmIcon size={16} />
             {t.compose.join}
           </button>
@@ -955,9 +975,11 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
           )}
           quality={(joinable[0]?.kind === 'new' ? joinable[0].quality : undefined) ?? videoSettings?.quality ?? 'standard'}
           fileName={joinable[0]?.kind === 'new' ? joinable[0].file.name : (joinable[0]?.media.name ?? 'video.mp4')}
+          hidden={joining === 'hidden'}
           mayUsePaid={mayUsePaid}
           onDone={onJoined}
           onClose={() => setJoining(false)}
+          onDiscard={discardJoin}
         />
       )}
 
