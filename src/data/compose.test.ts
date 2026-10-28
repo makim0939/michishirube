@@ -10,7 +10,7 @@ const files = vi.hoisted(() => ({
 }))
 vi.mock('./files', () => files)
 
-import { canSplitAt, moveEdge, checkClips, composeClips, totalSeconds } from './compose'
+import { checkClips, composeClips, totalSeconds } from './compose'
 
 const source = { file: 'media/a.mp4' }
 
@@ -160,22 +160,6 @@ describe('元の動画の音', () => {
   })
 })
 
-describe('区間を分けられるか', () => {
-  it('分けたどちらも最短（0.3 秒）以上あれば分けられる', () => {
-    expect(canSplitAt(1, 5, 3)).toBe(true)
-    expect(canSplitAt(1, 5, 1.3)).toBe(true)
-    expect(canSplitAt(1, 5, 4.7)).toBe(true)
-  })
-
-  it('始め・終わりに近すぎる位置、範囲の外では分けられない', () => {
-    expect(canSplitAt(1, 5, 1)).toBe(false)
-    expect(canSplitAt(1, 5, 1.2)).toBe(false)
-    expect(canSplitAt(1, 5, 4.8)).toBe(false)
-    expect(canSplitAt(1, 5, 0)).toBe(false)
-    expect(canSplitAt(1, 5, 9)).toBe(false)
-  })
-})
-
 describe('つないだ全体の長さ', () => {
   it('終わりを省いた区間は、動画の長さまで数える', () => {
     expect(totalSeconds([{ source: { file: 'a' }, start: 1, duration: 4 }, { source: { file: 'b' }, start: 0, end: 2.5 }])).toBe(5.5)
@@ -183,54 +167,5 @@ describe('つないだ全体の長さ', () => {
 
   it('長さが分からない区間があれば 0（BGM の終わりを小さくしない）', () => {
     expect(totalSeconds([{ source: { file: 'a' }, start: 1 }])).toBe(0)
-  })
-})
-
-describe('分割の境目を動かす', () => {
-  const spans = [
-    { id: 'a', key: 'k', start: 0, end: 3 },
-    { id: 'b', key: 'k', start: 3, end: 6 },
-    { id: 'c', key: 'k', start: 6, end: 9 },
-    { id: 'x', key: 'other', start: 3, end: 5 },
-  ]
-
-  it('始めを動かすと、すぐ前の区間の終わりも同じ値になり、重ならない', () => {
-    const r = moveEdge(spans, 'b', 'start', 4, 9)
-    expect(r).toEqual([
-      { id: 'b', start: 4, end: 6 },
-      { id: 'a', start: 0, end: 4 },
-    ])
-  })
-
-  it('終わりを動かすと、すぐ後ろの区間の始めも動く', () => {
-    const r = moveEdge(spans, 'b', 'end', 5, 9)
-    expect(r).toEqual([
-      { id: 'b', start: 3, end: 5 },
-      { id: 'c', start: 5, end: 9 },
-    ])
-  })
-
-  it('隣を最短の長さより縮めるところまでは動かさない', () => {
-    const r = moveEdge(spans, 'b', 'end', 100, 9)
-    expect(r[0].end).toBeCloseTo(8.7)
-    expect(r[1].start).toBeCloseTo(8.7)
-    const l = moveEdge(spans, 'b', 'start', -5, 9)
-    expect(l[0].start).toBeCloseTo(0.3)
-  })
-
-  it('自分も最短の長さを割らない', () => {
-    expect(moveEdge(spans, 'b', 'start', 99, 9)[0].start).toBeCloseTo(5.7)
-  })
-
-  it('動画の両端は、隣がなく、0〜長さの中で動く。別の動画の区間は動かさない', () => {
-    expect(moveEdge(spans, 'a', 'start', -2, 9)).toEqual([{ id: 'a', start: 0, end: 3 }])
-    expect(moveEdge(spans, 'c', 'end', 20, 9)).toEqual([{ id: 'c', start: 6, end: 9 }])
-    expect(moveEdge(spans, 'a', 'end', 2, 9).map((s) => s.id)).toEqual(['a', 'b'])
-  })
-
-  it('動かしても、つながった区間の合計の長さは変わらない', () => {
-    const moved = moveEdge(spans, 'b', 'start', 4.2, 9)
-    const next = spans.map((s) => ({ ...s, ...moved.find((m) => m.id === s.id) })).filter((s) => s.key === 'k')
-    expect(next.reduce((sum, s) => sum + s.end - s.start, 0)).toBeCloseTo(9)
   })
 })

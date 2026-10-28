@@ -109,6 +109,29 @@ export const ScissorsIcon = (p: P) => (
   </Icon>
 )
 
+export const UndoIcon = (p: P) => (
+  <Icon {...p}>
+    <path d="M9 14L4 9l5-5" />
+    <path d="M4 9h10a6 6 0 0 1 0 12h-3" />
+  </Icon>
+)
+
+export const RedoIcon = (p: P) => (
+  <Icon {...p}>
+    <path d="M15 14l5-5-5-5" />
+    <path d="M20 9H10a6 6 0 0 0 0 12h3" />
+  </Icon>
+)
+
+export const TrashIcon = (p: P) => (
+  <Icon {...p}>
+    <path d="M4 7h16" />
+    <path d="M9.5 7V4.5h5V7" />
+    <path d="M6.5 7l.9 12.5h9.2L17.5 7" />
+    <path d="M10 11v5M14 11v5" />
+  </Icon>
+)
+
 export const FilmIcon = (p: P) => (
   <Icon {...p}>
     <rect x="4" y="4" width="16" height="16" rx="2" />
