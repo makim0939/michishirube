@@ -106,22 +106,19 @@ export function Trimmer({
   // メモリに写してから再生する（iPhone で IndexedDB の動画を直接再生できないことがあるため）。
   // アプリのファイルにある動画は、写さずにファイルの URL のまま使う（長い動画で、メモリに何倍も載らないように）
   useEffect(() => {
-    if (src) {
-      setUrl(src)
-      return () => {
-        job.current?.cancel()
-        void audio.current?.close()
-      }
-    }
     let revoked = false
     let u: string | undefined
-    inMemory(file!)
-      .then((b) => {
-        if (revoked) return
-        u = URL.createObjectURL(b)
-        setUrl(u)
-      })
-      .catch(() => setError(t.common.videoLoadFailed))
+    if (src) {
+      setUrl(src)
+    } else {
+      inMemory(file!)
+        .then((b) => {
+          if (revoked) return
+          u = URL.createObjectURL(b)
+          setUrl(u)
+        })
+        .catch(() => setError(t.common.videoLoadFailed))
+    }
     return () => {
       revoked = true
       if (u) URL.revokeObjectURL(u)

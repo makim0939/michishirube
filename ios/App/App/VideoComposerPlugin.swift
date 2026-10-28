@@ -145,7 +145,8 @@ public class VideoComposerPlugin: CAPPlugin, CAPBridgedPlugin {
         }
 
         /// 進みが止まっていれば true（1 回だけ）。書き込み中は、サンプルが 60 秒進まないとき。
-        /// 仕上げ（finishWriting。ファイルの並べ替えを含む）は、書き出した動画の大きさで時間が変わるので長めに待つ
+        /// 仕上げ（finishWriting。ファイルの並べ替えを含む）は、書き込みより時間がかかるので長めに待つ
+        /// （10 分の高画質＝約 460 MB でも、並べ替えは数秒〜数十秒。遅い端末の余裕を見て 180 秒）
         func expired(finishLimit: TimeInterval) -> Bool {
             lock.lock()
             defer { lock.unlock() }
@@ -361,6 +362,8 @@ public class VideoComposerPlugin: CAPPlugin, CAPBridgedPlugin {
             reader?.cancelReading()
             if writer?.status == .writing { writer?.cancelWriting() }
         }
+        // 準備（動画の読み込み・つなぎ）にかかった時間を、「進まない」に数えない。ここから数え直す
+        watchdog.enter(.writing)
         guard reader.startReading() else { throw reader.error ?? fail(5, "読み込みを始められません") }
         guard writer.startWriting() else { throw writer.error ?? fail(6, "書き出しを始められません") }
         writer.startSession(atSourceTime: .zero)
