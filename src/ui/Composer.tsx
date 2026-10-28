@@ -390,7 +390,8 @@ export function Composer({
     if (!v || v.paused) return
     const ci = ls.findIndex((c) => c.key === ck)
     const c = ls[ci]
-    if (!c || v.seeking) return
+    // 別の動画を読み込み中は、確認しない（前の動画の位置を見てしまうため）
+    if (!c || v.seeking || pendingSeek.current !== null) return
     const local = v.currentTime
     setG(c.off + local)
     const seg = c.segs.find((s) => local >= s.start && local < s.end)
@@ -515,19 +516,25 @@ export function Composer({
   }
 
   // ---- 区間の端（取っ手）を引く ----
-  const hd = useRef<{ id: string; edge: 'start' | 'end'; x0: number; t0: number; pxs: number } | null>(null)
+  const hd = useRef<{ id: string; edge: 'start' | 'end'; x0: number; t0: number; pxs: number; recorded: boolean } | null>(null)
   const handleDown = (edge: 'start' | 'end', pxs: number) => (e: PointerEvent) => {
     if (!target) return
     e.stopPropagation()
     e.currentTarget.setPointerCapture(e.pointerId)
     stopAll()
-    checkpoint()
-    hd.current = { id: target.id, edge, x0: e.clientX, t0: target[edge], pxs }
+    // 引いている間に再生ヘッドが動いても、対象が変わらないよう、選んだ状態にする
+    setSel(target.id)
+    hd.current = { id: target.id, edge, x0: e.clientX, t0: target[edge], pxs, recorded: false }
   }
   const handleMove = (e: PointerEvent) => {
     const d = hd.current
     if (!d || !targetClip) return
     e.stopPropagation()
+    // 動かし始めたときに、取り消しの 1 手として積む（触れただけでは、積まない）
+    if (!d.recorded) {
+      d.recorded = true
+      checkpoint()
+    }
     const key = segKey(d.id)
     const t = Math.min(targetClip.d, Math.max(0, d.t0 + (e.clientX - d.x0) / d.pxs))
     commit((doc0) => ({ ...doc0, segs: { ...doc0.segs, [key]: trimEdge(doc0.segs[key], key, d.id, d.edge, t, durs[key]) } }), false)
@@ -652,7 +659,7 @@ export function Composer({
       </div>
     )
   }
-  const track = (pxs: number) =>
+  const buildTrack = (pxs: number) =>
     lay.flatMap((c) =>
       c.segs.map((s, i) => (
         <div
@@ -664,6 +671,10 @@ export function Composer({
         </div>
       )),
     )
+
+  // 帯の絵は、再生ヘッドが動くたびには作り直さない（再生中は毎コマ描き直すので、重くなる）
+  const ovTrack = useMemo(() => buildTrack(pxs1), [lay, frames, pxs1])
+  const cuTrack = useMemo(() => buildTrack(zoom), [lay, frames, zoom])
 
   const delLabel = target?.off ? t.compose.restore : t.compose.remove
 
@@ -793,7 +804,7 @@ export function Composer({
             {/* 上の段：全体（なぞると、再生ヘッドが動く） */}
             <div className="cmp-ov">
               <div className="cmp-ov-in" ref={ov} style={{ width: ovW }} onPointerDown={ovDown} onPointerMove={(e) => e.buttons && !hd.current && scrubTo(ovAt(e), pxs1)}>
-                {track(pxs1)}
+                {ovTrack}
                 {frame(pxs1)}
                 <div className="filmstrip-head" style={{ left: g * pxs1 }} aria-hidden="true" />
               </div>
@@ -802,7 +813,7 @@ export function Composer({
             {/* 下の段：再生ヘッドの周りの拡大（再生ヘッドは中央に固定。2 本指で倍率） */}
             <div className="cmp-cu" onPointerDown={cuDown} onPointerMove={cuMove} onPointerUp={cuUp} onPointerCancel={cuUp}>
               <div className="cmp-cu-in" style={{ width: T * zoom, transform: `translateX(${W / 2 - g * zoom}px)` }}>
-                {track(zoom)}
+                {cuTrack}
                 {frame(zoom)}
               </div>
               <div className="filmstrip-head" style={{ left: W / 2 }} aria-hidden="true" />
