@@ -89,6 +89,7 @@ export function isVideo(m: Pick<Media, 'type'>) {
  */
 function VideoView({
   blob,
+  src,
   type,
   poster,
   cacheKey,
@@ -96,7 +97,9 @@ function VideoView({
   className,
   videoRef,
 }: {
-  blob: Blob
+  blob?: Blob
+  /** アプリのファイルの URL。あれば、メモリに写さず、そのまま再生する */
+  src?: string
   type: string
   poster?: Blob
   cacheKey?: string
@@ -115,9 +118,13 @@ function VideoView({
 
   useEffect(() => {
     if (!requested) return
+    if (src) {
+      setUrl(src)
+      return
+    }
     let cancelled = false
     let u: string | undefined
-    latest.current
+    latest.current!
       .arrayBuffer()
       .then((buf) => {
         if (cancelled) return
@@ -129,7 +136,7 @@ function VideoView({
       cancelled = true
       if (u) URL.revokeObjectURL(u)
     }
-  }, [requested, type])
+  }, [requested, type, src])
 
   // 読み込めたらすぐ再生する。押してからの読み込みの間に音つきの自動再生が許されなくなっていたら（iPhone）、
   // 音なしで始める（音はプレーヤーで出せる）
@@ -202,6 +209,7 @@ export function videoControl(v: HTMLVideoElement): PlayerControl {
 
 export function MediaView({
   blob,
+  src,
   type,
   poster,
   cacheKey,
@@ -209,7 +217,9 @@ export function MediaView({
   className,
   videoRef,
 }: {
-  blob: Blob
+  blob?: Blob
+  /** 動画のファイルの URL（iPhone のアプリ。長い動画をメモリに写さずに再生する）。blob の代わりに渡す */
+  src?: string
   type: string
   poster?: Blob
   cacheKey?: string
@@ -223,6 +233,7 @@ export function MediaView({
       <VideoView
         key={cacheKey}
         blob={blob}
+        src={src}
         type={type}
         poster={poster}
         cacheKey={cacheKey}
@@ -232,7 +243,7 @@ export function MediaView({
       />
     )
   }
-  return <ImageView blob={blob} cacheKey={cacheKey} className={className} />
+  return blob ? <ImageView blob={blob} cacheKey={cacheKey} className={className} /> : null
 }
 
 function ImageView({ blob, cacheKey, className }: { blob: Blob; cacheKey?: string; className?: string }) {

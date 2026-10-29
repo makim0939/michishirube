@@ -35,6 +35,15 @@ export function mayBeOnServer(m: Pick<Media, 'type' | 'size' | 'cloudPhoto'>): b
   return m.type.startsWith('image/') && (!!m.cloudPhoto || m.size <= PHOTO_MAX_BYTES)
 }
 
+/**
+ * アプリのファイルにある動画を、メモリに読まずに、ファイルの URL のまま再生・コマ取りに使えるなら、そのファイルの場所。
+ * fromFile は、その端末の WebView が、ファイルの URL での動画の再生・シークに対応しているか（files.ts の playsFromFile）。
+ * 写真は小さいので対象にしない（切り取りの元にもならない）。すでにメモリにある（blob がある）ものは、そのまま使う
+ */
+export function fileBackedVideo(m: Pick<Media, 'type' | 'blob' | 'file'>, fromFile: boolean): string | undefined {
+  return fromFile && !m.blob && m.type.startsWith('video/') ? m.file : undefined
+}
+
 /** 中身を読む。無ければ undefined */
 export async function contentBlob(m: Pick<Media, 'blob' | 'file' | 'type'>): Promise<Blob | undefined> {
   if (m.blob) return m.blob

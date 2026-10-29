@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const files = vi.hoisted(() => ({
+  ComposeCancelled: class ComposeCancelled extends Error {},
   composeVideoFiles: vi.fn(),
   deleteDir: vi.fn(async () => {}),
   deleteFile: vi.fn(async () => {}),
@@ -11,6 +12,8 @@ const files = vi.hoisted(() => ({
 vi.mock('./files', () => files)
 
 import { checkClips, composeClips, totalSeconds } from './compose'
+
+const ComposeCancelled = files.ComposeCancelled
 
 const source = { file: 'media/a.mp4' }
 
@@ -69,6 +72,35 @@ describe('動画をつなぐ', () => {
     files.composeVideoFiles.mockRejectedValue(new Error('boom'))
     await expect(composeClips([{ source: { blob: new Blob(['x']) }, start: 0 }], 'standard', 'a.mp4')).rejects.toThrow('boom')
     expect(files.deleteDir).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('書き出しのやめる・進み', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    files.readBlobFile.mockResolvedValue(new Blob(['mp4'], { type: 'video/mp4' }))
+    files.composeVideoFiles.mockResolvedValue({ size: 3, duration: 1 })
+  })
+  const one = [{ source: { blob: new Blob(['x']) }, start: 0 }]
+
+  it('進みの受け取りを、書き出しにそのまま渡す', async () => {
+    const onProgress = vi.fn()
+    await composeClips(one, 'standard', 'a.mp4', undefined, false, onProgress)
+    expect(files.composeVideoFiles.mock.calls[0][5]).toBe(onProgress)
+  })
+
+  it('書き出しを始める前にやめられていたら、始めずにやめたことを投げて、一時ファイルを片付ける', async () => {
+    await expect(composeClips(one, 'standard', 'a.mp4', undefined, false, undefined, () => true)).rejects.toBeInstanceOf(ComposeCancelled)
+    expect(files.composeVideoFiles).not.toHaveBeenCalled()
+    expect(files.deleteDir).toHaveBeenCalledTimes(1)
+  })
+
+  it('書き出しの途中でやめられても、片付けて、やめたことを投げる。そのあと、もう一度書き出せる', async () => {
+    files.composeVideoFiles.mockRejectedValueOnce(new ComposeCancelled())
+    await expect(composeClips(one, 'standard', 'a.mp4')).rejects.toBeInstanceOf(ComposeCancelled)
+    expect(files.deleteDir).toHaveBeenCalledTimes(1)
+    const file = await composeClips(one, 'standard', 'a.mp4')
+    expect(file.name).toBe('a-edit.mp4')
   })
 })
 

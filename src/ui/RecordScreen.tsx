@@ -1,7 +1,8 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useRef, useState } from 'react'
 import { canJoinVideos } from '../data/compose'
-import { contentBlob } from '../data/content'
+import { contentBlob, fileBackedVideo } from '../data/content'
+import { contentFileExists, contentUrl, playsFromFile } from '../data/files'
 import { loadProducts, mayCompose, noteComposeUse } from '../data/purchases'
 import { db } from '../data/db'
 import { compressPhoto, inMemory, makePoster, type Poster } from '../data/mediaPrep'
@@ -86,6 +87,16 @@ type Item =
 function itemBlob(item: Item): Blob | undefined {
   if (item.kind === 'new') return item.file
   return item.replaced?.file ?? item.media.blob
+}
+
+/**
+ * 保存済みの動画で、メモリに読まずにファイルの URL のまま使うもの（iPhone のアプリ）。
+ * 切り取りなどで差し替えたあと（replaced）は、メモリ上のファイルがあるので、そちらを使う
+ */
+function itemSrc(item: Item): string | undefined {
+  if (item.kind !== 'existing' || item.replaced) return undefined
+  const file = fileBackedVideo(item.media, playsFromFile)
+  return file ? contentUrl(file) : undefined
 }
 
 function itemType(item: Item): string {
@@ -234,8 +245,14 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
       }
       const rows = (await db.media.bulkGet(record.mediaIds)).filter((m): m is Media => !!m)
       // アプリでは中身がファイルにあるので、切り取りなどで使えるよう読み込んでおく（保存はしない）
+      // iPhone の動画は、メモリに読まずにファイルの URL のまま使う（長い動画で、メモリに何倍も載るのを避ける）。ファイルが無ければ「この端末にありません」
       const media = await Promise.all(
-        rows.map(async (m) => (m.file && !m.blob ? { ...m, blob: await contentBlob(m).catch(() => undefined) } : m)),
+        rows.map(async (m): Promise<Media> => {
+          if (!m.file || m.blob) return m
+          const file = fileBackedVideo(m, playsFromFile)
+          if (file) return (await contentFileExists(file)) ? m : { ...m, file: undefined }
+          return { ...m, blob: await contentBlob(m).catch(() => undefined) }
+        }),
       )
       if (cancelled) return
       originalSkillId.current = record.skillId
@@ -453,7 +470,7 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
   }
 
   /** つなぐ動画（端末に中身があるもの）。並びは、画面の並びのまま */
-  const joinable = canJoinVideos ? items.filter((i) => isVideo({ type: itemType(i) }) && !!itemBlob(i)) : []
+  const joinable = canJoinVideos ? items.filter((i) => isVideo({ type: itemType(i) }) && !!(itemBlob(i) || itemSrc(i))) : []
 
   /**
    * 仕上げる画面で、変えたあとにキャンセルした。確認は出さず、画面を隠して、トーストの「元に戻す」で編集の内容に戻れる。
@@ -611,6 +628,7 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
 
   const trimItem = items.find((i) => i.key === trimming)
   const trimBlob = trimItem && itemBlob(trimItem)
+  const trimSrc = trimItem && itemSrc(trimItem)
 
   // 次の一手の候補：前回と同じ、選んだ原因の直し方（押すだけで入る）
   const suggestions = [
@@ -719,17 +737,20 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
           <ul className="previews">
             {items.map((item) => {
               const blob = itemBlob(item)
+              const src = itemSrc(item)
+              const size = blob?.size ?? (src && item.kind === 'existing' ? item.media.size : undefined)
               const type = itemType(item)
               const poster = item.kind === 'new' ? item.poster?.blob : (item.replaced?.poster?.blob ?? item.media.poster)
               const privacyLabel = (item.kind === 'new' ? (item.privacy ?? videoSettings?.youtubePrivacy) : undefined) === 'public' ? t.common.anyone : t.common.linkOnly
               return (
                 <li key={item.key}>
-                  {blob ? (
+                  {blob || src ? (
                     <MediaView
                       blob={blob}
+                      src={src}
                       type={type}
                       poster={poster}
-                      cacheKey={`${item.key}-${blob.size}`}
+                      cacheKey={`${item.key}-${size}`}
                       autoLoad={item.kind === 'new' || !!item.replaced}
                     />
                   ) : (
@@ -739,8 +760,8 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
                     ×
                   </button>
                   <div className="preview-actions">
-                    {blob && <span className="muted">{formatBytes(blob.size)}</span>}
-                    {blob && isVideo({ type }) && (
+                    {size !== undefined && <span className="muted">{formatBytes(size)}</span>}
+                    {(blob || src) && isVideo({ type }) && (
                       <button type="button" className="btn small" onClick={() => setTrimming(item.key)}>
                         <ScissorsIcon size={16} />
                         {t.common.edit}
@@ -968,7 +989,8 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
           clips={joinable.map(
             (i): ComposerClip => ({
               key: i.key,
-              blob: itemBlob(i)!,
+              blob: itemBlob(i),
+              src: itemSrc(i),
               // 保存済みで、まだ切り取っていない動画は、アプリのファイルをそのまま書き出しに渡す
               file: i.kind === 'existing' && !i.replaced ? i.media.file : undefined,
             }),
@@ -983,9 +1005,10 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
         />
       )}
 
-      {trimItem && trimBlob && (
+      {trimItem && (trimBlob || trimSrc) && (
         <Trimmer
           file={trimBlob}
+          src={trimSrc}
           name={trimItem.kind === 'new' ? trimItem.file.name : (trimItem.media.name ?? 'video.mp4')}
           onDone={(file) => onTrimmed(trimItem.key, file)}
           onClose={() => setTrimming(null)}
