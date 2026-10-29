@@ -99,7 +99,7 @@ export const ja = {
     plusThanks: 'ありがとうございます。Plus が使えます',
     plusLine: (free: number) => `無料の${free}回を使いました`,
     plusKind: 'SNS 向けの動画編集',
-    plusHeadline: '撮った動画を、そのまま編集',
+    plusHeadline: 'SNS 向けの高度な動画編集',
     plusWhat: '分割・カット・つなぎ・BGM が、何度でも使えます',
     plusSplit: '分割・カット',
     plusJoin: '複数の動画をつなぐ',

@@ -95,7 +95,7 @@ export const en: Messages = {
     plusThanks: 'Thank you. Plus is unlocked',
     plusLine: (free: number) => `You've used the ${free} free tries`,
     plusKind: 'Video editing for social',
-    plusHeadline: 'Edit your videos right here',
+    plusHeadline: 'Advanced video editing for social',
     plusWhat: 'Split, cut, join and add music, as often as you like',
     plusSplit: 'Split & cut',
     plusJoin: 'Join several videos',
