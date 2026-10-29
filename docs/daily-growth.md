@@ -18,22 +18,68 @@
 
 ## 最初の準備（ユーザーが 1 回だけ）
 
-`~/.latte-daily/env`（権限 600）に、次を書く。ない鍵の元は、収集が `errors` に出して、ほかの元で続ける。
+秘密の値は、すべて `~/.latte-daily/` に置く（git の外）。チャット・リポジトリ・PR には書かない。ない鍵の元は、収集が `errors` に出して、ほかの元で続ける。
 
-```
-# App Store Connect API（「ユーザとアクセス」→「統合」→「App Store Connect API」で、アクセス権「App Manager」以上のキーを作る）
-ASC_KEY_ID=
-ASC_ISSUER_ID=
-ASC_KEY_PATH=~/.latte-daily/AuthKey_XXXX.p8
-ASC_VENDOR_NUMBER=          # 「売上およびトレンド」→ 左上の「プロバイダ」の数字
+### 0. フォルダを作る
 
-# YouTube（Google Cloud で、デスクトップアプリの OAuth クライアントを作る。YouTube Data API v3 と YouTube Analytics API を有効にする。
-# 同意画面は「本番」にする。「テスト」のままだと、更新トークンが 7 日で切れる）
-GOOGLE_CLIENT_ID=
-GOOGLE_CLIENT_SECRET=
+```bash
+mkdir -p ~/.latte-daily && chmod 700 ~/.latte-daily && touch ~/.latte-daily/env && chmod 600 ~/.latte-daily/env
 ```
 
-そのあと `node scripts/daily/auth-youtube.mjs` を実行し、表示された URL を、らておのアカウントで許可する。Cloudflare は、`wrangler login` 済みなら追加の準備は要らない。
+### 1. App Store Connect の API キー（約 5 分）
+
+1. <https://appstoreconnect.apple.com/access/integrations/api> を開く（「ユーザとアクセス」→「統合」→「App Store Connect API」。アカウントの持ち主（アカウント管理者）だけが開ける）。
+2. 初めてなら「キーをリクエスト」でアクセスを有効にする。
+3. 「キーを生成」→ 名前は `latte-daily`、アクセス権は **App Manager**（読み取りだけで足りるが、解析レポートの依頼を作るために、Developer より上が要る）。
+4. 一覧の **Issuer ID** と、作ったキーの **Key ID** を控える。
+5. 「APIキーをダウンロード」で `.p8` を取る（**ダウンロードは 1 回だけ**）。`~/.latte-daily/` に置いて `chmod 600` する。
+6. 「売上およびトレンド」（<https://appstoreconnect.apple.com/trends/>）の左上、アカウント名の横に出る数字が **Vendor Number**（ベンダー番号。「支払いと財務レポート」にも出る）。
+7. `~/.latte-daily/env` に書く。
+
+```
+ASC_KEY_ID=（Key ID）
+ASC_ISSUER_ID=（Issuer ID）
+ASC_KEY_PATH=~/.latte-daily/AuthKey_（Key ID）.p8
+ASC_VENDOR_NUMBER=（Vendor Number）
+```
+
+初日は、解析レポートの依頼が作られるだけで、インプレッションなどは 1〜2 日後から出る。
+
+### 2. YouTube（Google の OAuth。約 10 分）
+
+「Google Cloud」の、**ラテ帳のログイン用とは別のプロジェクト**を作る（審査中の同意画面に触れないため）。
+
+1. <https://console.cloud.google.com/projectcreate> でプロジェクトを作る（名前は `latte-daily`）。
+2. 「API とサービス」→「ライブラリ」で、**YouTube Data API v3** と **YouTube Analytics API** を有効にする。
+3. 「OAuth 同意画面」→ 外部 → アプリ名 `latte-daily`、サポートメールと連絡先は自分のもの。スコープは足さなくてよい（認可のときに出る）。
+4. 同意画面の「公開ステータス」を **「本番環境に公開」**にする。「テスト」のままだと、更新トークンが **7 日で切れる**（毎週ログインが要る）。自分だけが使うので、確認済みアプリの審査は要らない。認可のとき「このアプリは Google で確認されていません」と出たら、「詳細」→「latte-daily（安全ではないページ）に移動」で進む。
+5. 「認証情報」→「認証情報を作成」→「OAuth クライアント ID」→ 種類は **デスクトップ アプリ**。
+6. 出た **クライアント ID** と **クライアント シークレット**を、`~/.latte-daily/env` に書く。
+
+```
+GOOGLE_CLIENT_ID=（クライアント ID）
+GOOGLE_CLIENT_SECRET=（クライアント シークレット）
+```
+
+7. リポジトリで次を実行し、表示された URL をブラウザで開く。**らておのチャンネルの Google アカウント**で、2 つの権限（解析の閲覧・YouTube の管理）を許可する。
+
+```bash
+node scripts/daily/auth-youtube.mjs
+```
+
+「YT_REFRESH_TOKEN を ~/.latte-daily/env に書きました」と出れば完了（トークンは画面に出ない）。権限は、解析の読み取りと、動画の説明欄の更新だけ。動画のアップロード・削除はしない。
+
+### 3. Cloudflare
+
+`wrangler login` 済みなら、追加の準備は要らない（収集のたびに、wrangler がトークンを更新する）。ログインが切れていたら、`cd worker && npx wrangler login` をやり直す。
+
+### 4. 動作確認
+
+```bash
+node scripts/daily/collect.mjs
+```
+
+最後の `errors:` が `なし` なら、全部取れている。
 
 ## 毎日の手順（20:00）
 
