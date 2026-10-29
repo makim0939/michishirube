@@ -22,11 +22,15 @@ import {
 import { BackIcon, ForwardIcon, MusicIcon, PauseIcon, PlayIcon, RedoIcon, ScissorsIcon, SpeakerIcon, TextIcon, TrashIcon, UndoIcon } from './icons'
 import {
   drawText,
+  fitAll,
+  fitFrom,
+  fitTo,
   lanes as textLanes,
   loadTextFonts,
   moveEnd,
   moveStart,
   newText,
+  snapCenter,
   TEXT_COLORS,
   TEXT_FONTS,
   TEXT_SIZE_MAX,
@@ -188,7 +192,7 @@ export function Composer({
   /** いま描いているテキストの外枠（画面の px）。つかむ・選ぶ範囲の判定に使う */
   const textBoxes = useRef<{ id: string; box: TextBox }[]>([])
   /** 選んだテキストの、設定の種類（フォント・文字の色・背景・大きさ）。続けて使えるよう、前回の種類を覚えておく */
-  const [styleTab, setStyleTab] = useState<'font' | 'color' | 'bg' | 'size'>('color')
+  const [styleTab, setStyleTab] = useState<'font' | 'color' | 'bg' | 'time'>('color')
   /** 同梱のフォントを読み終えたら、描き直す */
   const [fontTick, setFontTick] = useState(0)
   /** カラーピッカーを開いている間の、取り消しの 1 手（開くたびに 1 回だけ積む） */
@@ -747,6 +751,21 @@ export function Composer({
     patchText(selT.id, { [key]: c }, false)
   }
 
+  // 打つ欄は、出していない間は、読み取り専用にして focus を外す（blur だけだと、iPhone のキーボードが残ることがある）
+  const focusText = () => {
+    const ta = textInput.current
+    if (!ta) return
+    ta.readOnly = false
+    ta.focus()
+  }
+  const blurText = () => {
+    const ta = textInput.current
+    if (!ta) return
+    ta.readOnly = true
+    ta.blur()
+    ;(document.activeElement as HTMLElement | null)?.blur?.()
+  }
+
   const addText = () => {
     if (!ready || busy) return
     stopAll()
@@ -761,7 +780,7 @@ export function Composer({
     editingRef.current = true
     setEditing(true)
     // キーボードを出すには、タップの操作の中で focus する
-    textInput.current?.focus()
+    focusText()
   }
   const startEdit = () => {
     if (!selT || busy) return
@@ -770,12 +789,12 @@ export function Composer({
     checkpoint()
     editingRef.current = true
     setEditing(true)
-    textInput.current?.focus()
+    focusText()
   }
   const finishEdit = () => {
     if (!editingRef.current) return
     editingRef.current = false
-    textInput.current?.blur()
+    blurText()
     setEditing(false)
     const o = selT
     if (o && !o.text.trim()) {
@@ -789,7 +808,7 @@ export function Composer({
   const removeText = () => {
     if (!selT) return
     editingRef.current = false
-    textInput.current?.blur()
+    blurText()
     setEditing(false)
     commit((d) => ({ ...d, texts: d.texts.filter((x) => x.id !== selT.id) }))
     setSelText(undefined)
@@ -799,11 +818,38 @@ export function Composer({
   const tPts = useRef(new Map<number, { x: number; y: number }>())
   const tDrag = useRef<{ id?: string; x0: number; y0: number; ox: number; oy: number; moved: boolean; recorded: boolean; wasSel: boolean } | null>(null)
   const pinch = useRef<{ d0: number; s0: number; recorded: boolean } | null>(null)
-  const sizeDrag = useRef(false)
+  /** 角の取っ手で大きさを変えている間：始めの大きさ・中心からの距離・中心（画面の px） */
+  const sizeHandle = useRef<{ s0: number; d0: number; cx: number; cy: number; recorded: boolean } | null>(null)
+  /** 中央に吸い付いている間、縦の目印を出す */
+  const [guideX, setGuideX] = useState(false)
   const textPoint = (e: PointerEvent) => {
     const r = textCanvas.current!.getBoundingClientRect()
     const k = textCanvas.current!.width / r.width
     return { x: (e.clientX - r.left) * k, y: (e.clientY - r.top) * k, k }
+  }
+  // 角の取っ手を引くと、中心からの距離に比例して大きさが変わる
+  const sizeDown = (e: PointerEvent) => {
+    if (!selT || !selBox || !textCanvas.current) return
+    e.stopPropagation()
+    e.currentTarget.setPointerCapture(e.pointerId)
+    const r = textCanvas.current.getBoundingClientRect()
+    const cx = r.left + selBox.x + selBox.w / 2
+    const cy = r.top + selBox.y + selBox.h / 2
+    sizeHandle.current = { s0: selT.size, d0: Math.hypot(e.clientX - cx, e.clientY - cy) || 1, cx, cy, recorded: false }
+  }
+  const sizeMove = (e: PointerEvent) => {
+    const h = sizeHandle.current
+    if (!h || !selT) return
+    e.stopPropagation()
+    if (!h.recorded) {
+      h.recorded = true
+      checkpoint()
+    }
+    const size = Math.min(TEXT_SIZE_MAX, Math.max(TEXT_SIZE_MIN, (h.s0 * Math.hypot(e.clientX - h.cx, e.clientY - h.cy)) / h.d0))
+    patchText(selT.id, { size }, false)
+  }
+  const sizeUp = () => {
+    sizeHandle.current = null
   }
   const textDown = (e: PointerEvent) => {
     e.currentTarget.setPointerCapture(e.pointerId)
@@ -848,10 +894,13 @@ export function Composer({
       d.recorded = true
       checkpoint()
     }
-    patchText(d.id, { x: Math.min(1, Math.max(0, d.ox + dx / r.width)), y: Math.min(1, Math.max(0, d.oy + dy / r.height)) }, false)
+    const x = snapCenter(Math.min(1, Math.max(0, d.ox + dx / r.width)))
+    setGuideX(x === 0.5)
+    patchText(d.id, { x, y: Math.min(1, Math.max(0, d.oy + dy / r.height)) }, false)
   }
   const textUp = (e: PointerEvent) => {
     const had = tPts.current.delete(e.pointerId)
+    setGuideX(false)
     if (pinch.current) {
       if (tPts.current.size < 2) pinch.current = null
       if (tPts.current.size === 0) tDrag.current = null
@@ -1077,7 +1126,36 @@ export function Composer({
             onPointerCancel={textUp}
           />
         )}
-        {vr && selBox && selT && !busy && <div className="cmp-txt-sel" style={{ left: vr.x + selBox.x, top: vr.y + selBox.y, width: selBox.w, height: selBox.h }} />}
+        {vr && selBox && selT && !busy && (
+          <>
+            <div className="cmp-txt-sel" style={{ left: vr.x + selBox.x, top: vr.y + selBox.y, width: selBox.w, height: selBox.h }} />
+            {/* 選んだテキストの角：左上＝消す、右上＝文字を直す、右下＝引いて大きさ（見つけやすいように、箱に付ける） */}
+            {!editing && (
+              <>
+                <button type="button" className="cmp-txt-badge del" aria-label={t.compose.textBadgeDelete} style={{ left: Math.max(2, vr.x + selBox.x - 14), top: Math.max(2, vr.y + selBox.y - 14) }} onClick={removeText}>
+                  ×
+                </button>
+                <button type="button" className="cmp-txt-badge edit" aria-label={t.compose.textBadgeEdit} style={{ left: Math.min(vr.x + vr.w - 26, vr.x + selBox.x + selBox.w - 14), top: Math.max(2, vr.y + selBox.y - 14) }} onClick={startEdit}>
+                  <TextIcon size={14} />
+                </button>
+                <span
+                  className="cmp-txt-badge size"
+                  role="slider"
+                  aria-label={t.compose.textSize}
+                  aria-valuenow={selT.size}
+                  style={{ left: Math.min(vr.x + vr.w - 26, vr.x + selBox.x + selBox.w - 14), top: Math.min(vr.y + vr.h - 26, vr.y + selBox.y + selBox.h - 14) }}
+                  onPointerDown={sizeDown}
+                  onPointerMove={sizeMove}
+                  onPointerUp={sizeUp}
+                  onPointerCancel={sizeUp}
+                >
+                  ⤡
+                </span>
+              </>
+            )}
+          </>
+        )}
+        {vr && guideX && <div className="cmp-txt-guide" style={{ left: vr.x + vr.w / 2, top: vr.y, height: vr.h }} />}
         {ready && !playing && !busy && !selText && (
           <button className="editor-play" aria-label={t.player.play} onClick={togglePlay}>
             <PlayIcon size={30} />
@@ -1088,13 +1166,15 @@ export function Composer({
           <textarea
             ref={textInput}
             rows={Math.min(3, Math.max(1, (selT?.text.split('\n').length ?? 1)))}
+            readOnly
             value={selT?.text ?? ''}
             placeholder={t.compose.textPlaceholder}
             aria-label={t.compose.text}
             onChange={(e) => selT && patchText(selT.id, { text: e.target.value }, false)}
             onBlur={finishEdit}
           />
-          <button type="button" className="editor-text-button primary" onClick={finishEdit}>
+          {/* 押した瞬間に、打つ欄の focus が外れると、欄が消えて、押した扱いにならない（1 回目が空振りになる）。focus を動かさず、離したときに確定する */}
+          <button type="button" className="editor-text-button primary" onPointerDown={(e) => e.preventDefault()} onMouseDown={(e) => e.preventDefault()} onClick={finishEdit}>
             {t.compose.textDone}
           </button>
         </div>
@@ -1124,7 +1204,7 @@ export function Composer({
                       ['font', t.compose.textTabFont, <span key="f" className="cmp-tab-aa">Aa</span>],
                       ['color', t.compose.textTabColor, <span key="c" className="cmp-tab-dot" style={{ background: selT.color }} />],
                       ['bg', t.compose.textTabBg, <span key="b" className={`cmp-tab-bg${selT.plate ? ' on' : ''}`}>A</span>],
-                      ['size', t.compose.textSize, <span key="s" className="cmp-tab-size"><i>A</i><b>A</b></span>],
+                      ['time', t.compose.textTabTime, <svg key="s" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></svg>],
                     ] as const
                   ).map(([id, label, icon]) => (
                     <button key={id} type="button" role="tab" aria-selected={styleTab === id} aria-label={label} className={`cmp-style-tab${styleTab === id ? ' on' : ''}`} onClick={() => setStyleTab(id)}>
@@ -1164,25 +1244,22 @@ export function Composer({
                       )}
                     </>
                   )}
-                  {styleTab === 'size' && (
-                    <input
-                      type="range"
-                      className="bgm-volume"
-                      min={TEXT_SIZE_MIN}
-                      max={TEXT_SIZE_MAX}
-                      step={0.005}
-                      value={selT.size}
-                      aria-label={t.compose.textSize}
-                      onPointerDown={() => (sizeDrag.current = false)}
-                      onChange={(e) => {
-                        if (!sizeDrag.current) {
-                          sizeDrag.current = true
-                          checkpoint()
-                        }
-                        patchText(selT.id, { size: Number(e.target.value) }, false)
-                      }}
-                    />
-                  )}
+                  {styleTab === 'time' &&
+                    [0, 1, 2].map((i) => {
+                      const c = lay.find((x) => x.key === selT.key)
+                      const at = Math.min(c?.d ?? 0, Math.max(0, g - (c?.off ?? 0)))
+                      return (
+                        <button
+                          key={i}
+                          type="button"
+                          className="cmp-time-chip"
+                          aria-label={t.compose.textTimeLabel[i]}
+                          onClick={() => c && patchText(selT.id, (o) => (i === 0 ? fitAll(o, c.d) : i === 1 ? fitFrom(o, at, c.d) : fitTo(o, at, c.d)))}
+                        >
+                          {t.compose.textTimeShort[i]}
+                        </button>
+                      )
+                    })}
                 </div>
               </div>
             ) : (

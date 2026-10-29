@@ -4010,7 +4010,7 @@ h1.wordmark {
   display: grid;
   place-items: center;
   width: 34px;
-  height: 38px;
+  height: 40px;
   padding: 0;
   border: 1.5px solid transparent;
   border-radius: 10px;
@@ -4146,4 +4146,58 @@ h1.wordmark {
     repeating-linear-gradient(135deg, rgb(255 255 255 / 30%) 0 2px, transparent 2px 6px),
     rgb(0 0 0 / 55%);
   pointer-events: none;
+}
+
+/* 選んだテキストの角の取っ手（消す・文字を直す・大きさ）。指で押せる大きさ */
+.cmp-txt-badge {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #f5c542;
+  color: #1d1712;
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.cmp-txt-badge.del {
+  background: rgb(0 0 0 / 70%);
+  color: #fff;
+  border: 1.5px solid #f5c542;
+}
+
+/* 中央に吸い付いている間の目印 */
+.cmp-txt-guide {
+  position: absolute;
+  width: 0;
+  border-left: 1px dashed rgb(245 197 66 / 90%);
+  pointer-events: none;
+}
+
+.cmp-tab-time {
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+/* 表示する時間を、ひとことで合わせるチップ */
+.cmp-time-chip {
+  flex: none;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1.5px solid rgb(255 255 255 / 25%);
+  border-radius: 18px;
+  background: none;
+  color: #fff;
+  font: inherit;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  cursor: pointer;
 }

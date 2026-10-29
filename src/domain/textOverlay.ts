@@ -102,6 +102,26 @@ export function moveEnd(o: TextOverlay, t: number, duration: number): TextOverla
   return { ...o, end: clamp(t, o.start + TEXT_MIN_SECONDS, duration) }
 }
 
+/** 表示する時間を、動画の全体にする */
+export function fitAll(o: TextOverlay, duration: number): TextOverlay {
+  return { ...o, start: 0, end: duration }
+}
+
+/** 表示する時間を、再生ヘッド（at 秒）から、動画の終わりまでにする（終わりに近すぎれば、最小の長さを手前に確保） */
+export function fitFrom(o: TextOverlay, at: number, duration: number): TextOverlay {
+  return { ...o, start: clamp(at, 0, Math.max(0, duration - TEXT_MIN_SECONDS)), end: duration }
+}
+
+/** 表示する時間を、動画の始めから、再生ヘッド（at 秒）までにする（始めに近すぎれば、最小の長さを先に確保） */
+export function fitTo(o: TextOverlay, at: number, duration: number): TextOverlay {
+  return { ...o, start: 0, end: clamp(at, Math.min(TEXT_MIN_SECONDS, duration), duration) }
+}
+
+/** 横の位置が、中央に近ければ、中央に吸い付ける */
+export function snapCenter(x: number): number {
+  return Math.abs(x - 0.5) < 0.025 ? 0.5 : x
+}
+
 /** できあがりの時間（秒）に直した、重ねる時間 */
 export interface OutputInterval {
   id: string

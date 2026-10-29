@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clampRange, lanes, moveEnd, moveStart, newText, outputIntervals, TEXT_MIN_SECONDS, wrapLines, type TextOverlay } from './textOverlay'
+import { clampRange, fitAll, fitFrom, fitTo, lanes, moveEnd, moveStart, newText, outputIntervals, snapCenter, TEXT_MIN_SECONDS, wrapLines, type TextOverlay } from './textOverlay'
 
 const base = (over: Partial<TextOverlay> = {}): TextOverlay => ({
   id: 'x',
@@ -54,6 +54,29 @@ describe('テキストの時間を動かす', () => {
   it('範囲を動画の中に収める', () => {
     expect(clampRange(18, 25, 20)).toEqual({ start: 18, end: 20 })
     expect(clampRange(-2, 1, 20).start).toBe(0)
+  })
+})
+
+describe('表示する時間を、ひとことで合わせる', () => {
+  it('全体：動画の始めから終わりまで', () => {
+    expect(fitAll(base(), 20)).toMatchObject({ start: 0, end: 20 })
+  })
+
+  it('ここから最後まで：再生ヘッドから動画の終わりまで（終わりに近すぎれば、最小の長さを残す）', () => {
+    expect(fitFrom(base(), 8, 20)).toMatchObject({ start: 8, end: 20 })
+    expect(fitFrom(base(), 19.9, 20).start).toBe(20 - TEXT_MIN_SECONDS)
+  })
+
+  it('最初からここまで：動画の始めから再生ヘッドまで（始めに近すぎれば、最小の長さ）', () => {
+    expect(fitTo(base(), 8, 20)).toMatchObject({ start: 0, end: 8 })
+    expect(fitTo(base(), 0, 20).end).toBe(TEXT_MIN_SECONDS)
+  })
+})
+
+describe('位置の吸い付き', () => {
+  it('中央の近くは中央に、離れていればそのまま', () => {
+    expect(snapCenter(0.51)).toBe(0.5)
+    expect(snapCenter(0.45)).toBe(0.45)
   })
 })
 
