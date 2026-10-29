@@ -5,8 +5,37 @@
  * 画面のプレビューと、書き出す画像は、同じ drawText で描く（見た目が、ずれないように）
  */
 
-/** 色（白・黒・金・赤・青）。文字の色。背景つきのときは、文字の明るさに合わせて、暗い／明るい板を敷く */
+/** はじめから並べる色（白・黒・金・赤・青）。ほかの色は、システムのカラーピッカーで選ぶ（どんな色でも持てる） */
 export const TEXT_COLORS = ['#ffffff', '#1d1712', '#f3c64f', '#e8604c', '#5aa7e8'] as const
+
+/** 背景の板の濃さ（0〜1）。動画が透けて見える程度 */
+export const PLATE_ALPHA = 0.8
+
+/**
+ * フォント。日本語に合う 4 種類：ゴシック・明朝・丸ゴシックは iPhone・iPad の標準（ヒラギノ）、手書きは、同梱の Yusei Magic（OFL。public/fonts）。
+ * プレビューも書き出しも、同じ WebView の canvas で描くので、同じ見た目になる。標準のフォントが無い端末では、後ろの候補に落ちる
+ */
+export const TEXT_FONTS = [
+  { id: 'gothic', family: '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", system-ui, sans-serif', weight: 700 },
+  { id: 'mincho', family: '"Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif', weight: 700 },
+  { id: 'maru', family: '"Hiragino Maru Gothic ProN", "Zen Maru Gothic", "Hiragino Sans", system-ui, sans-serif', weight: 700 },
+  { id: 'hand', family: '"Yusei Magic", "Hiragino Maru Gothic ProN", system-ui, sans-serif', weight: 400 },
+] as const
+
+export type TextFontId = (typeof TEXT_FONTS)[number]['id']
+
+const fontOf = (id: TextFontId) => TEXT_FONTS.find((f) => f.id === id) ?? TEXT_FONTS[0]
+
+/** 同梱のフォントは、使う前に読み込む（canvas は、読み込み中のフォントで描くと、代わりの字で描いてしまう） */
+export async function loadTextFonts(ids: TextFontId[]): Promise<void> {
+  if (typeof document === 'undefined' || !document.fonts) return
+  await Promise.all(
+    [...new Set(ids)].map((id) => {
+      const f = fontOf(id)
+      return document.fonts.load(`${f.weight} 40px ${f.family}`, 'あいうAa').catch(() => [])
+    }),
+  )
+}
 
 /** 文字の大きさ（絵の高さに対する割合）の範囲と、はじめの値 */
 export const TEXT_SIZE_MIN = 0.03
@@ -34,8 +63,11 @@ export interface TextOverlay {
   /** 文字の大きさ（絵の高さに対する割合） */
   size: number
   color: string
+  font: TextFontId
   /** 背景の板を敷くか（敷かないときは、影をつける） */
   plate: boolean
+  /** 背景の板の色（plate が true のとき） */
+  plateColor: string
 }
 
 let counter = 0
@@ -50,7 +82,7 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
 export function newText(key: string, at: number, duration: number): TextOverlay {
   const len = Math.min(TEXT_SECONDS, duration)
   const start = clamp(at, 0, Math.max(0, duration - len))
-  return { id: newTextId(), key, start, end: start + len, text: '', x: 0.5, y: 0.78, size: TEXT_SIZE_DEFAULT, color: TEXT_COLORS[0], plate: false }
+  return { id: newTextId(), key, start, end: start + len, text: '', x: 0.5, y: 0.78, size: TEXT_SIZE_DEFAULT, color: TEXT_COLORS[0], font: 'gothic', plate: false, plateColor: TEXT_COLORS[1] }
 }
 
 /** 時間の範囲を、動画の長さの中に収める（最小の長さを割らない） */
@@ -137,8 +169,6 @@ export function wrapLines(text: string, maxWidth: number, measure: Measure): str
   return lines
 }
 
-export const TEXT_FONT = '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", system-ui, sans-serif'
-
 /** 描いたテキストの外枠（絵の左上からの px）。選ぶ・つかむ範囲の判定に使う */
 export interface TextBox {
   x: number
@@ -158,6 +188,12 @@ function roundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: num
   ctx.closePath()
 }
 
+/** #rrggbb に、濃さをつけた rgba に直す */
+function withAlpha(hex: string, a: number): string {
+  const n = parseInt(hex.slice(1), 16)
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`
+}
+
 const isLight = (hex: string) => {
   const n = parseInt(hex.slice(1), 16)
   const r = (n >> 16) & 255
@@ -174,7 +210,8 @@ export function drawText(ctx: CanvasRenderingContext2D, W: number, H: number, o:
   if (!o.text.trim()) return undefined
   const px = o.size * H
   ctx.save()
-  ctx.font = `700 ${px}px ${TEXT_FONT}`
+  const font = fontOf(o.font)
+  ctx.font = `${font.weight} ${px}px ${font.family}`
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   const lines = wrapLines(o.text, W * WRAP_WIDTH, (s) => ctx.measureText(s).width)
@@ -186,7 +223,7 @@ export function drawText(ctx: CanvasRenderingContext2D, W: number, H: number, o:
   const padX = px * 0.5
   const padY = px * 0.3
   if (o.plate) {
-    ctx.fillStyle = isLight(o.color) ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.85)'
+    ctx.fillStyle = withAlpha(o.plateColor, PLATE_ALPHA)
     ctx.beginPath()
     roundedRect(ctx, cx - w / 2 - padX, cy - h / 2 - padY, w + padX * 2, h + padY * 2, px * 0.35)
     ctx.fill()

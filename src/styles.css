@@ -3874,13 +3874,24 @@ h1.wordmark {
 
 .cmp-swatches {
   display: flex;
-  gap: 8px;
+  flex: none;
+  gap: 6px;
+}
+
+.cmp-swatches.small {
+  gap: 5px;
+}
+
+.cmp-swatches.small .cmp-swatch {
+  width: 22px;
+  height: 22px;
 }
 
 .cmp-swatch {
+  position: relative;
   flex: none;
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   padding: 0;
   border: 2px solid rgb(255 255 255 / 35%);
   border-radius: 50%;
@@ -3892,10 +3903,6 @@ h1.wordmark {
   box-shadow: 0 0 0 2px #0d0b0a, 0 0 0 4px #f5c542;
 }
 
-.cmp-plate.on {
-  background: rgb(245 197 66 / 25%);
-  color: #f5c542;
-}
 
 /* 全体の段：テキストの時間の目印 */
 .cmp-ov-txt {
@@ -3931,6 +3938,7 @@ h1.wordmark {
 }
 
 .cmp-txt-bar > span {
+  position: relative;
   overflow: hidden;
   padding: 0 10px;
   text-overflow: ellipsis;
@@ -3978,12 +3986,164 @@ h1.wordmark {
   user-select: text;
 }
 
-/* 背景の切り替え：切っているときも、押せるものだと分かるよう、縁をつける */
-.cmp-plate {
-  border: 1.5px solid rgb(255 255 255 / 30%);
-  border-radius: 8px;
+
+/* 同梱のフォント：手書き（OFL。public/fonts）。canvas で描く前に、読み込む（loadTextFonts） */
+@font-face {
+  font-family: 'Yusei Magic';
+  src: url('/fonts/YuseiMagic-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
 }
 
-.cmp-plate.on {
+/* 選んだテキストの設定：左に種類、右に中身（中身は、横に流せる） */
+.cmp-txt-style {
+  align-items: center;
+}
+
+.cmp-style-tabs {
+  display: flex;
+  flex: none;
+  gap: 4px;
+}
+
+.cmp-style-tab {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 38px;
+  padding: 0;
+  border: 1.5px solid transparent;
+  border-radius: 10px;
+  background: rgb(255 255 255 / 10%);
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
+.cmp-style-tab.on {
   border-color: #f5c542;
+  background: rgb(245 197 66 / 18%);
+  color: #f5c542;
+}
+
+.cmp-tab-aa {
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.cmp-tab-dot {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgb(255 255 255 / 60%);
+  border-radius: 50%;
+}
+
+/* 背景：「A」。板があるときは、四角で囲む */
+.cmp-tab-bg {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.cmp-tab-bg.on {
+  background: #f5c542;
+  color: #1d1712;
+}
+
+.cmp-tab-size {
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  font-style: normal;
+}
+
+.cmp-tab-size i {
+  font-size: 0.65rem;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.cmp-tab-size b {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.cmp-style-opts {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  /* 左の種類との間の区切り */
+  padding: 4px 4px 4px 10px;
+  border-left: 1px solid rgb(255 255 255 / 18%);
+  overflow-x: auto;
+  scrollbar-width: none;
+  touch-action: pan-x;
+}
+
+.cmp-style-opts::-webkit-scrollbar {
+  display: none;
+}
+
+
+.cmp-font-tile,
+.cmp-bg-tile {
+  display: grid;
+  flex: none;
+  place-items: center;
+  min-width: 34px;
+  height: 36px;
+  padding: 0 4px;
+  border: 1.5px solid rgb(255 255 255 / 25%);
+  border-radius: 10px;
+  background: none;
+  color: #fff;
+  font-size: 1.05rem;
+  cursor: pointer;
+}
+
+.cmp-font-tile.on,
+.cmp-bg-tile.on {
+  border-color: #f5c542;
+  color: #f5c542;
+}
+
+.cmp-bg-tile {
+  width: 34px;
+  min-width: 0;
+  padding: 0;
+}
+
+/* システムのカラーピッカー：虹色の丸。選んでいる色が 5 色に無いときは、その色の丸になる */
+.cmp-swatch.custom {
+  overflow: hidden;
+  background: conic-gradient(#f2545b, #f3c64f, #6fcf6f, #4aa8e8, #8a63d2, #f2545b);
+}
+
+.cmp-swatch.custom input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* テキストの帯：外した区間にかかる部分 */
+.cmp-txt-off {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 6px;
+  background:
+    repeating-linear-gradient(135deg, rgb(255 255 255 / 30%) 0 2px, transparent 2px 6px),
+    rgb(0 0 0 / 55%);
+  pointer-events: none;
 }

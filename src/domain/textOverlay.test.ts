@@ -11,7 +11,9 @@ const base = (over: Partial<TextOverlay> = {}): TextOverlay => ({
   y: 0.78,
   size: 0.055,
   color: '#ffffff',
+  font: 'gothic',
   plate: false,
+  plateColor: '#1d1712',
   ...over,
 })
 
@@ -25,6 +27,11 @@ describe('テキストを置く', () => {
     const o = newText('a', 19, 20)
     expect(o.end).toBe(20)
     expect(o.end - o.start).toBe(3)
+  })
+
+  it('はじめは、ゴシックで、白い文字。背景の板は暗い色（まだ敷かない）', () => {
+    const o = newText('a', 0, 10)
+    expect([o.font, o.color, o.plate, o.plateColor]).toEqual(['gothic', '#ffffff', false, '#1d1712'])
   })
 
   it('動画が 3 秒より短ければ、動画の長さまでにする', () => {

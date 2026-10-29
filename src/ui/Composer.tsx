@@ -23,10 +23,12 @@ import { BackIcon, ForwardIcon, MusicIcon, PauseIcon, PlayIcon, RedoIcon, Scisso
 import {
   drawText,
   lanes as textLanes,
+  loadTextFonts,
   moveEnd,
   moveStart,
   newText,
   TEXT_COLORS,
+  TEXT_FONTS,
   TEXT_SIZE_MAX,
   TEXT_SIZE_MIN,
   type TextBox,
@@ -64,6 +66,37 @@ async function urlDuration(url: string): Promise<{ duration: number; w: number; 
   }
 }
 
+/** 色の選び：はじめの 5 色と、システムのカラーピッカー（どんな色でも）。選んでいる色が 5 色に無ければ、ピッカーの丸にその色を出す */
+function Swatches({
+  small = false,
+  value,
+  label,
+  custom,
+  onPick,
+  onPicker,
+  onPickerOpen,
+}: {
+  small?: boolean
+  value: string
+  label: readonly string[]
+  custom: string
+  onPick: (c: string) => void
+  onPicker: (c: string) => void
+  onPickerOpen: () => void
+}) {
+  const preset = (TEXT_COLORS as readonly string[]).includes(value)
+  return (
+    <div className={`cmp-swatches${small ? ' small' : ''}`} role="group">
+      {TEXT_COLORS.map((col, i) => (
+        <button key={col} type="button" className={`cmp-swatch${value === col ? ' on' : ''}`} style={{ background: col }} aria-label={label[i]} aria-pressed={value === col} onClick={() => onPick(col)} />
+      ))}
+      <label className={`cmp-swatch custom${preset ? '' : ' on'}`} style={preset ? undefined : { background: value }} aria-label={custom}>
+        <input type="color" value={value} onFocus={onPickerOpen} onChange={(e) => onPicker(e.target.value)} />
+      </label>
+    </div>
+  )
+}
+
 /** 帯の絵 1 枚の幅（px） */
 const TILE = 34
 /** 最初に作る粗い絵の数と、あとから作る細かい絵の数（1 本あたり。取得は、粗い順に全部、そのあと細かく） */
@@ -74,7 +107,7 @@ const ZOOM_MIN = 24
 const ZOOM_MAX = 220
 const ZOOM_DEFAULT = 60
 /** テキストの時間の帯 1 段の高さ（px） */
-const LANE = 24
+const LANE = 22
 /** 再生ヘッドが区間の境目に吸い付く距離（px） */
 const SNAP_PX = 7
 
@@ -154,6 +187,12 @@ export function Composer({
   const editingRef = useRef(false)
   /** いま描いているテキストの外枠（画面の px）。つかむ・選ぶ範囲の判定に使う */
   const textBoxes = useRef<{ id: string; box: TextBox }[]>([])
+  /** 選んだテキストの、設定の種類（フォント・文字の色・背景・大きさ）。続けて使えるよう、前回の種類を覚えておく */
+  const [styleTab, setStyleTab] = useState<'font' | 'color' | 'bg' | 'size'>('color')
+  /** 同梱のフォントを読み終えたら、描き直す */
+  const [fontTick, setFontTick] = useState(0)
+  /** カラーピッカーを開いている間の、取り消しの 1 手（開くたびに 1 回だけ積む） */
+  const pickerRecorded = useRef(false)
   /** 選んだ区間（タップで選ぶ。選んでいなければ、再生ヘッドの下の区間） */
   const [sel, setSel] = useState<string>()
   /** 再生ヘッドの位置（つないだ並びの、先頭からの秒） */
@@ -631,7 +670,9 @@ export function Composer({
   // ---- テキスト ----
   const curLay = lay.find((c) => c.key === curKey)
   const localNow = g - (curLay?.off ?? 0)
-  const shownTexts = ready ? texts.filter((o) => o.key === curKey && localNow >= o.start && localNow < o.end) : []
+  // 外した（斜線の）区間では、できあがりに無いので、プレビューにも出さない（書き出しと同じ見え方にする）
+  const inOff = ready && !!segAtG(g)?.off
+  const shownTexts = ready && !inOff ? texts.filter((o) => o.key === curKey && localNow >= o.start && localNow < o.end) : []
   const shownSig = shownTexts.map((o) => `${o.id}|${o.text}|${o.x}|${o.y}|${o.size}|${o.color}|${o.plate}`).join('/')
   const laneOf = textLanes(texts, Object.fromEntries(lay.map((c) => [c.key, c.off])))
   const laneCount = texts.length ? Math.min(3, Math.max(...Object.values(laneOf)) + 1) : 0
@@ -682,13 +723,38 @@ export function Composer({
     setSelBox(sb ? { x: sb.x / dpr, y: sb.y / dpr, w: sb.w / dpr, h: sb.h / dpr } : undefined)
     // shownTexts は shownSig で見る（毎コマの描き直しを、見た目が変わったときだけにする）
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vr, shownSig, selText])
+  }, [vr, shownSig, selText, fontTick])
+
+  // 同梱のフォント（手書き）は、使うとき・選ぶ一覧を出すときに読み込み、読めたら描き直す
+  const fontSig = texts.map((o) => o.font).join(',') + (selT && styleTab === 'font' ? ',all' : '')
+  useEffect(() => {
+    const ids = fontSig.includes('all') ? TEXT_FONTS.map((f) => f.id) : (fontSig.split(',').filter(Boolean) as (typeof TEXT_FONTS)[number]['id'][])
+    if (ids.length === 0) return
+    let cancelled = false
+    void loadTextFonts(ids).then(() => !cancelled && setFontTick((n) => n + 1))
+    return () => {
+      cancelled = true
+    }
+  }, [fontSig])
+
+  /** カラーピッカーで選んだ色（選んでいる間は、細かく変わるので、取り消しの 1 手は、開いて最初の 1 回だけ積む） */
+  const pickerChange = (c: string, key: 'color' | 'plateColor' = 'color') => {
+    if (!selT) return
+    if (!pickerRecorded.current) {
+      pickerRecorded.current = true
+      checkpoint()
+    }
+    patchText(selT.id, { [key]: c }, false)
+  }
 
   const addText = () => {
     if (!ready || busy) return
     stopAll()
     const { c, local } = locate(g)
-    const o = newText(c.key, local, c.d)
+    const base = newText(c.key, local, c.d)
+    // 同じ時間に、すでにテキストがあれば、重ならないよう、上にずらして置く
+    const sameTime = texts.filter((x) => x.key === base.key && x.start < base.end && x.end > base.start).length
+    const o = { ...base, y: Math.max(0.2, base.y - 0.1 * sameTime) }
     commit((d) => ({ ...d, texts: [...d.texts, o] }))
     setSelText(o.id)
     freshText.current = true
@@ -803,12 +869,15 @@ export function Composer({
   }
 
   // 時間の帯の端を引いて、表示する時間を変える（引いている間は、その端の絵を出す）
-  const th = useRef<{ id: string; edge: 'start' | 'end'; x0: number; t0: number; recorded: boolean } | null>(null)
+  const th = useRef<{ id: string; edge: 'start' | 'end' | 'move'; x0: number; t0: number; len: number; moved: boolean; recorded: boolean } | null>(null)
+  // 帯の中をつかむと、長さを保ったまま、ずらせる（動かさずに離せば、選ぶだけ）
   const textBarDown = (o: TextOverlay) => (e: PointerEvent) => {
     e.stopPropagation()
+    e.currentTarget.setPointerCapture(e.pointerId)
     if (editing) finishEdit()
     stopAll()
     setSelText(o.id)
+    th.current = { id: o.id, edge: 'move', x0: e.clientX, t0: o.start, len: o.end - o.start, moved: false, recorded: false }
     const c = lay.find((x) => x.key === o.key)
     if (c) seekGlobal(c.off + Math.min(c.d - 0.01, o.start), false)
   }
@@ -817,7 +886,7 @@ export function Composer({
     e.currentTarget.setPointerCapture(e.pointerId)
     stopAll()
     setSelText(o.id)
-    th.current = { id: o.id, edge, x0: e.clientX, t0: o[edge], recorded: false }
+    th.current = { id: o.id, edge, x0: e.clientX, t0: o[edge], len: 0, moved: true, recorded: false }
   }
   const textHandleMove = (e: PointerEvent) => {
     const d = th.current
@@ -825,9 +894,17 @@ export function Composer({
     const c = o && lay.find((x) => x.key === o.key)
     if (!d || !o || !c) return
     e.stopPropagation()
+    if (d.edge === 'move' && !d.moved && Math.abs(e.clientX - d.x0) < 5) return
+    d.moved = true
     if (!d.recorded) {
       d.recorded = true
       checkpoint()
+    }
+    if (d.edge === 'move') {
+      const start = Math.min(c.d - d.len, Math.max(0, d.t0 + (e.clientX - d.x0) / zoom))
+      patchText(d.id, { start, end: start + d.len }, false)
+      seekGlobal(c.off + Math.min(c.d - 0.01, start), false)
+      return
     }
     const t = Math.min(c.d, Math.max(0, d.t0 + (e.clientX - d.x0) / zoom))
     patchText(d.id, (x) => (d.edge === 'start' ? moveStart(x, t, c.d) : moveEnd(x, t, c.d)), false)
@@ -1040,39 +1117,73 @@ export function Composer({
             {/* 音：元の音のあり・なし（スピーカー 1 つ）。BGM は、同梱の曲が入るまでは出さない（曲の持ち合わせがない人には使えないため） */}
             {selT && !editing ? (
               <div className="cmp-sound cmp-txt-style">
-                <div className="cmp-swatches" role="group" aria-label={t.compose.text}>
-                  {TEXT_COLORS.map((col, i) => (
-                    <button
-                      key={col}
-                      type="button"
-                      className={`cmp-swatch${selT.color === col ? ' on' : ''}`}
-                      style={{ background: col }}
-                      aria-label={t.compose.textColors[i]}
-                      aria-pressed={selT.color === col}
-                      onClick={() => patchText(selT.id, { color: col })}
-                    />
+                {/* 左：設定の種類（フォント・文字の色・背景・大きさ）。右：選んだ種類の中身（横に流せる） */}
+                <div className="cmp-style-tabs" role="tablist">
+                  {(
+                    [
+                      ['font', t.compose.textTabFont, <span key="f" className="cmp-tab-aa">Aa</span>],
+                      ['color', t.compose.textTabColor, <span key="c" className="cmp-tab-dot" style={{ background: selT.color }} />],
+                      ['bg', t.compose.textTabBg, <span key="b" className={`cmp-tab-bg${selT.plate ? ' on' : ''}`}>A</span>],
+                      ['size', t.compose.textSize, <span key="s" className="cmp-tab-size"><i>A</i><b>A</b></span>],
+                    ] as const
+                  ).map(([id, label, icon]) => (
+                    <button key={id} type="button" role="tab" aria-selected={styleTab === id} aria-label={label} className={`cmp-style-tab${styleTab === id ? ' on' : ''}`} onClick={() => setStyleTab(id)}>
+                      {icon}
+                    </button>
                   ))}
                 </div>
-                <button type="button" className={`editor-text-button cmp-plate${selT.plate ? ' on' : ''}`} aria-pressed={selT.plate} onClick={() => patchText(selT.id, { plate: !selT.plate })}>
-                  {t.compose.textPlate}
-                </button>
-                <input
-                  type="range"
-                  className="bgm-volume"
-                  min={TEXT_SIZE_MIN}
-                  max={TEXT_SIZE_MAX}
-                  step={0.005}
-                  value={selT.size}
-                  aria-label={t.compose.textSize}
-                  onPointerDown={() => (sizeDrag.current = false)}
-                  onChange={(e) => {
-                    if (!sizeDrag.current) {
-                      sizeDrag.current = true
-                      checkpoint()
-                    }
-                    patchText(selT.id, { size: Number(e.target.value) }, false)
-                  }}
-                />
+                <div className="cmp-style-opts">
+                  {styleTab === 'font' &&
+                    TEXT_FONTS.map((f, i) => (
+                      <button
+                        key={f.id}
+                        type="button"
+                        className={`cmp-font-tile${selT.font === f.id ? ' on' : ''}`}
+                        style={{ fontFamily: f.family, fontWeight: f.weight }}
+                        aria-label={t.compose.textFonts[i]}
+                        aria-pressed={selT.font === f.id}
+                        onClick={() => patchText(selT.id, { font: f.id })}
+                      >
+                        あA
+                      </button>
+                    ))}
+                  {styleTab === 'color' && (
+                    <Swatches value={selT.color} label={t.compose.textColors} custom={t.compose.textColorCustom} onPick={(c) => patchText(selT.id, { color: c })} onPicker={pickerChange} onPickerOpen={() => (pickerRecorded.current = false)} />
+                  )}
+                  {styleTab === 'bg' && (
+                    <>
+                      <button type="button" className={`cmp-bg-tile${selT.plate ? ' on' : ''}`} aria-label={selT.plate ? t.compose.textBgPlate : t.compose.textBgNone} aria-pressed={selT.plate} onClick={() => patchText(selT.id, { plate: !selT.plate })}>
+                        <span className={`cmp-tab-bg${selT.plate ? ' on' : ''}`} style={selT.plate ? { background: selT.plateColor, color: selT.color } : undefined}>
+                          A
+                        </span>
+                      </button>
+                      {selT.plate && (
+                        <>
+                          <Swatches small value={selT.plateColor} label={t.compose.textColors} custom={t.compose.textColorCustom} onPick={(c) => patchText(selT.id, { plateColor: c })} onPicker={(c) => pickerChange(c, 'plateColor')} onPickerOpen={() => (pickerRecorded.current = false)} />
+                        </>
+                      )}
+                    </>
+                  )}
+                  {styleTab === 'size' && (
+                    <input
+                      type="range"
+                      className="bgm-volume"
+                      min={TEXT_SIZE_MIN}
+                      max={TEXT_SIZE_MAX}
+                      step={0.005}
+                      value={selT.size}
+                      aria-label={t.compose.textSize}
+                      onPointerDown={() => (sizeDrag.current = false)}
+                      onChange={(e) => {
+                        if (!sizeDrag.current) {
+                          sizeDrag.current = true
+                          checkpoint()
+                        }
+                        patchText(selT.id, { size: Number(e.target.value) }, false)
+                      }}
+                    />
+                  )}
+                </div>
               </div>
             ) : (
             <div className="cmp-sound">
@@ -1183,7 +1294,16 @@ export function Composer({
                         className={`cmp-txt-bar${on ? ' on' : ''}`}
                         style={{ left: (c.off + o.start) * zoom, width: Math.max(8, (o.end - o.start) * zoom), top: Math.min(2, laneOf[o.id] ?? 0) * LANE + 2 }}
                         onPointerDown={textBarDown(o)}
+                        onPointerMove={textHandleMove}
+                        onPointerUp={textHandleUp}
+                        onPointerCancel={textHandleUp}
                       >
+                        {/* 外した（斜線の）区間にかかる部分は、できあがりに入らないので、斜線で示す */}
+                        {c.segs
+                          .filter((sg) => sg.off && sg.end > o.start && sg.start < o.end)
+                          .map((sg) => (
+                            <u key={sg.id} className="cmp-txt-off" style={{ left: (Math.max(sg.start, o.start) - o.start) * zoom, width: (Math.min(sg.end, o.end) - Math.max(sg.start, o.start)) * zoom }} />
+                          ))}
                         <span>{o.text.split('\n')[0] || t.compose.textPlaceholder}</span>
                         {on && (
                           <>

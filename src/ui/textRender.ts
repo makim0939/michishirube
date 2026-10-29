@@ -1,5 +1,5 @@
 import { renderSize, type ComposeOverlay } from '../data/compose'
-import { drawText, outputIntervals, type TextOverlay } from '../domain/textOverlay'
+import { drawText, loadTextFonts, outputIntervals, type TextOverlay } from '../domain/textOverlay'
 
 /**
  * 書き出しに重ねる、テキストの画像（透明な背景の PNG）を作る。
@@ -13,6 +13,8 @@ export async function renderTextOverlays(
   shortSide: number,
 ): Promise<ComposeOverlay[]> {
   const size = renderSize(first.w, first.h, shortSide)
+  // 同梱のフォントは、読み込みが終わってから描く（終わる前だと、代わりの字になる）
+  await loadTextFonts(texts.map((o) => o.font))
   const out: ComposeOverlay[] = []
   for (const o of texts) {
     const intervals = outputIntervals([o], ranges)
