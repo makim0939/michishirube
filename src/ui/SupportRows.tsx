@@ -1,15 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Product } from '@capgo/native-purchases'
 import {
-  buyPlus,
   canPurchase,
   loadProducts,
   PurchaseCancelled,
-  restorePurchases,
   sendTip,
   usePlus,
 } from '../data/purchases'
 import { useToast } from './feedback'
+import { PlusSheet } from './PlusSheet'
 import { t } from '../i18n'
 
 /**
@@ -49,55 +48,42 @@ export function useProducts() {
 }
 
 /**
- * 設定の「その他」に並べる、アプリ内課金の行（iPhone・iPad のアプリだけ）。
- * 説明は並べず、1行ずつ、押すとストアの購入の画面が出る。買ったかどうかは、行の右に出すだけ。
- * 価格はストアのもの。ストアから商品が取れた行だけを出す
+ * 設定の「その他」に出す、「ラテ帳 Plus」の行（iPhone・iPad のアプリだけ）。
+ * 右に、何が使えるか（買ったあとは「購入済み」）を出し、押すと、シートで、使えるようになる機能を動画で見せ、購入・復元できる。
+ * 価格は一覧に出さない（シートの中だけ）。ストアから商品が取れないときは、行を出さない
  */
 export function SupportRows() {
-  const toast = useToast()
   const plus = usePlus()
   const products = useProducts()
-  const { busy, run } = usePurchaseRunner()
+  const { busy } = usePurchaseRunner()
+  const [open, setOpen] = useState(false)
 
-  if (!canPurchase) return null
-
-  const restore = () =>
-    run(async () => {
-      const restored = await restorePurchases()
-      toast.show(restored ? t.support.restored : t.support.nothingToRestore)
-    })
+  if (!canPurchase || !products.plus) return null
 
   return (
     <>
-      {products.plus && (
-        <>
-          <li>
-            <button
-              type="button"
-              className="settings-row choice"
-              disabled={busy || plus}
-              onClick={() => run(buyPlus, t.support.plusThanks)}
-            >
-              <span className="settings-label">{t.support.plus}</span>
-              <span className="settings-value">{plus ? t.support.purchased : products.plus?.priceString}</span>
-            </button>
-          </li>
-          <li>
-            <button type="button" className="settings-row choice" disabled={busy} onClick={restore}>
-              <span className="settings-label">{t.support.restore}</span>
-            </button>
-          </li>
-        </>
-      )}
-      {/* 商品がストアに無い（まだ登録・承認されていない、取れなかった）ときは出さない。押しても必ず失敗する行を見せないため */}
-      {products.tip && (
-        <li>
-          <button type="button" className="settings-row choice" disabled={busy} onClick={() => run(sendTip, t.support.tipThanks)}>
-            <span className="settings-label">{t.support.tip}</span>
-            <span className="settings-value">{products.tip.priceString}</span>
-          </button>
-        </li>
-      )}
+      <li>
+        <button type="button" className="settings-row choice" disabled={busy || plus} onClick={() => setOpen(true)}>
+          <span className="settings-label">{t.support.plus}</span>
+          <span className="settings-value">{plus ? t.support.purchased : t.support.plusKind}</span>
+        </button>
+      </li>
+      {open && <PlusSheet onUnlocked={() => setOpen(false)} onClose={() => setOpen(false)} />}
     </>
+  )
+}
+
+/**
+ * 開発を応援する（投げ銭）。設定のいちばん下に、静かな文字リンクとして置く（行にはしない）。
+ * 何も解放しない。価格は、押したあとのストアの画面に出る。ストアに商品が無いときは出さない
+ */
+export function SupportTip() {
+  const products = useProducts()
+  const { busy, run } = usePurchaseRunner()
+  if (!canPurchase || !products.tip) return null
+  return (
+    <button type="button" className="support-tip" disabled={busy} onClick={() => run(sendTip, t.support.tipThanks)}>
+      {t.support.tipShort}
+    </button>
   )
 }

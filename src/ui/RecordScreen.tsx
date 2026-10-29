@@ -26,7 +26,7 @@ import { Trimmer } from './Trimmer'
 import { recordBackAction } from './recordBack'
 import { useBackHandler } from './useBackHandler'
 import { patternFor } from './world'
-import { BackIcon, CameraIcon, ChevronDownIcon, FilmIcon, PhotoIcon, PlusIcon, ScissorsIcon, VideoIcon } from './icons'
+import { BackIcon, CameraIcon, ChevronDownIcon, PhotoIcon, PlusIcon, ScissorsIcon, VideoIcon } from './icons'
 import { t } from '../i18n'
 
 const OUTCOMES: { value: Outcome; label: string }[] = (['good', 'meh', 'bad'] as const).map((value) => ({
@@ -628,7 +628,6 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
 
   const trimItem = items.find((i) => i.key === trimming)
   const trimBlob = trimItem && itemBlob(trimItem)
-  const trimSrc = trimItem && itemSrc(trimItem)
 
   // 次の一手の候補：前回と同じ、選んだ原因の直し方（押すだけで入る）
   const suggestions = [
@@ -761,7 +760,8 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
                   </button>
                   <div className="preview-actions">
                     {size !== undefined && <span className="muted">{formatBytes(size)}</span>}
-                    {(blob || src) && isVideo({ type }) && (
+                    {/* 編集の画面（Composer）が使える端末（iPhone・iPad）では、動画ごとの「編集」は出さず、下の「編集」1 つにまとめる。使えない端末（Android・Web）だけ、動画ごとに、切り取りの画面（Trimmer） */}
+                    {(blob || src) && isVideo({ type }) && !canJoinVideos && (
                       <button type="button" className="btn small" onClick={() => setTrimming(item.key)}>
                         <ScissorsIcon size={16} />
                         {t.common.edit}
@@ -796,11 +796,11 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
             </li>
           </ul>
         )}
-        {/* 仕上げる（つなぐ・BGM）。動画があるときに出す */}
+        {/* 編集（頭・尻・中の削除・分割・つなぐ・BGM）。動画があるときに出す。iPhone・iPad だけ */}
         {joinable.length >= 1 && (
           <button type="button" className="btn small join-button" onClick={() => setJoining('open')}>
-            <FilmIcon size={16} />
-            {t.compose.join}
+            <ScissorsIcon size={16} />
+            {t.common.edit}
           </button>
         )}
         {[
@@ -1005,10 +1005,9 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
         />
       )}
 
-      {trimItem && (trimBlob || trimSrc) && (
+      {trimItem && trimBlob && (
         <Trimmer
           file={trimBlob}
-          src={trimSrc}
           name={trimItem.kind === 'new' ? trimItem.file.name : (trimItem.media.name ?? 'video.mp4')}
           onDone={(file) => onTrimmed(trimItem.key, file)}
           onClose={() => setTrimming(null)}

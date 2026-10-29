@@ -3752,3 +3752,66 @@ h1.wordmark {
   opacity: 0.3;
   cursor: not-allowed;
 }
+
+/* ---- ラテ帳 Plus のシート ---- */
+
+.plus-sheet {
+  /* 動画で機能を見せるので、高めにする */
+  max-height: 88vh;
+  min-height: 70vh;
+  overflow-y: auto;
+}
+
+.plus-headline {
+  margin: 4px 0 12px;
+  font-family: var(--font-mincho);
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.plus-demos {
+  display: flex;
+  gap: 12px;
+  margin: 0 -16px 14px;
+  padding: 0 16px;
+  overflow-x: auto;
+  list-style: none;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: 16px;
+}
+
+.plus-demos li {
+  flex: 0 0 78%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  scroll-snap-align: start;
+}
+
+.plus-demo {
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  margin-bottom: 6px;
+  border-radius: 14px;
+  background: #0b0b0b;
+  object-fit: cover;
+}
+
+.plus-buy {
+  margin-top: auto;
+  padding-top: 16px;
+}
+
+/* 設定のいちばん下の、静かな文字リンク */
+.support-tip {
+  display: block;
+  margin: 0 auto;
+  padding: 10px 12px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.8rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

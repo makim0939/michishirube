@@ -24,7 +24,7 @@ import { getVideoTemplates, isCustomTemplates } from '../data/videoText'
 import { ConfirmButton, formatBytes, requestPersist, saveFile } from './common'
 import { clearImageCaches } from './imageCache'
 import { useAction, useToast } from './feedback'
-import { SupportRows } from './SupportRows'
+import { SupportRows, SupportTip } from './SupportRows'
 import { FeedbackPage } from './FeedbackPage'
 import { RoadmapSettings } from './RoadmapSettings'
 import { backHandler, go, href, type SettingsSection } from './router'
@@ -214,6 +214,7 @@ function SettingsHome() {
       </section>
 
       <p className="muted small center">{t.settings.appName} v{__APP_VERSION__}</p>
+      <SupportTip />
     </div>
   )
 }
