@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
 import { BUNDLED_BGM, bgmBlob, bgmExtension, bgmTitle, type BgmChoice } from '../data/bgm'
 import { composeClips } from '../data/compose'
+import { cancelComposeVideoFiles, ComposeCancelled } from '../data/files'
 import { inMemory, probeDuration } from '../data/mediaPrep'
 import type { VideoQuality } from '../data/videoStorage'
 import {
@@ -129,6 +130,10 @@ export function Composer({
   const [url, setUrl] = useState<string>()
   const [playing, setPlaying] = useState(false)
   const [busy, setBusy] = useState(false)
+  /** 書き出しの進み（0〜1）。0 のあいだは、流れる線を出す */
+  const [progress, setProgress] = useState(0)
+  /** 作っている間に「キャンセル」を押された（ネイティブが始まる前でも、始めないようにする） */
+  const cancelRequested = useRef(false)
   const [error, setError] = useState<string>()
   const [plusSheet, setPlusSheet] = useState(false)
   const [frames, setFrames] = useState<Record<string, string[]>>({})
@@ -586,6 +591,8 @@ export function Composer({
     if (ranges.length === 0) return
     stopAll()
     setError(undefined)
+    setProgress(0)
+    cancelRequested.current = false
     setBusy(true)
     try {
       // 無料で試せる回数を使い切っていたら、書き出す前に購入の案内（画面を見て、触れたうえで判断してもらう）
@@ -608,13 +615,19 @@ export function Composer({
         fileName,
         bgm ? { source: { blob: await bgmBlob(bgm) }, volume: bgmVolume, extension: bgmExtension(bgm) } : undefined,
         muted,
+        setProgress,
+        () => cancelRequested.current,
       )
+      // やめるのと同時に書き終わったときも、できたものは使わない
+      if (cancelRequested.current) return
       onDone(
         file,
         ranges.map((r) => r.key),
         paid,
       )
     } catch (e) {
+      // やめたときは、何も出さずに編集へ戻る
+      if (e instanceof ComposeCancelled) return
       setError(e instanceof Error ? t.compose.failedWith(e.message) : t.compose.failed)
     } finally {
       setBusy(false)
@@ -623,7 +636,12 @@ export function Composer({
 
   /** キャンセル：変えていなければ、そのまま閉じる。変えていれば、確認せず閉じ、親が「元に戻す」のトーストを出す（作っている間は閉じない） */
   const cancel = () => {
-    if (busy) return
+    if (busy) {
+      // 作っている間は、書き出しをやめて編集へ戻る（確認もトーストも出さない）。画面は閉じない
+      cancelRequested.current = true
+      void cancelComposeVideoFiles()
+      return
+    }
     if (dirty) onDiscard()
     else onClose()
   }
@@ -690,7 +708,7 @@ export function Composer({
       style={hidden ? { display: 'none' } : undefined}
     >
       <div className="editor-top">
-        <button className="editor-text-button" onClick={cancel} disabled={busy}>
+        <button className="editor-text-button" onClick={cancel}>
           {t.editor.cancel}
         </button>
         <span className="editor-title">{ready ? formatTime(total) : ''}</span>
@@ -723,8 +741,8 @@ export function Composer({
         {busy && (
           <div className="editor-progress">
             <p>{t.compose.working}</p>
-            <div className="progress indeterminate" aria-hidden="true">
-              <span />
+            <div className={progress > 0 ? 'progress' : 'progress indeterminate'} aria-hidden="true">
+              <span style={progress > 0 ? { width: `${progress * 100}%` } : undefined} />
             </div>
           </div>
         )}

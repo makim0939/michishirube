@@ -1,4 +1,4 @@
-import { Capacitor, registerPlugin } from '@capacitor/core'
+import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor/core'
 import { Directory, Encoding, Filesystem } from '@capacitor/filesystem'
 import { Share } from '@capacitor/share'
 import { isIosApp, isNativeApp } from '../platform'
@@ -156,6 +156,18 @@ interface VideoComposerPlugin {
     videoBitrate: number
     audioBitrate: number
   }): Promise<{ size: number; duration: number }>
+  /** 書き出しをやめる（iOS だけ。書き出し中でなければ何もしない） */
+  cancel(): Promise<void>
+  /** 書き出しの進み（iOS だけ。value は 0〜1） */
+  addListener(event: 'composeProgress', handler: (e: { value: number }) => void): Promise<PluginListenerHandle>
+}
+
+/** 書き出しをやめたときに投げる（失敗とは分ける。呼ぶ側は何も出さずに編集へ戻る） */
+export class ComposeCancelled extends Error {
+  constructor() {
+    super('cancelled')
+    this.name = 'ComposeCancelled'
+  }
 }
 
 /** アプリの中だけのプラグイン（ios/App/App/VideoComposerPlugin.swift・android の VideoComposerPlugin.java） */
@@ -259,14 +271,30 @@ export async function composeVideoFiles(
   preset: { shortSide: number; video: number; audio: number },
   bgm?: { input: string; volume: number; totalSeconds: number },
   muteOriginal = false,
+  /** 進み具合（0〜1）を、約 1 秒ごとに受け取る。iOS だけ（Android は呼ばれない） */
+  onProgress?: (value: number) => void,
 ): Promise<{ size: number; duration: number }> {
-  return VideoComposer.compose({
-    clips: clips.map((c) => ({ ...c, input: fullPath(c.input) })),
-    ...(bgm ? { bgm: { ...bgm, input: fullPath(bgm.input) } } : {}),
-    ...(muteOriginal ? { muteOriginal } : {}),
-    output: fullPath(output),
-    maxShortSide: preset.shortSide,
-    videoBitrate: preset.video,
-    audioBitrate: preset.audio,
-  })
+  const listener = onProgress && isIosApp ? VideoComposer.addListener('composeProgress', (e) => onProgress(e.value)) : undefined
+  try {
+    return await VideoComposer.compose({
+      clips: clips.map((c) => ({ ...c, input: fullPath(c.input) })),
+      ...(bgm ? { bgm: { ...bgm, input: fullPath(bgm.input) } } : {}),
+      ...(muteOriginal ? { muteOriginal } : {}),
+      output: fullPath(output),
+      maxShortSide: preset.shortSide,
+      videoBitrate: preset.video,
+      audioBitrate: preset.audio,
+    })
+  } catch (e) {
+    if ((e as { code?: string } | null)?.code === 'CANCELLED') throw new ComposeCancelled()
+    throw e
+  } finally {
+    void listener?.then((h) => h.remove())
+  }
+}
+
+/** 作っている書き出しをやめる。iOS だけ。Android にはこの操作が無いので、何もしない（画面側でも出さない） */
+export async function cancelComposeVideoFiles(): Promise<void> {
+  if (!isIosApp) return
+  await VideoComposer.cancel().catch(() => undefined)
 }
