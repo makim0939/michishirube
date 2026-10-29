@@ -83,7 +83,7 @@ function Tiles({ frames, start, end, duration, width }: { frames?: string[]; sta
 }
 
 /**
- * 動画を仕上げる（iPhone の写真アプリの見た目で、DaVinci Resolve の Cut ページのように操作する）。
+ * 動画を編集する（iPhone の写真アプリの見た目で、DaVinci Resolve の Cut ページのように操作する）。
  * 2 段のタイムライン：上は全体（なぞると再生ヘッドが動く）、下は再生ヘッドの周りの拡大（再生ヘッドは中央に固定。2 本指で倍率）。
  * 区間をタップして選び、分割・削除（斜線で残す）・戻す。選んだ区間の両端の取っ手でトリム（隣と重ならない）。
  * 取り消し・やり直しが、操作の列にある。キャンセルは確認せず、すぐ閉じる（onDiscard が、トーストの「元に戻す」を出す）。
@@ -879,6 +879,7 @@ export function Composer({
 
       {plusSheet && (
         <PlusSheet
+          exhausted
           onUnlocked={() => {
             setPlusSheet(false)
             void done()
