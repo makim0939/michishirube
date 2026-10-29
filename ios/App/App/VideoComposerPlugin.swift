@@ -139,7 +139,8 @@ public class VideoComposerPlugin: CAPPlugin, CAPBridgedPlugin {
         Task { [weak self] in
             while true {
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
-                if watchdog.isDone || watchdog.cancelled { return }
+                // 結果を返したあと（やめた・時間切れで先に失敗を返した）は、止める処理が戻らなくても、送り続けない
+                if watchdog.isDone || once.isSettled { return }
                 self?.notifyListeners("composeProgress", data: ["value": watchdog.fraction])
             }
         }
@@ -238,6 +239,11 @@ public class VideoComposerPlugin: CAPPlugin, CAPBridgedPlugin {
     private final class Once {
         private let lock = NSLock()
         private var settled = false
+        var isSettled: Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            return settled
+        }
         func run(_ body: () -> Void) {
             lock.lock()
             defer { lock.unlock() }
