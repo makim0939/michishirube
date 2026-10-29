@@ -3644,7 +3644,7 @@ h1.wordmark {
 .cmp-cu-in {
   position: absolute;
   top: 0;
-  bottom: 0;
+  height: 76px;
   left: 0;
 }
 
@@ -3813,4 +3813,177 @@ h1.wordmark {
   font-size: 0.8rem;
   text-decoration: underline;
   text-underline-offset: 3px;
+}
+
+/* ---- テキスト（編集画面） ---- */
+
+.cmp-txt-canvas {
+  position: absolute;
+  touch-action: none;
+}
+
+/* 選んだテキストの外枠 */
+.cmp-txt-sel {
+  position: absolute;
+  border: 1.5px dashed #f5c542;
+  border-radius: 8px;
+  pointer-events: none;
+}
+
+/* 文字を打つところ：絵の上の端。出していないときは、見えないだけで置いておく */
+.cmp-txt-edit {
+  position: absolute;
+  top: 6px;
+  left: 10px;
+  right: 10px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.cmp-txt-edit.on {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.cmp-txt-edit textarea {
+  flex: 1;
+  min-width: 0;
+  resize: none;
+  padding: 8px 10px;
+  border: 1px solid rgb(255 255 255 / 25%);
+  border-radius: 10px;
+  background: rgb(0 0 0 / 70%);
+  color: #fff;
+  font: inherit;
+  /* 16px 未満だと、iPhone が、入力のたびに画面を拡大する */
+  font-size: 16px;
+}
+
+.cmp-txt-edit .editor-text-button {
+  flex: none;
+  min-height: 38px;
+}
+
+/* 選んだテキストの、色・背景・大きさ・削除（音の行の場所に出す） */
+.cmp-txt-style {
+  gap: 10px;
+}
+
+.cmp-swatches {
+  display: flex;
+  gap: 8px;
+}
+
+.cmp-swatch {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 2px solid rgb(255 255 255 / 35%);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.cmp-swatch.on {
+  border-color: #f5c542;
+  box-shadow: 0 0 0 2px #0d0b0a, 0 0 0 4px #f5c542;
+}
+
+.cmp-plate.on {
+  background: rgb(245 197 66 / 25%);
+  color: #f5c542;
+}
+
+/* 全体の段：テキストの時間の目印 */
+.cmp-ov-txt {
+  position: absolute;
+  bottom: -2px;
+  height: 3px;
+  border-radius: 2px;
+  background: rgb(245 197 66 / 70%);
+  pointer-events: none;
+}
+
+.cmp-ov-txt.on {
+  background: #f5c542;
+}
+
+/* 拡大の段：テキストの時間の帯 */
+.cmp-cu-txt {
+  position: absolute;
+  left: 0;
+}
+
+.cmp-txt-bar {
+  position: absolute;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  border-radius: 6px;
+  background: rgb(245 197 66 / 30%);
+  color: #fff;
+  font-size: 0.7rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.cmp-txt-bar > span {
+  overflow: hidden;
+  padding: 0 10px;
+  text-overflow: ellipsis;
+}
+
+.cmp-txt-bar.on {
+  background: rgb(245 197 66 / 55%);
+  outline: 1.5px solid #f5c542;
+}
+
+.cmp-txt-bar i {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 16px;
+  background: #f5c542;
+  touch-action: none;
+}
+
+.cmp-txt-bar i::before {
+  content: '';
+  position: absolute;
+  inset: 0 -12px;
+}
+
+.cmp-txt-bar i.start {
+  left: -8px;
+  border-radius: 6px 0 0 6px;
+}
+
+.cmp-txt-bar i.end {
+  right: -8px;
+  border-radius: 0 6px 6px 0;
+}
+
+/* 編集画面は、文字を選択する拡大鏡・メニューを出さない（テキストを動かすとき、長押しで出てしまう）。文字を打つ欄だけは、選べる */
+.cmp {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.cmp .cmp-txt-edit textarea {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* 背景の切り替え：切っているときも、押せるものだと分かるよう、縁をつける */
+.cmp-plate {
+  border: 1.5px solid rgb(255 255 255 / 30%);
+  border-radius: 8px;
+}
+
+.cmp-plate.on {
+  border-color: #f5c542;
 }

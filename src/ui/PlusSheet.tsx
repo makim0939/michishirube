@@ -46,6 +46,7 @@ export function PlusSheet({
   // 使えるようになる機能を、音の無い短い動画（ループ）で見せる。横にスワイプして見る
   const demos = [
     { src: `${import.meta.env.BASE_URL}plus/split.mp4`, title: t.support.plusSplit },
+    { src: `${import.meta.env.BASE_URL}plus/text.mp4`, title: t.support.plusText },
     { src: `${import.meta.env.BASE_URL}plus/join.mp4`, title: t.support.plusJoin },
   ]
 

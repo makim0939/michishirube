@@ -5,7 +5,11 @@
  * 外した区間は、並びに残る（詰めない）ので、戻せる
  */
 
+import type { TextOverlay } from './textOverlay'
+
 /** 区間の最小の長さ（秒）。残す区間どうしは、これを割らない */
+
+
 export const MIN_SEG = 0.3
 /** これより短い「外した区間」は、無いものとする */
 const TINY = 0.02
@@ -17,10 +21,11 @@ export interface Seg {
   off: boolean
 }
 
-/** 編集の中身。order は、つなぐ動画（key）の並び */
+/** 編集の中身。order は、つなぐ動画（key）の並び。texts は、動画に重ねるテキスト（動画の中の秒で持つので、並べ替え・分割・削除に付いてくる） */
 export interface Doc {
   order: string[]
   segs: Record<string, Seg[]>
+  texts: TextOverlay[]
 }
 
 let counter = 0

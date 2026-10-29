@@ -151,6 +151,8 @@ interface VideoComposerPlugin {
     bgm?: { input: string; volume: number; totalSeconds: number }
     /** 元の動画の音を使わない */
     muteOriginal?: boolean
+    /** 動画に重ねる画像（iOS だけ。入力は、アプリのファイルの場所） */
+    overlays?: { input: string; start: number; end: number }[]
     output: string
     maxShortSide: number
     videoBitrate: number
@@ -273,6 +275,8 @@ export async function composeVideoFiles(
   muteOriginal = false,
   /** 進み具合（0〜1）を、約 1 秒ごとに受け取る。iOS だけ（Android は呼ばれない） */
   onProgress?: (value: number) => void,
+  /** 動画に重ねる画像（できあがりの start〜end 秒の間だけ）。iOS だけ */
+  overlays?: { input: string; start: number; end: number }[],
 ): Promise<{ size: number; duration: number }> {
   const listener = onProgress && isIosApp ? VideoComposer.addListener('composeProgress', (e) => onProgress(e.value)) : undefined
   try {
@@ -280,6 +284,7 @@ export async function composeVideoFiles(
       clips: clips.map((c) => ({ ...c, input: fullPath(c.input) })),
       ...(bgm ? { bgm: { ...bgm, input: fullPath(bgm.input) } } : {}),
       ...(muteOriginal ? { muteOriginal } : {}),
+      ...(overlays?.length ? { overlays: overlays.map((o) => ({ ...o, input: fullPath(o.input) })) } : {}),
       output: fullPath(output),
       maxShortSide: preset.shortSide,
       videoBitrate: preset.video,

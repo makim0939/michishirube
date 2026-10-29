@@ -1,5 +1,6 @@
 import AVFoundation
 import Capacitor
+import CoreImage
 import Foundation
 
 /// 複数の動画から、指定した区間を切り出し、順につないで 1 本の MP4（H.264・AAC）にする。
@@ -54,6 +55,13 @@ public class VideoComposerPlugin: CAPPlugin, CAPBridgedPlugin {
         let end: Double
     }
 
+    /// 動画に重ねる画像（テキスト）。書き出す絵と同じ比の、透明な背景の PNG。できあがりの start〜end 秒の間だけ重ねる
+    private struct Overlay {
+        let url: URL
+        let start: Double
+        let end: Double
+    }
+
     @objc func compose(_ call: CAPPluginCall) {
         guard let rawClips = call.getArray("clips") as? [[String: Any]], !rawClips.isEmpty,
             let output = call.getString("output")
@@ -86,6 +94,15 @@ public class VideoComposerPlugin: CAPPlugin, CAPBridgedPlugin {
             bgm = Bgm(url: docs.appendingPathComponent(input), volume: max(0, min(1, volume)))
         }
 
+        // 重ねる画像（任意）。画面で描いた PNG を、できあがりの時間（秒）で指定する
+        var overlays: [Overlay] = []
+        for raw in call.getArray("overlays") as? [[String: Any]] ?? [] {
+            guard let input = raw["input"] as? String, let start = (raw["start"] as? NSNumber)?.doubleValue,
+                let end = (raw["end"] as? NSNumber)?.doubleValue, end > start
+            else { continue }
+            overlays.append(Overlay(url: docs.appendingPathComponent(input), start: start, end: end))
+        }
+
         let watchdog = Watchdog()
         let once = Once()
         let session = Active(watchdog: watchdog, once: once, call: call, outURL: outURL)
@@ -101,7 +118,7 @@ public class VideoComposerPlugin: CAPPlugin, CAPBridgedPlugin {
         Task {
             do {
                 let result = try await Self.run(
-                    clips: clips, bgm: bgm, muteOriginal: muteOriginal, outURL: outURL, maxShortSide: maxShortSide,
+                    clips: clips, bgm: bgm, overlays: overlays, muteOriginal: muteOriginal, outURL: outURL, maxShortSide: maxShortSide,
                     videoBitrate: videoBitrate, audioBitrate: audioBitrate, queue: queue, watchdog: watchdog)
                 watchdog.enter(.done)
                 finish()
@@ -258,7 +275,7 @@ public class VideoComposerPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     private static func run(
-        clips: [Clip], bgm: Bgm?, muteOriginal: Bool, outURL: URL, maxShortSide: CGFloat, videoBitrate: Int, audioBitrate: Int, queue: DispatchQueue,
+        clips: [Clip], bgm: Bgm?, overlays: [Overlay], muteOriginal: Bool, outURL: URL, maxShortSide: CGFloat, videoBitrate: Int, audioBitrate: Int, queue: DispatchQueue,
         watchdog: Watchdog
     ) async throws -> [String: Any] {
         let timescale: CMTimeScale = 600
@@ -408,6 +425,17 @@ public class VideoComposerPlugin: CAPPlugin, CAPBridgedPlugin {
         videoIn.expectsMediaDataInRealTime = false
         writer.add(videoIn)
 
+        // 重ねる画像を、書き出す大きさにそろえて読み込む（画面で描いた大きさと、1 ピクセルほど違っても、全面に合わせる）
+        let ciContext = CIContext()
+        var overlayImages: [(start: Double, end: Double, image: CIImage)] = []
+        for ov in overlays {
+            guard let image = CIImage(contentsOf: ov.url) else { throw fail(12, "重ねる画像を読み込めません") }
+            let sx = renderSize.width / image.extent.width
+            let sy = renderSize.height / image.extent.height
+            let fitted = abs(sx - 1) < 0.0001 && abs(sy - 1) < 0.0001 ? image : image.transformed(by: CGAffineTransform(scaleX: sx, y: sy))
+            overlayImages.append((ov.start, ov.end, fitted))
+        }
+
         var pairs: [(AVAssetReaderOutput, AVAssetWriterInput)] = [(videoOut, videoIn)]
         let audioTracks = [hasAudio ? audioTrack : nil, bgmTrack].compactMap { $0 }
         if !audioTracks.isEmpty {
@@ -460,6 +488,14 @@ public class VideoComposerPlugin: CAPPlugin, CAPBridgedPlugin {
                             while input.isReadyForMoreMediaData && !finished {
                                 if writer.status == .writing, reader.status == .reading, let sample = out.copyNextSampleBuffer() {
                                     let pts = CMSampleBufferGetPresentationTimeStamp(sample).seconds
+                                    // テキストなどを重ねる時間なら、この絵に直接描き込む（重ねない絵は、そのまま渡す）
+                                    if out === videoOut, !overlayImages.isEmpty, let buffer = CMSampleBufferGetImageBuffer(sample) {
+                                        var composed: CIImage?
+                                        for ov in overlayImages where pts >= ov.start && pts < ov.end {
+                                            composed = ov.image.composited(over: composed ?? CIImage(cvPixelBuffer: buffer))
+                                        }
+                                        if let composed { ciContext.render(composed, to: buffer) }
+                                    }
                                     if !input.append(sample) { finished = true }
                                     watchdog.touch()
                                     if out === videoOut, total > 0 { watchdog.setFraction(pts / total) }

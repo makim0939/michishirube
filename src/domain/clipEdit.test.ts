@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { hasKept, initSegs, isUntouched, keptRanges, moveClip, segKey, splitAt, toggleOff, totalSeconds, trimEdge, type Doc } from './clipEdit'
 
 const dur = { a: 24, b: 10 }
-const docOf = (a = initSegs('a', 24)): Doc => ({ order: ['a'], segs: { a } })
+const docOf = (a = initSegs('a', 24)): Doc => ({ order: ['a'], segs: { a }, texts: [] })
 
 describe('区間の分割', () => {
   it('位置を含む区間を 2 つに分け、どちらも最短の長さ以上あるときだけ分ける', () => {
@@ -85,7 +85,7 @@ describe('トリム（境目を引く）', () => {
 
 describe('つなぐ動画', () => {
   it('動画ごとの区間を、並びの順につなぐ', () => {
-    const doc: Doc = { order: ['b', 'a'], segs: { a: initSegs('a', 24), b: initSegs('b', 10) } }
+    const doc: Doc = { order: ['b', 'a'], segs: { a: initSegs('a', 24), b: initSegs('b', 10) }, texts: [] }
     expect(keptRanges(doc, dur).map((r) => r.key)).toEqual(['b', 'a'])
   })
 
@@ -95,7 +95,7 @@ describe('つなぐ動画', () => {
   })
 
   it('何も変えていないかを調べられる（変えていなければ、書き出さない）', () => {
-    const doc: Doc = { order: ['a', 'b'], segs: { a: initSegs('a', 24), b: initSegs('b', 10) } }
+    const doc: Doc = { order: ['a', 'b'], segs: { a: initSegs('a', 24), b: initSegs('b', 10) }, texts: [] }
     const r = keptRanges(doc, dur)
     expect(isUntouched(r, ['a', 'b'], dur)).toBe(true)
     expect(isUntouched(r, ['b', 'a'], dur)).toBe(false)

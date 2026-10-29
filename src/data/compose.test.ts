@@ -11,7 +11,7 @@ const files = vi.hoisted(() => ({
 }))
 vi.mock('./files', () => files)
 
-import { checkClips, composeClips, totalSeconds } from './compose'
+import { checkClips, composeClips, renderSize, totalSeconds } from './compose'
 
 const ComposeCancelled = files.ComposeCancelled
 
@@ -199,5 +199,49 @@ describe('つないだ全体の長さ', () => {
 
   it('長さが分からない区間があれば 0（BGM の終わりを小さくしない）', () => {
     expect(totalSeconds([{ source: { file: 'a' }, start: 1 }])).toBe(0)
+  })
+})
+
+describe('書き出す絵の大きさ', () => {
+  it('短い辺を画質の大きさまで縮める（比は変えない）', () => {
+    expect(renderSize(1080, 1920, 720)).toEqual({ width: 720, height: 1280 })
+    expect(renderSize(3840, 2160, 1080)).toEqual({ width: 1920, height: 1080 })
+  })
+
+  it('小さい動画は、大きくしない', () => {
+    expect(renderSize(640, 360, 720)).toEqual({ width: 640, height: 360 })
+  })
+
+  it('幅・高さは偶数にそろえる', () => {
+    const r = renderSize(1079, 1919, 720)
+    expect(r.width % 2).toBe(0)
+    expect(r.height % 2).toBe(0)
+  })
+})
+
+describe('動画に重ねるテキスト', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    files.readBlobFile.mockResolvedValue(new Blob(['mp4'], { type: 'video/mp4' }))
+    files.composeVideoFiles.mockResolvedValue({ size: 3, duration: 1 })
+  })
+
+  it('画像は一時ファイルに書いて、できあがりの時間といっしょに渡し、終わったら片付ける', async () => {
+    const overlays = [
+      { png: new Blob(['a']), start: 1, end: 3 },
+      { png: new Blob(['b']), start: 5, end: 6 },
+    ]
+    await composeClips([{ source: { file: 'media/a.mp4' }, start: 0 }], 'standard', 'a.mp4', undefined, false, undefined, undefined, overlays)
+    expect(files.writeBlobFile).toHaveBeenCalledTimes(2)
+    const passed = files.composeVideoFiles.mock.calls[0][6] as { input: string; start: number; end: number }[]
+    expect(passed.map((o) => [o.start, o.end])).toEqual([[1, 3], [5, 6]])
+    expect(passed[0].input).toMatch(/^compose\/.+\/ov-0\.png$/)
+    expect(files.deleteFile).toHaveBeenCalledWith(expect.stringMatching(/ov-1\.png$/))
+    expect(files.deleteDir).toHaveBeenCalledTimes(1)
+  })
+
+  it('重ねるものが無ければ、空の一覧を渡す', async () => {
+    await composeClips([{ source: { file: 'media/a.mp4' }, start: 0 }], 'standard', 'a.mp4')
+    expect(files.composeVideoFiles.mock.calls[0][6]).toEqual([])
   })
 })
