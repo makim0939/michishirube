@@ -45,8 +45,8 @@ export function PlusSheet({
 
   // 使えるようになる機能を、音の無い短い動画（ループ）で見せる。横にスワイプして見る
   const demos = [
-    { src: `${import.meta.env.BASE_URL}plus/split.mp4`, title: t.support.plusSplit, line: t.support.plusSplitLine },
-    { src: `${import.meta.env.BASE_URL}plus/join.mp4`, title: t.support.plusJoin, line: t.support.plusJoinLine },
+    { src: `${import.meta.env.BASE_URL}plus/split.mp4`, title: t.support.plusSplit },
+    { src: `${import.meta.env.BASE_URL}plus/join.mp4`, title: t.support.plusJoin },
   ]
 
   return (
@@ -65,7 +65,6 @@ export function PlusSheet({
             <li key={d.src}>
               <video className="plus-demo" src={d.src} autoPlay muted loop playsInline preload="auto" aria-hidden="true" />
               <strong>{d.title}</strong>
-              <span className="muted small">{d.line}</span>
             </li>
           ))}
         </ul>
