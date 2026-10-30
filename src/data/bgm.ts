@@ -13,7 +13,14 @@ export interface BgmTrack {
 }
 
 /** 同梱の曲。曲を足すときは、public/bgm/ に置き、ここに足し、出典とライセンスを docs/bgm.md に書く */
-export const BUNDLED_BGM: BgmTrack[] = []
+export const BUNDLED_BGM: BgmTrack[] = [
+  { id: 'poor-but-happy', title: 'Poor But Happy', path: 'bgm/poor-but-happy.m4a' },
+  { id: 'blue-skies', title: 'Blue Skies', path: 'bgm/blue-skies.m4a' },
+  { id: 'puppy-love', title: 'Puppy Love', path: 'bgm/puppy-love.m4a' },
+  { id: 'clouds', title: 'Clouds', path: 'bgm/clouds.m4a' },
+  { id: 'letting-go', title: 'Letting Go', path: 'bgm/letting-go.m4a' },
+  { id: 'a-little-off', title: 'A Little Off', path: 'bgm/a-little-off.m4a' },
+]
 
 /** 選んだ BGM。同梱の曲か、利用者のファイル */
 export type BgmChoice = { kind: 'bundled'; track: BgmTrack } | { kind: 'file'; file: File }
