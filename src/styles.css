@@ -3987,24 +3987,10 @@ h1.wordmark {
 }
 
 
-/* 同梱のフォント（OFL。public/fonts。日本語の主な文字だけの woff2）。canvas で描く前に、読み込む（loadTextFonts） */
+/* 同梱のフォント（手書き。OFL。public/fonts。日本語の主な文字だけの woff2）。canvas で描く前に、読み込む（loadTextFonts） */
 @font-face {
   font-family: 'Yusei Magic';
   src: url('/fonts/YuseiMagic-Regular.woff2') format('woff2');
-  font-weight: 400;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Dela Gothic One';
-  src: url('/fonts/DelaGothicOne-Regular.woff2') format('woff2');
-  font-weight: 400;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Mochiy Pop One';
-  src: url('/fonts/MochiyPopOne-Regular.woff2') format('woff2');
   font-weight: 400;
   font-display: swap;
 }

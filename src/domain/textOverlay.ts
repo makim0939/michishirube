@@ -6,28 +6,29 @@
  */
 
 /**
- * はじめから並べる色。日本のテロップで多い、白・黄・ピンク・水色・赤、と、黒（縁・板用）。
- * 動画の背景（ラテの茶・白い泡）の上でも読めるよう、明るい色は、縁取りと組み合わせて使う。ほかの色は、システムのカラーピッカーで選ぶ
+ * はじめから並べる色：白・クリーム・黄・金茶・濃い茶（ラテアート・カフェの動画で、実際に多かった白を中心に、ラテ帳の温かい色）。
+ * 動画の背景（ラテの茶・泡の白）の上で読めるよう、明るい色は、影・縁・板と組み合わせて使う。ほかの色は、システムのカラーピッカーで選ぶ
  */
-export const TEXT_COLORS = ['#ffffff', '#ffe14d', '#ff7dae', '#6ccbff', '#ff5252', '#1d1712'] as const
+export const TEXT_COLORS = ['#ffffff', '#f6e6c8', '#ffd84d', '#c99b66', '#3b2a1e'] as const
 
 /** 背景の板の濃さ（0〜1）。動画が透けて見える程度 */
-export const PLATE_ALPHA = 0.8
+export const PLATE_ALPHA = 0.78
 
-/** 縁取りの太さ（文字の大きさに対する、縁の外側の幅の割合） */
-export const STROKE_RATIO = 0.13
+/** 縁取りの太さ（文字の大きさに対する、縁の外側の幅の割合）。細めの縁（太い縁は、バラエティの印象になる） */
+export const STROKE_RATIO = 0.085
 
 /**
  * スタイル（1 タップで、文字の色・縁取り・背景の板・影をまとめて決める）。
- * 日本のテロップの定番（太い字に、白＋黒縁・黄＋黒縁・白＋色縁・板つき）と、細い字幕風（縁なし・影のみ）
+ * ラテアート・カフェの縦動画を調べた結果（PR の説明）：白の細め〜中くらいの字幕に、やわらかい影、が最も多い。
+ * 太い縁取りは、見出しに少し。板は、小さな帯として、少し。
  */
 export const TEXT_STYLES = [
-  { id: 'white-black', color: '#ffffff', stroke: '#1d1712', plate: false, plateColor: '#1d1712' },
-  { id: 'yellow-black', color: '#ffe14d', stroke: '#1d1712', plate: false, plateColor: '#1d1712' },
-  { id: 'white-pink', color: '#ffffff', stroke: '#e8458b', plate: false, plateColor: '#1d1712' },
-  { id: 'white-blue', color: '#ffffff', stroke: '#2f8fd8', plate: false, plateColor: '#1d1712' },
-  { id: 'plate', color: '#ffffff', stroke: null, plate: true, plateColor: '#1d1712' },
-  { id: 'plain', color: '#ffffff', stroke: null, plate: false, plateColor: '#1d1712' },
+  { id: 'caption', color: '#ffffff', stroke: null, plate: false, plateColor: '#2b1d14' },
+  { id: 'cream', color: '#f6e6c8', stroke: null, plate: false, plateColor: '#2b1d14' },
+  { id: 'outline', color: '#ffffff', stroke: '#2b1d14', plate: false, plateColor: '#2b1d14' },
+  { id: 'accent', color: '#ffd84d', stroke: '#2b1d14', plate: false, plateColor: '#2b1d14' },
+  { id: 'plate-dark', color: '#fff6e6', stroke: null, plate: true, plateColor: '#2b1d14' },
+  { id: 'plate-cream', color: '#3b2a1e', stroke: null, plate: true, plateColor: '#fff3df' },
 ] as const
 
 export type TextStyleId = (typeof TEXT_STYLES)[number]['id']
@@ -44,17 +45,15 @@ export function currentStyle(o: TextOverlay): TextStyleId | undefined {
 }
 
 /**
- * フォント。役割の違う 6 種類：ゴシック（字幕）・極太（見出し）・ポップ・丸ゴシック・明朝・手書き。
- * ゴシック・丸ゴシック・明朝は、iPhone・iPad 標準のヒラギノ。極太（Dela Gothic One）・ポップ（Mochiy Pop One）・手書き（Yusei Magic）は、
- * 同梱（いずれも SIL OFL 1.1。public/fonts。日本語の主な文字だけに絞った woff2）。使うときだけ読み込む。
- * プレビューも書き出しも、同じ WebView の canvas で描くので、同じ見た目になる。収録に無い字は、後ろの候補で描く
+ * フォント：ゴシック（字幕）・太ゴシック（見出し）・丸ゴシック・明朝・手書きの 5 種。
+ * 手書き（Yusei Magic）だけ、同梱（SIL OFL 1.1。public/fonts。日本語の主な文字だけの woff2 約 0.4 MB。使うときだけ読み込む）。
+ * ほかは、iPhone・iPad 標準のヒラギノ。プレビューも書き出しも、同じ WebView の canvas で描くので、同じ見た目になる。収録に無い字は、後ろの候補で描く
  */
 export const TEXT_FONTS = [
-  { id: 'gothic', family: '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", system-ui, sans-serif', weight: 800 },
-  { id: 'dela', family: '"Dela Gothic One", "Hiragino Sans", system-ui, sans-serif', weight: 400 },
-  { id: 'pop', family: '"Mochiy Pop One", "Hiragino Maru Gothic ProN", system-ui, sans-serif', weight: 400 },
+  { id: 'gothic', family: '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", system-ui, sans-serif', weight: 600 },
+  { id: 'bold', family: '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", system-ui, sans-serif', weight: 800 },
   { id: 'maru', family: '"Hiragino Maru Gothic ProN", "Zen Maru Gothic", "Hiragino Sans", system-ui, sans-serif', weight: 700 },
-  { id: 'mincho', family: '"Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif', weight: 700 },
+  { id: 'mincho', family: '"Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif', weight: 600 },
   { id: 'hand', family: '"Yusei Magic", "Hiragino Maru Gothic ProN", system-ui, sans-serif', weight: 400 },
 ] as const
 
@@ -76,7 +75,7 @@ export async function loadTextFonts(ids: TextFontId[]): Promise<void> {
 /** 文字の大きさ（絵の高さに対する割合）の範囲と、はじめの値 */
 export const TEXT_SIZE_MIN = 0.03
 export const TEXT_SIZE_MAX = 0.12
-export const TEXT_SIZE_DEFAULT = 0.055
+export const TEXT_SIZE_DEFAULT = 0.048
 
 /** 表示する長さ（秒）：はじめの長さと、これ以上は縮められない長さ */
 export const TEXT_SECONDS = 3
@@ -120,7 +119,7 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
 export function newText(key: string, at: number, duration: number): TextOverlay {
   const len = Math.min(TEXT_SECONDS, duration)
   const start = clamp(at, 0, Math.max(0, duration - len))
-  return { id: newTextId(), key, start, end: start + len, text: '', x: 0.5, y: 0.78, size: TEXT_SIZE_DEFAULT, color: '#ffffff', stroke: '#1d1712', font: 'gothic', plate: false, plateColor: '#1d1712' }
+  return { id: newTextId(), key, start, end: start + len, text: '', x: 0.5, y: 0.8, size: TEXT_SIZE_DEFAULT, color: '#ffffff', stroke: null, font: 'gothic', plate: false, plateColor: '#2b1d14' }
 }
 
 /** 時間の範囲を、動画の長さの中に収める（最小の長さを割らない） */
@@ -286,9 +285,12 @@ export function drawText(ctx: CanvasRenderingContext2D, W: number, H: number, o:
     roundedRect(ctx, cx - w / 2 - padX, cy - h / 2 - padY, w + padX * 2, h + padY * 2, px * 0.35)
     ctx.fill()
   } else if (!o.stroke) {
-    ctx.shadowColor = isLight(o.color) ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.7)'
-    ctx.shadowBlur = px * 0.14
-    ctx.shadowOffsetY = px * 0.04
+    // やわらかい影（二重に描いて、白い泡の上でも、字の輪郭が分かる程度に）
+    ctx.shadowColor = isLight(o.color) ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.6)'
+    ctx.shadowBlur = px * 0.2
+    ctx.shadowOffsetY = px * 0.05
+    ctx.fillStyle = o.color
+    lines.forEach((l, i) => ctx.fillText(l, cx, cy - h / 2 + lh * (i + 0.5)))
   }
   if (o.stroke) {
     // 縁取り：太い線を先に引いて、その上に文字を重ねる（外側にだけ縁が出る）。角は丸める

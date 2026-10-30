@@ -30,9 +30,9 @@ describe('テキストを置く', () => {
     expect(o.end - o.start).toBe(3)
   })
 
-  it('はじめは、ゴシックで、白い文字に黒い縁取り（定番）。背景の板は敷かない', () => {
+  it('はじめは、ゴシックで、白い字幕（縁取りなし・影だけ・板なし）', () => {
     const o = newText('a', 0, 10)
-    expect([o.font, o.color, o.stroke, o.plate]).toEqual(['gothic', '#ffffff', '#1d1712', false])
+    expect([o.font, o.color, o.stroke, o.plate]).toEqual(['gothic', '#ffffff', null, false])
   })
 
   it('動画が 3 秒より短ければ、動画の長さまでにする', () => {
@@ -142,18 +142,18 @@ describe('折り返し', () => {
 
 describe('スタイル（1 タップで、色・縁取り・板をまとめて決める）', () => {
   it('当てても、位置・時間・文字・大きさ・フォントは変わらない', () => {
-    const o = base({ x: 0.3, y: 0.4, size: 0.08, font: 'pop', text: 'ラテ' })
-    const next = applyStyle(o, 'yellow-black')
-    expect(next).toMatchObject({ x: 0.3, y: 0.4, size: 0.08, font: 'pop', text: 'ラテ', start: 2, end: 5, color: '#ffe14d', stroke: '#1d1712', plate: false })
+    const o = base({ x: 0.3, y: 0.4, size: 0.08, font: 'maru', text: 'ラテ' })
+    const next = applyStyle(o, 'accent')
+    expect(next).toMatchObject({ x: 0.3, y: 0.4, size: 0.08, font: 'maru', text: 'ラテ', start: 2, end: 5, color: '#ffd84d', stroke: '#2b1d14', plate: false })
   })
 
   it('板つきは、縁取りなしで板が付く', () => {
-    expect(applyStyle(base(), 'plate')).toMatchObject({ stroke: null, plate: true })
+    expect(applyStyle(base(), 'plate-dark')).toMatchObject({ stroke: null, plate: true, plateColor: '#2b1d14' })
   })
 
   it('いまのスタイルが分かる。細かく色を変えたら、どれにも当たらない', () => {
-    expect(currentStyle(applyStyle(base(), 'white-pink'))).toBe('white-pink')
-    expect(currentStyle({ ...applyStyle(base(), 'white-pink'), color: '#123456' })).toBeUndefined()
+    expect(currentStyle(applyStyle(base(), 'outline'))).toBe('outline')
+    expect(currentStyle({ ...applyStyle(base(), 'outline'), color: '#123456' })).toBeUndefined()
   })
 
   it('スタイルは 6 つ、どれも別の見た目', () => {
