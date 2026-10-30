@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
 import { BUNDLED_BGM, bgmBlob, bgmExtension, bgmTitle, type BgmChoice } from '../data/bgm'
 import { composeClips } from '../data/compose'
 import { cancelComposeVideoFiles, ComposeCancelled } from '../data/files'
-import { inMemory, probeDuration } from '../data/mediaPrep'
+import { inMemory, probeDuration, QUALITY } from '../data/mediaPrep'
 import type { VideoQuality } from '../data/videoStorage'
 import {
   hasKept,
@@ -19,8 +19,30 @@ import {
   type Doc,
   type Seg,
 } from '../domain/clipEdit'
-import { BackIcon, ForwardIcon, MusicIcon, PauseIcon, PlayIcon, RedoIcon, ScissorsIcon, SpeakerIcon, TrashIcon, UndoIcon } from './icons'
+import { BackIcon, ForwardIcon, MusicIcon, PauseIcon, PlayIcon, RedoIcon, ScissorsIcon, SpeakerIcon, TextIcon, TrashIcon, UndoIcon } from './icons'
+import {
+  applyStyle,
+  currentStyle,
+  drawText,
+  fitAll,
+  fitFrom,
+  fitTo,
+  lanes as textLanes,
+  loadTextFonts,
+  moveEnd,
+  moveStart,
+  newText,
+  snapCenter,
+  TEXT_COLORS,
+  TEXT_FONTS,
+  TEXT_STYLES,
+  TEXT_SIZE_MAX,
+  TEXT_SIZE_MIN,
+  type TextBox,
+  type TextOverlay,
+} from '../domain/textOverlay'
 import { PlusSheet } from './PlusSheet'
+import { renderTextOverlays } from './textRender'
 import { formatTime, makeFilmstrip } from './Trimmer'
 import { useBackHandler } from './useBackHandler'
 import { t } from '../i18n'
@@ -35,18 +57,59 @@ export interface ComposerClip {
   file?: string
 }
 
-/** 動画の長さだけを読み取る（画面には出さない video で、メタデータだけ読む） */
-async function urlDuration(url: string): Promise<number> {
+/** 動画の長さと絵の大きさ（向きを直したあと）を読み取る（画面には出さない video で、メタデータだけ読む） */
+async function urlDuration(url: string): Promise<{ duration: number; w: number; h: number }> {
   const video = document.createElement('video')
   try {
     video.muted = true
     video.playsInline = true
     video.preload = 'metadata'
     video.src = url
-    return await probeDuration(video)
+    const duration = await probeDuration(video)
+    return { duration, w: video.videoWidth, h: video.videoHeight }
   } finally {
     video.removeAttribute('src')
     video.load()
+  }
+}
+
+/** 色の選び：はじめの 5 色と、システムのカラーピッカー（どんな色でも）。選んでいる色が 5 色に無ければ、ピッカーの丸にその色を出す */
+function Swatches({
+  small = false,
+  value,
+  label,
+  custom,
+  onPick,
+  onPicker,
+  onPickerOpen,
+}: {
+  small?: boolean
+  value: string
+  label: readonly string[]
+  custom: string
+  onPick: (c: string) => void
+  onPicker: (c: string) => void
+  onPickerOpen: () => void
+}) {
+  const preset = (TEXT_COLORS as readonly string[]).includes(value)
+  return (
+    <div className={`cmp-swatches${small ? ' small' : ''}`} role="group">
+      {TEXT_COLORS.map((col, i) => (
+        <button key={col} type="button" className={`cmp-swatch${value === col ? ' on' : ''}`} style={{ background: col }} aria-label={label[i]} aria-pressed={value === col} onClick={() => onPick(col)} />
+      ))}
+      <label className={`cmp-swatch custom${preset ? '' : ' on'}`} style={preset ? undefined : { background: value }} aria-label={custom}>
+        <input type="color" value={value} onFocus={onPickerOpen} onChange={(e) => onPicker(e.target.value)} />
+      </label>
+    </div>
+  )
+}
+
+/** 指を捉える（画面の外へ出ても、追い続けるため）。捉えられない指（合成された操作など）でも、止まらない */
+function capture(el: Element, id: number) {
+  try {
+    el.setPointerCapture(id)
+  } catch {
+    // 捉えられなくても、操作は続ける
   }
 }
 
@@ -59,6 +122,8 @@ const FINE = 40
 const ZOOM_MIN = 24
 const ZOOM_MAX = 220
 const ZOOM_DEFAULT = 60
+/** テキストの時間の帯 1 段の高さ（px） */
+const LANE = 22
 /** 再生ヘッドが区間の境目に吸い付く距離（px） */
 const SNAP_PX = 7
 
@@ -119,9 +184,31 @@ export function Composer({
   const clipOf = (key: string) => clips.find((c) => c.key === key)!
   const video = useRef<HTMLVideoElement>(null)
   const root = useRef<HTMLDivElement>(null)
-  const [hist, setHist] = useState<Hist>({ doc: { order: originalOrder, segs: {} }, past: [], future: [] })
+  const [hist, setHist] = useState<Hist>({ doc: { order: originalOrder, segs: {}, texts: [] }, past: [], future: [] })
   const doc = hist.doc
   const [durs, setDurs] = useState<Record<string, number>>({})
+  /** 動画ごとの絵の大きさ（テキストを置く・書き出すときの比） */
+  const [sizes, setSizes] = useState<Record<string, { w: number; h: number }>>({})
+  const stage = useRef<HTMLDivElement>(null)
+  const textCanvas = useRef<HTMLCanvasElement>(null)
+  /** 絵（動画の見えている部分）の、舞台の中での位置と大きさ（px） */
+  const [vr, setVr] = useState<{ x: number; y: number; w: number; h: number }>()
+  /** 選んだテキストと、文字を入力しているか */
+  const [selText, setSelText] = useState<string>()
+  const [editing, setEditing] = useState(false)
+  const textInput = useRef<HTMLTextAreaElement>(null)
+  /** 置いたばかりで、まだ何も打っていない（空のまま閉じたら、置く前に戻す） */
+  const freshText = useRef(false)
+  /** 文字を打っている間だけ true（キーボードを閉じたときと「決定」で、2 回終わらせないため） */
+  const editingRef = useRef(false)
+  /** いま描いているテキストの外枠（画面の px）。つかむ・選ぶ範囲の判定に使う */
+  const textBoxes = useRef<{ id: string; box: TextBox }[]>([])
+  /** 選んだテキストの、設定の種類（フォント・文字の色・背景・大きさ）。続けて使えるよう、前回の種類を覚えておく */
+  const [styleTab, setStyleTab] = useState<'font' | 'style' | 'color' | 'time'>('style')
+  /** 同梱のフォントを読み終えたら、描き直す */
+  const [fontTick, setFontTick] = useState(0)
+  /** カラーピッカーを開いている間の、取り消しの 1 手（開くたびに 1 回だけ積む） */
+  const pickerRecorded = useRef(false)
   /** 選んだ区間（タップで選ぶ。選んでいなければ、再生ヘッドの下の区間） */
   const [sel, setSel] = useState<string>()
   /** 再生ヘッドの位置（つないだ並びの、先頭からの秒） */
@@ -183,7 +270,8 @@ export function Composer({
   const ready = clips.every((c) => (durs[c.key] ?? 0) > 0) && lay.every((c) => c.segs.length > 0)
   const ranges = useMemo(() => keptRanges(doc, durs), [doc, durs])
   const total = totalSeconds(ranges)
-  const paid = ranges.length > 1 || !!bgm
+  const hasText = doc.texts.some((o) => o.text.trim())
+  const paid = ranges.length > 1 || !!bgm || hasText
   const needsCompose = paid || muted || !isUntouched(ranges, originalOrder, durs)
 
   const locate = (gg: number) => {
@@ -198,6 +286,8 @@ export function Composer({
   const allSegs = lay.flatMap((c) => c.segs)
   const target = (sel ? allSegs.find((s) => s.id === sel) : undefined) ?? under
   const targetClip = target ? lay.find((c) => c.key === segKey(target.id)) : undefined
+  const texts = doc.texts
+  const selT = selText ? texts.find((o) => o.id === selText) : undefined
 
   // 全部の動画の長さを読み取り、区間を初期化する（頭から尻まで、ひとつの残す区間）
   useEffect(() => {
@@ -205,9 +295,10 @@ export function Composer({
     void (async () => {
       for (const c of clips) {
         try {
-          const d = await urlDuration(await urlFor(c.key))
+          const { duration: d, w, h } = await urlDuration(await urlFor(c.key))
           if (cancelled) return
           setDurs((p) => ({ ...p, [c.key]: d }))
+          setSizes((p) => ({ ...p, [c.key]: { w, h } }))
           setHist((h) => (h.doc.segs[c.key] ? h : { ...h, doc: { ...h.doc, segs: { ...h.doc.segs, [c.key]: initSegs(c.key, d) } } }))
         } catch {
           if (!cancelled) setError(t.editor.durationFailed)
@@ -477,7 +568,10 @@ export function Composer({
     stopAll()
     seekGlobal(Math.min(T - 0.001, Math.max(0, snap(gg, pxs))), false)
   }
-  const selectAt = (gg: number) => setSel(segAtG(Math.min(T - 0.001, Math.max(0, gg)))?.id)
+  const selectAt = (gg: number) => {
+    setSel(segAtG(Math.min(T - 0.001, Math.max(0, gg)))?.id)
+    setSelText(undefined)
+  }
 
   const ov = useRef<HTMLDivElement>(null)
   const ovAt = (e: PointerEvent) => {
@@ -485,7 +579,7 @@ export function Composer({
     return ((e.clientX - r.left) / r.width) * T
   }
   const ovDown = (e: PointerEvent) => {
-    e.currentTarget.setPointerCapture(e.pointerId)
+    capture(e.currentTarget, e.pointerId)
     const gg = ovAt(e)
     scrubTo(gg, pxs1)
     selectAt(gg)
@@ -495,7 +589,7 @@ export function Composer({
   const pts = useRef(new Map<number, number>())
   const cu = useRef<{ x0: number; g0: number; dist0: number; z0: number } | null>(null)
   const cuDown = (e: PointerEvent) => {
-    e.currentTarget.setPointerCapture(e.pointerId)
+    capture(e.currentTarget, e.pointerId)
     pts.current.set(e.pointerId, e.clientX)
     const xs = [...pts.current.values()]
     cu.current = { x0: e.clientX, g0: g, dist0: xs.length === 2 ? Math.abs(xs[0] - xs[1]) : 0, z0: zoom }
@@ -527,7 +621,7 @@ export function Composer({
   const handleDown = (edge: 'start' | 'end', pxs: number) => (e: PointerEvent) => {
     if (!target) return
     e.stopPropagation()
-    e.currentTarget.setPointerCapture(e.pointerId)
+    capture(e.currentTarget, e.pointerId)
     stopAll()
     // 引いている間に再生ヘッドが動いても、対象が変わらないよう、選んだ状態にする
     setSel(target.id)
@@ -556,7 +650,10 @@ export function Composer({
   const canSplit = ready && !busy && inTarget
   /** 外せるのは、残す区間が 1 つ以上残るとき（ぜんぶ外すと、できあがりが空になる） */
   const canDelete = (() => {
-    if (!ready || busy || !target) return false
+    if (!ready || busy) return false
+    // テキストを選んでいるときは、「削除」はそのテキストを消す
+    if (selT) return true
+    if (!target) return false
     if (target.off) return true
     const key = segKey(target.id)
     return hasKept({ ...doc, segs: { ...doc.segs, [key]: toggleOff(doc.segs[key], target.id) } })
@@ -569,6 +666,10 @@ export function Composer({
     commit((d) => ({ ...d, segs: { ...d.segs, [key]: splitAt(d.segs[key], key, at) } }))
   }
   const remove = () => {
+    if (selT) {
+      removeText()
+      return
+    }
     if (!target || !canDelete) return
     stopAll()
     const key = segKey(target.id)
@@ -581,6 +682,298 @@ export function Composer({
     commit((d) => ({ ...d, order: moveClip(d.order, segKey(target.id), delta) }))
   }
   const orderIndex = target ? doc.order.indexOf(segKey(target.id)) : -1
+
+  // ---- テキスト ----
+  const curLay = lay.find((c) => c.key === curKey)
+  const localNow = g - (curLay?.off ?? 0)
+  // 外した（斜線の）区間では、できあがりに無いので、プレビューにも出さない（書き出しと同じ見え方にする）
+  const inOff = ready && !!segAtG(g)?.off
+  const shownTexts = ready && !inOff ? texts.filter((o) => o.key === curKey && localNow >= o.start && localNow < o.end) : []
+  const shownSig = shownTexts.map((o) => `${o.id}|${o.text}|${o.x}|${o.y}|${o.size}|${o.color}|${o.stroke}|${o.font}|${o.plate}|${o.plateColor}`).join('/')
+  const laneOf = textLanes(texts, Object.fromEntries(lay.map((c) => [c.key, c.off])))
+  const laneCount = texts.length ? Math.min(3, Math.max(...Object.values(laneOf)) + 1) : 0
+  const [selBox, setSelBox] = useState<TextBox>()
+
+  const patchText = (id: string, patch: Partial<TextOverlay> | ((o: TextOverlay) => TextOverlay), record = true) =>
+    commit((d) => ({ ...d, texts: d.texts.map((o) => (o.id === id ? (typeof patch === 'function' ? patch(o) : { ...o, ...patch }) : o)) }), record)
+
+  // 絵の位置を測る（動画は、枠の中に収まる大きさで出る）
+  useEffect(() => {
+    const measure = () => {
+      const v = video.current
+      const st = stage.current
+      const sz = sizes[curKey]
+      if (!v || !st || !sz || !sz.w || !sz.h) return
+      const er = v.getBoundingClientRect()
+      const sr = st.getBoundingClientRect()
+      const k = Math.min(er.width / sz.w, er.height / sz.h)
+      setVr({ x: er.left - sr.left + (er.width - sz.w * k) / 2, y: er.top - sr.top + (er.height - sz.h * k) / 2, w: sz.w * k, h: sz.h * k })
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    if (stage.current) ro.observe(stage.current)
+    return () => ro.disconnect()
+  }, [sizes, curKey, ready])
+
+  // 見えているテキストを、絵の上に描く（書き出しと同じ drawText）
+  useEffect(() => {
+    const c = textCanvas.current
+    if (!c || !vr) return
+    const dpr = Math.min(3, window.devicePixelRatio || 1)
+    const cw = Math.max(1, Math.round(vr.w * dpr))
+    const ch = Math.max(1, Math.round(vr.h * dpr))
+    if (c.width !== cw || c.height !== ch) {
+      c.width = cw
+      c.height = ch
+    }
+    const ctx = c.getContext('2d')
+    if (!ctx) return
+    ctx.clearRect(0, 0, cw, ch)
+    const boxes: { id: string; box: TextBox }[] = []
+    for (const o of shownTexts) {
+      const b = drawText(ctx, cw, ch, o)
+      if (b) boxes.push({ id: o.id, box: b })
+    }
+    textBoxes.current = boxes
+    const sb = boxes.find((x) => x.id === selText)?.box
+    setSelBox(sb ? { x: sb.x / dpr, y: sb.y / dpr, w: sb.w / dpr, h: sb.h / dpr } : undefined)
+    // shownTexts は shownSig で見る（毎コマの描き直しを、見た目が変わったときだけにする）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vr, shownSig, selText, fontTick])
+
+  // 同梱のフォント（手書き）は、使うとき・選ぶ一覧を出すときに読み込み、読めたら描き直す
+  const fontSig = texts.map((o) => o.font).join(',') + (selT && styleTab === 'font' ? ',all' : '')
+  useEffect(() => {
+    const ids = fontSig.includes('all') ? TEXT_FONTS.map((f) => f.id) : (fontSig.split(',').filter(Boolean) as (typeof TEXT_FONTS)[number]['id'][])
+    if (ids.length === 0) return
+    let cancelled = false
+    void loadTextFonts(ids).then(() => !cancelled && setFontTick((n) => n + 1))
+    return () => {
+      cancelled = true
+    }
+  }, [fontSig])
+
+  /** カラーピッカーで選んだ色（選んでいる間は、細かく変わるので、取り消しの 1 手は、開いて最初の 1 回だけ積む） */
+  const pickerChange = (c: string, key: 'color' | 'plateColor' | 'stroke' = 'color') => {
+    if (!selT) return
+    if (!pickerRecorded.current) {
+      pickerRecorded.current = true
+      checkpoint()
+    }
+    patchText(selT.id, { [key]: c }, false)
+  }
+
+  // 打つ欄は、出していない間は、読み取り専用にして focus を外す（blur だけだと、iPhone のキーボードが残ることがある）
+  const focusText = () => {
+    const ta = textInput.current
+    if (!ta) return
+    ta.readOnly = false
+    ta.focus()
+  }
+  const blurText = () => {
+    const ta = textInput.current
+    if (!ta) return
+    ta.readOnly = true
+    ta.blur()
+    ;(document.activeElement as HTMLElement | null)?.blur?.()
+  }
+
+  const addText = () => {
+    if (!ready || busy) return
+    stopAll()
+    const { c, local } = locate(g)
+    const base = newText(c.key, local, c.d)
+    // 同じ時間に、すでにテキストがあれば、重ならないよう、上にずらして置く
+    const sameTime = texts.filter((x) => x.key === base.key && x.start < base.end && x.end > base.start).length
+    const o = { ...base, y: Math.max(0.2, base.y - 0.1 * sameTime) }
+    commit((d) => ({ ...d, texts: [...d.texts, o] }))
+    setSelText(o.id)
+    freshText.current = true
+    editingRef.current = true
+    setEditing(true)
+    // キーボードを出すには、タップの操作の中で focus する
+    focusText()
+  }
+  const startEdit = () => {
+    if (!selT || busy) return
+    stopAll()
+    freshText.current = false
+    checkpoint()
+    editingRef.current = true
+    setEditing(true)
+    focusText()
+  }
+  const finishEdit = () => {
+    if (!editingRef.current) return
+    editingRef.current = false
+    blurText()
+    setEditing(false)
+    const o = selT
+    if (o && !o.text.trim()) {
+      // 何も打たなかったら、置く前に戻す（やり直しにも残さない）。打ったものを消したときは、そのテキストを消す
+      if (freshText.current) setHist((h) => (h.past.length ? { doc: h.past[h.past.length - 1], past: h.past.slice(0, -1), future: h.future } : h))
+      else commit((d) => ({ ...d, texts: d.texts.filter((x) => x.id !== o.id) }))
+      setSelText(undefined)
+    }
+    freshText.current = false
+  }
+  const removeText = () => {
+    if (!selT) return
+    editingRef.current = false
+    blurText()
+    setEditing(false)
+    commit((d) => ({ ...d, texts: d.texts.filter((x) => x.id !== selT.id) }))
+    setSelText(undefined)
+  }
+
+  // 絵の上：つかんで動かす・2 本指で大きさ・タップで選ぶ（選んだものをもう一度タップで、文字を直す）。何もないところは、再生・停止（選んでいれば、選びを外す）
+  const tPts = useRef(new Map<number, { x: number; y: number }>())
+  const tDrag = useRef<{ id?: string; x0: number; y0: number; ox: number; oy: number; moved: boolean; recorded: boolean; wasSel: boolean } | null>(null)
+  const pinch = useRef<{ d0: number; s0: number; recorded: boolean } | null>(null)
+  /** 角の取っ手で大きさを変えている間：始めの大きさ・中心からの距離・中心（画面の px） */
+  const sizeHandle = useRef<{ s0: number; d0: number; cx: number; cy: number; recorded: boolean } | null>(null)
+  /** 中央に吸い付いている間、縦の目印を出す */
+  const [guideX, setGuideX] = useState(false)
+  const textPoint = (e: PointerEvent) => {
+    const r = textCanvas.current!.getBoundingClientRect()
+    const k = textCanvas.current!.width / r.width
+    return { x: (e.clientX - r.left) * k, y: (e.clientY - r.top) * k, k }
+  }
+  // 角の取っ手を引くと、中心からの距離に比例して大きさが変わる
+  const sizeDown = (e: PointerEvent) => {
+    if (!selT || !selBox || !textCanvas.current) return
+    e.stopPropagation()
+    capture(e.currentTarget, e.pointerId)
+    const r = textCanvas.current.getBoundingClientRect()
+    const cx = r.left + selBox.x + selBox.w / 2
+    const cy = r.top + selBox.y + selBox.h / 2
+    sizeHandle.current = { s0: selT.size, d0: Math.hypot(e.clientX - cx, e.clientY - cy) || 1, cx, cy, recorded: false }
+  }
+  const sizeMove = (e: PointerEvent) => {
+    const h = sizeHandle.current
+    if (!h || !selT) return
+    e.stopPropagation()
+    if (!h.recorded) {
+      h.recorded = true
+      checkpoint()
+    }
+    const size = Math.min(TEXT_SIZE_MAX, Math.max(TEXT_SIZE_MIN, (h.s0 * Math.hypot(e.clientX - h.cx, e.clientY - h.cy)) / h.d0))
+    patchText(selT.id, { size }, false)
+  }
+  const sizeUp = () => {
+    sizeHandle.current = null
+  }
+  const textDown = (e: PointerEvent) => {
+    capture(e.currentTarget, e.pointerId)
+    tPts.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    if (tPts.current.size === 2 && selT) {
+      const [a, b] = [...tPts.current.values()]
+      pinch.current = { d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, s0: selT.size, recorded: false }
+      tDrag.current = null
+      return
+    }
+    const p = textPoint(e)
+    const slop = 10 * p.k
+    const hit = [...textBoxes.current].reverse().find(({ box }) => p.x >= box.x - slop && p.x <= box.x + box.w + slop && p.y >= box.y - slop && p.y <= box.y + box.h + slop)
+    const o = hit && texts.find((x) => x.id === hit.id)
+    tDrag.current = { id: o?.id, x0: e.clientX, y0: e.clientY, ox: o?.x ?? 0, oy: o?.y ?? 0, moved: false, recorded: false, wasSel: !!o && o.id === selText }
+    if (o) {
+      setSelText(o.id)
+      stopAll()
+    }
+  }
+  const textMove = (e: PointerEvent) => {
+    if (!tPts.current.has(e.pointerId)) return
+    tPts.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    if (pinch.current && selT && tPts.current.size === 2) {
+      const [a, b] = [...tPts.current.values()]
+      if (!pinch.current.recorded) {
+        pinch.current.recorded = true
+        checkpoint()
+      }
+      const size = Math.min(TEXT_SIZE_MAX, Math.max(TEXT_SIZE_MIN, (pinch.current.s0 * Math.hypot(a.x - b.x, a.y - b.y)) / pinch.current.d0))
+      patchText(selT.id, { size }, false)
+      return
+    }
+    const d = tDrag.current
+    if (!d || !d.id) return
+    const r = textCanvas.current!.getBoundingClientRect()
+    const dx = e.clientX - d.x0
+    const dy = e.clientY - d.y0
+    if (!d.moved && Math.hypot(dx, dy) < 5) return
+    d.moved = true
+    if (!d.recorded) {
+      d.recorded = true
+      checkpoint()
+    }
+    const x = snapCenter(Math.min(1, Math.max(0, d.ox + dx / r.width)))
+    setGuideX(x === 0.5)
+    patchText(d.id, { x, y: Math.min(1, Math.max(0, d.oy + dy / r.height)) }, false)
+  }
+  const textUp = (e: PointerEvent) => {
+    const had = tPts.current.delete(e.pointerId)
+    setGuideX(false)
+    if (pinch.current) {
+      if (tPts.current.size < 2) pinch.current = null
+      if (tPts.current.size === 0) tDrag.current = null
+      return
+    }
+    const d = tDrag.current
+    if (!had || !d) return
+    tDrag.current = null
+    if (d.moved) return
+    if (d.id) {
+      if (d.wasSel) startEdit()
+    } else if (editing) finishEdit()
+    else if (selText) setSelText(undefined)
+    else togglePlay()
+  }
+
+  // 時間の帯の端を引いて、表示する時間を変える（引いている間は、その端の絵を出す）
+  const th = useRef<{ id: string; edge: 'start' | 'end' | 'move'; x0: number; t0: number; len: number; moved: boolean; recorded: boolean } | null>(null)
+  // 帯の中をつかむと、長さを保ったまま、ずらせる（動かさずに離せば、選ぶだけ）
+  const textBarDown = (o: TextOverlay) => (e: PointerEvent) => {
+    e.stopPropagation()
+    capture(e.currentTarget, e.pointerId)
+    if (editing) finishEdit()
+    stopAll()
+    setSelText(o.id)
+    th.current = { id: o.id, edge: 'move', x0: e.clientX, t0: o.start, len: o.end - o.start, moved: false, recorded: false }
+    const c = lay.find((x) => x.key === o.key)
+    if (c) seekGlobal(c.off + Math.min(c.d - 0.01, o.start), false)
+  }
+  const textHandleDown = (o: TextOverlay, edge: 'start' | 'end') => (e: PointerEvent) => {
+    e.stopPropagation()
+    capture(e.currentTarget, e.pointerId)
+    stopAll()
+    setSelText(o.id)
+    th.current = { id: o.id, edge, x0: e.clientX, t0: o[edge], len: 0, moved: true, recorded: false }
+  }
+  const textHandleMove = (e: PointerEvent) => {
+    const d = th.current
+    const o = d && texts.find((x) => x.id === d.id)
+    const c = o && lay.find((x) => x.key === o.key)
+    if (!d || !o || !c) return
+    e.stopPropagation()
+    if (d.edge === 'move' && !d.moved && Math.abs(e.clientX - d.x0) < 5) return
+    d.moved = true
+    if (!d.recorded) {
+      d.recorded = true
+      checkpoint()
+    }
+    if (d.edge === 'move') {
+      const start = Math.min(c.d - d.len, Math.max(0, d.t0 + (e.clientX - d.x0) / zoom))
+      patchText(d.id, { start, end: start + d.len }, false)
+      seekGlobal(c.off + Math.min(c.d - 0.01, start), false)
+      return
+    }
+    const t = Math.min(c.d, Math.max(0, d.t0 + (e.clientX - d.x0) / zoom))
+    patchText(d.id, (x) => (d.edge === 'start' ? moveStart(x, t, c.d) : moveEnd(x, t, c.d)), false)
+    seekGlobal(c.off + Math.min(c.d - 0.01, t), false)
+  }
+  const textHandleUp = () => {
+    th.current = null
+  }
 
   const done = async () => {
     if (!ready || busy) return
@@ -617,6 +1010,7 @@ export function Composer({
         muted,
         setProgress,
         () => cancelRequested.current,
+        hasText ? await renderTextOverlays(texts, ranges, sizes[ranges[0].key] ?? { w: 1080, h: 1920 }, QUALITY[quality].shortSide) : undefined,
       )
       // やめるのと同時に書き終わったときも、できたものは使わない
       if (cancelRequested.current) return
@@ -636,6 +1030,10 @@ export function Composer({
 
   /** キャンセル：変えていなければ、そのまま閉じる。変えていれば、確認せず閉じ、親が「元に戻す」のトーストを出す（作っている間は閉じない） */
   const cancel = () => {
+    if (editing) {
+      finishEdit()
+      return
+    }
     if (busy) {
       // 作っている間は、書き出しをやめて編集へ戻る（確認もトーストも出さない）。画面は閉じない
       cancelRequested.current = true
@@ -696,7 +1094,7 @@ export function Composer({
   const ovTrack = useMemo(() => buildTrack(pxs1), [lay, frames, pxs1])
   const cuTrack = useMemo(() => buildTrack(zoom), [lay, frames, zoom])
 
-  const delLabel = target?.off ? t.compose.restore : t.compose.remove
+  const delLabel = !selT && target?.off ? t.compose.restore : t.compose.remove
 
   return (
     <div
@@ -717,7 +1115,7 @@ export function Composer({
         </button>
       </div>
 
-      <div className="editor-stage">
+      <div className="editor-stage" ref={stage}>
         <video
           ref={video}
           className="editor-video"
@@ -728,11 +1126,72 @@ export function Composer({
           onPause={() => setPlaying(false)}
           onClick={busy ? undefined : togglePlay}
         />
-        {ready && !playing && !busy && (
+        {/* テキスト：絵の上に重ねる canvas（書き出しと同じ描き方）。つかんで動かす・2 本指で大きさ・タップで選ぶ */}
+        {vr && ready && (
+          <canvas
+            ref={textCanvas}
+            className="cmp-txt-canvas"
+            role="img"
+            aria-label={shownTexts.map((o) => o.text).join(' / ') || t.compose.text}
+            style={{ left: vr.x, top: vr.y, width: vr.w, height: vr.h, pointerEvents: busy ? 'none' : 'auto' }}
+            onPointerDown={textDown}
+            onPointerMove={textMove}
+            onPointerUp={textUp}
+            onPointerCancel={textUp}
+          />
+        )}
+        {vr && selBox && selT && !busy && (
+          <>
+            <div className="cmp-txt-sel" style={{ left: vr.x + selBox.x, top: vr.y + selBox.y, width: selBox.w, height: selBox.h }} />
+            {/* 選んだテキストの角：左上＝消す、右上＝文字を直す、右下＝引いて大きさ（見つけやすいように、箱に付ける） */}
+            {!editing && (
+              <>
+                <button type="button" className="cmp-txt-badge del" aria-label={t.compose.textBadgeDelete} style={{ left: Math.max(2, vr.x + selBox.x - 20), top: Math.max(2, vr.y + selBox.y - 20) }} onClick={removeText}>
+                  ×
+                </button>
+                <button type="button" className="cmp-txt-badge edit" aria-label={t.compose.textBadgeEdit} style={{ left: Math.min(vr.x + vr.w - 28, vr.x + selBox.x + selBox.w - 8), top: Math.max(2, vr.y + selBox.y - 20) }} onClick={startEdit}>
+                  <TextIcon size={14} />
+                </button>
+                <span
+                  className="cmp-txt-badge size"
+                  role="slider"
+                  aria-label={t.compose.textSize}
+                  aria-valuenow={selT.size}
+                  style={{ left: Math.min(vr.x + vr.w - 28, vr.x + selBox.x + selBox.w - 8), top: Math.min(vr.y + vr.h - 28, vr.y + selBox.y + selBox.h - 8) }}
+                  onPointerDown={sizeDown}
+                  onPointerMove={sizeMove}
+                  onPointerUp={sizeUp}
+                  onPointerCancel={sizeUp}
+                >
+                  ⤡
+                </span>
+              </>
+            )}
+          </>
+        )}
+        {vr && guideX && <div className="cmp-txt-guide" style={{ left: vr.x + vr.w / 2, top: vr.y, height: vr.h }} />}
+        {ready && !playing && !busy && !selText && (
           <button className="editor-play" aria-label={t.player.play} onClick={togglePlay}>
             <PlayIcon size={30} />
           </button>
         )}
+        {/* 文字を打つところ：キーボードで隠れない、絵の上の端に出す（絵の上には、打った文字がそのまま出る）。出していないときは、見えないだけで、置いてある（タップの操作の中で focus してキーボードを出すため） */}
+        <div className={`cmp-txt-edit${editing ? ' on' : ''}`}>
+          <textarea
+            ref={textInput}
+            rows={Math.min(3, Math.max(1, (selT?.text.split('\n').length ?? 1)))}
+            readOnly
+            value={selT?.text ?? ''}
+            placeholder={t.compose.textPlaceholder}
+            aria-label={t.compose.text}
+            onChange={(e) => selT && patchText(selT.id, { text: e.target.value }, false)}
+            onBlur={finishEdit}
+          />
+          {/* 押した瞬間に、打つ欄の focus が外れると、欄が消えて、押した扱いにならない（1 回目が空振りになる）。focus を動かさず、離したときに確定する */}
+          <button type="button" className="editor-text-button primary" onPointerDown={(e) => e.preventDefault()} onMouseDown={(e) => e.preventDefault()} onClick={finishEdit}>
+            {t.compose.textDone}
+          </button>
+        </div>
       </div>
 
       <div className="editor-panel">
@@ -750,6 +1209,93 @@ export function Composer({
         {ready && !busy && (
           <>
             {/* 音：元の音のあり・なし（スピーカー 1 つ）。BGM は、同梱の曲が入るまでは出さない（曲の持ち合わせがない人には使えないため） */}
+            {selT && !editing ? (
+              <div className="cmp-sound cmp-txt-style">
+                {/* 左：設定の種類（フォント・文字の色・背景・大きさ）。右：選んだ種類の中身（横に流せる） */}
+                <div className="cmp-style-tabs" role="tablist">
+                  {(
+                    [
+                      ['font', t.compose.textTabFont, <span key="f" className="cmp-tab-aa">Aa</span>],
+                      ['style', t.compose.textTabStyle, <span key="y" className="cmp-tab-style" style={{ color: selT.color, WebkitTextStrokeColor: selT.stroke ?? 'transparent', background: selT.plate ? selT.plateColor : undefined }}>あ</span>],
+                      ['color', t.compose.textTabColor, <span key="c" className="cmp-tab-dot" style={{ background: selT.color }} />],
+                      ['time', t.compose.textTabTime, <svg key="s" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></svg>],
+                    ] as const
+                  ).map(([id, label, icon]) => (
+                    <button key={id} type="button" role="tab" aria-selected={styleTab === id} aria-label={label} className={`cmp-style-tab${styleTab === id ? ' on' : ''}`} onClick={() => setStyleTab(id)}>
+                      {icon}
+                    </button>
+                  ))}
+                </div>
+                <div className="cmp-style-opts">
+                  {styleTab === 'font' &&
+                    TEXT_FONTS.map((f, i) => (
+                      <button
+                        key={f.id}
+                        type="button"
+                        className={`cmp-font-tile${selT.font === f.id ? ' on' : ''}`}
+                        style={{ fontFamily: f.family, fontWeight: f.weight, fontStyle: f.italic ? 'italic' : 'normal', letterSpacing: f.tracking ? `${f.tracking * 0.4}em` : undefined }}
+                        aria-label={t.compose.textFonts[i]}
+                        aria-pressed={selT.font === f.id}
+                        onClick={() => patchText(selT.id, { font: f.id })}
+                      >
+                        あA
+                      </button>
+                    ))}
+                  {styleTab === 'color' && (
+                    <>
+                      <Swatches value={selT.color} label={t.compose.textColors} custom={t.compose.textColorCustom} onPick={(c) => patchText(selT.id, { color: c })} onPicker={pickerChange} onPickerOpen={() => (pickerRecorded.current = false)} />
+                      {/* ふち・板がついているときだけ、その色も選べる（スタイルで付ける） */}
+                      {(selT.stroke || selT.plate) && (
+                        <>
+                          <span className="cmp-opts-sep" aria-hidden="true" />
+                          <span className="cmp-opts-label">{selT.stroke ? t.compose.textColorStroke : t.compose.textColorPlate}</span>
+                          <Swatches
+                            small
+                            value={selT.stroke ?? selT.plateColor}
+                            label={t.compose.textColors}
+                            custom={t.compose.textColorCustom}
+                            onPick={(c) => patchText(selT.id, selT.stroke ? { stroke: c } : { plateColor: c })}
+                            onPicker={(c) => pickerChange(c, selT.stroke ? 'stroke' : 'plateColor')}
+                            onPickerOpen={() => (pickerRecorded.current = false)}
+                          />
+                        </>
+                      )}
+                    </>
+                  )}
+                  {styleTab === 'style' &&
+                    TEXT_STYLES.map((st, i) => (
+                      <button
+                        key={st.id}
+                        type="button"
+                        className={`cmp-style-tile${currentStyle(selT) === st.id ? ' on' : ''}`}
+                        aria-label={t.compose.textStyles[i]}
+                        aria-pressed={currentStyle(selT) === st.id}
+                        onClick={() => patchText(selT.id, (o) => applyStyle(o, st.id))}
+                      >
+                        <span className="cmp-style-sample" style={{ color: st.color, WebkitTextStrokeColor: st.stroke ?? 'transparent', background: st.plate ? st.plateColor : undefined, textShadow: !st.stroke && !st.plate ? '0 1px 3px rgb(0 0 0 / 70%)' : undefined }}>
+                          あA
+                        </span>
+                      </button>
+                    ))}
+                  {styleTab === 'time' &&
+                    [0, 1, 2].map((i) => {
+                      const c = lay.find((x) => x.key === selT.key)
+                      const at = Math.min(c?.d ?? 0, Math.max(0, g - (c?.off ?? 0)))
+                      return (
+                        <button
+                          key={i}
+                          type="button"
+                          className="cmp-time-chip"
+                          aria-label={t.compose.textTimeLabel[i]}
+                          onClick={() => c && patchText(selT.id, (o) => (i === 0 ? fitAll(o, c.d) : i === 1 ? fitFrom(o, at, c.d) : fitTo(o, at, c.d)))}
+                        >
+                          {t.compose.textTimeShort[i]}
+                        </button>
+                      )
+                    })}
+                </div>
+              </div>
+            ) : (
             <div className="cmp-sound">
               <button
                 type="button"
@@ -759,6 +1305,10 @@ export function Composer({
                 onClick={() => setMuted((m) => !m)}
               >
                 <SpeakerIcon size={22} off={muted} />
+              </button>
+              <button type="button" className="editor-text-button bgm-button" onClick={addText}>
+                <TextIcon size={18} />
+                {t.compose.text}
               </button>
               {BUNDLED_BGM.length > 0 && (
                 <>
@@ -797,6 +1347,7 @@ export function Composer({
                 </>
               )}
             </div>
+            )}
             {BUNDLED_BGM.length > 0 && bgmListOpen && (
               <ul className="bgm-list">
                 {BUNDLED_BGM.map((track0) => (
@@ -826,16 +1377,55 @@ export function Composer({
               <div className="cmp-ov-in" ref={ov} style={{ width: ovW }} onPointerDown={ovDown} onPointerMove={(e) => e.buttons && !hd.current && scrubTo(ovAt(e), pxs1)}>
                 {ovTrack}
                 {frame(pxs1)}
+                {texts.map((o) => {
+                  const c = lay.find((x) => x.key === o.key)
+                  return c ? <div key={o.id} className={`cmp-ov-txt${o.id === selText ? ' on' : ''}`} style={{ left: (c.off + o.start) * pxs1, width: Math.max(2, (o.end - o.start) * pxs1) }} aria-hidden="true" /> : null
+                })}
                 <div className="filmstrip-head" style={{ left: g * pxs1 }} aria-hidden="true" />
               </div>
             </div>
 
             {/* 下の段：再生ヘッドの周りの拡大（再生ヘッドは中央に固定。2 本指で倍率） */}
-            <div className="cmp-cu" onPointerDown={cuDown} onPointerMove={cuMove} onPointerUp={cuUp} onPointerCancel={cuUp}>
+            <div className="cmp-cu" style={{ height: 76 + laneCount * LANE }} onPointerDown={cuDown} onPointerMove={cuMove} onPointerUp={cuUp} onPointerCancel={cuUp}>
               <div className="cmp-cu-in" style={{ width: T * zoom, transform: `translateX(${W / 2 - g * zoom}px)` }}>
                 {cuTrack}
                 {frame(zoom)}
               </div>
+              {/* テキストの時間の帯（動画の下）。タップで選び、選んだ帯の両端を引いて、表示する時間を変える */}
+              {laneCount > 0 && (
+                <div className="cmp-cu-txt" style={{ top: 76, height: laneCount * LANE, width: T * zoom, transform: `translateX(${W / 2 - g * zoom}px)` }}>
+                  {texts.map((o) => {
+                    const c = lay.find((x) => x.key === o.key)
+                    if (!c) return null
+                    const on = o.id === selText
+                    return (
+                      <div
+                        key={o.id}
+                        className={`cmp-txt-bar${on ? ' on' : ''}`}
+                        style={{ left: (c.off + o.start) * zoom, width: Math.max(8, (o.end - o.start) * zoom), top: Math.min(2, laneOf[o.id] ?? 0) * LANE + 2 }}
+                        onPointerDown={textBarDown(o)}
+                        onPointerMove={textHandleMove}
+                        onPointerUp={textHandleUp}
+                        onPointerCancel={textHandleUp}
+                      >
+                        {/* 外した（斜線の）区間にかかる部分は、できあがりに入らないので、斜線で示す */}
+                        {c.segs
+                          .filter((sg) => sg.off && sg.end > o.start && sg.start < o.end)
+                          .map((sg) => (
+                            <u key={sg.id} className="cmp-txt-off" style={{ left: (Math.max(sg.start, o.start) - o.start) * zoom, width: (Math.min(sg.end, o.end) - Math.max(sg.start, o.start)) * zoom }} />
+                          ))}
+                        <span>{o.text.split('\n')[0] || t.compose.textPlaceholder}</span>
+                        {on && (
+                          <>
+                            <i className="start" role="slider" aria-label={t.editor.start} aria-valuenow={o.start} onPointerDown={textHandleDown(o, 'start')} onPointerMove={textHandleMove} onPointerUp={textHandleUp} onPointerCancel={textHandleUp} />
+                            <i className="end" role="slider" aria-label={t.editor.end} aria-valuenow={o.end} onPointerDown={textHandleDown(o, 'end')} onPointerMove={textHandleMove} onPointerUp={textHandleUp} onPointerCancel={textHandleUp} />
+                          </>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
               <div className="filmstrip-head" style={{ left: W / 2 }} aria-hidden="true" />
             </div>
 

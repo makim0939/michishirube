@@ -109,6 +109,12 @@ export const ScissorsIcon = (p: P) => (
   </Icon>
 )
 
+export const TextIcon = (p: P) => (
+  <Icon {...p}>
+    <path d="M5 6.5V5h14v1.5M12 5v14M9 19h6" />
+  </Icon>
+)
+
 export const UndoIcon = (p: P) => (
   <Icon {...p}>
     <path d="M9 14L4 9l5-5" />

@@ -23,6 +23,23 @@ export interface ComposeClip {
   duration?: number
 }
 
+/** 動画に重ねる画像（テキスト）。書き出す絵と同じ比の、透明な背景の PNG。できあがりの start〜end 秒の間だけ重ねる */
+export interface ComposeOverlay {
+  png: Blob
+  start: number
+  end: number
+}
+
+/**
+ * 書き出す絵の大きさ（最初の区間の向きと比に合わせ、短い辺を shortSide までにする。小さい動画は大きくしない。偶数にそろえる）。
+ * ネイティブ（VideoComposerPlugin.swift の renderSize）と同じ計算。重ねる画像を、この大きさで描く
+ */
+export function renderSize(width: number, height: number, shortSide: number): { width: number; height: number } {
+  const scale = Math.min(1, shortSide / Math.min(width, height))
+  const even = (v: number) => Math.max(2, Math.round((v * scale) / 2) * 2)
+  return { width: even(width), height: even(height) }
+}
+
 /** BGM。入れた動画の長さまで繰り返し、終わりで小さくしていく */
 export interface ComposeBgm {
   /** アプリのファイルの場所か、メモリの音声 */
@@ -83,6 +100,8 @@ export async function composeClips(
   onProgress?: (value: number) => void,
   /** 書き出しを始める前に見る。true なら、始めずにやめる（ファイルを書いている間に「やめる」を押されたとき） */
   isCancelled?: () => boolean,
+  /** 動画に重ねるテキストの画像。iOS だけ */
+  overlays?: ComposeOverlay[],
 ): Promise<File> {
   if (!canCompose()) throw new Error(t.compose.unsupported)
   checkClips(clips)
@@ -122,8 +141,15 @@ export async function composeClips(
       }
       bgmInput = { input, volume: Math.max(0, Math.min(1, bgm.volume)), totalSeconds: totalSeconds(clips) }
     }
+    const overlayInputs: { input: string; start: number; end: number }[] = []
+    for (const [i, o] of (overlays ?? []).entries()) {
+      const input = `${dir}/ov-${i}.png`
+      temps.push(input)
+      await writeBlobFile(input, o.png)
+      overlayInputs.push({ input, start: o.start, end: o.end })
+    }
     if (isCancelled?.()) throw new ComposeCancelled()
-    await composeVideoFiles(inputs, output, QUALITY[quality], bgmInput, muteOriginal, onProgress)
+    await composeVideoFiles(inputs, output, QUALITY[quality], bgmInput, muteOriginal, onProgress, overlayInputs)
     // 読み終えた Blob は、ファイルを消しても読める（メモリにある）。もう一度写さない（長い動画で、メモリが倍になるため）
     const blob = await readBlobFile(output, 'video/mp4')
     const base = fileName.replace(/\.[^.]+$/, '').replace(/-edit$/, '')
