@@ -6,10 +6,10 @@
  */
 
 /**
- * はじめから並べる色：白・クリーム・黄・金茶・濃い茶（ラテアート・カフェの動画で、実際に多かった白を中心に、ラテ帳の温かい色）。
+ * はじめから並べる色：白・クリーム黄（おしゃれ系のタイトルで見られる、やわらかい黄）・黄・金茶・濃い茶（ラテアート・カフェの動画で、実際に多かった白を中心に、ラテ帳の温かい色）。
  * 動画の背景（ラテの茶・泡の白）の上で読めるよう、明るい色は、影・縁・板と組み合わせて使う。ほかの色は、システムのカラーピッカーで選ぶ
  */
-export const TEXT_COLORS = ['#ffffff', '#f6e6c8', '#ffd84d', '#c99b66', '#3b2a1e'] as const
+export const TEXT_COLORS = ['#ffffff', '#f3e2a0', '#ffd84d', '#c99b66', '#3b2a1e'] as const
 
 /** 背景の板の濃さ（0〜1）。動画が透けて見える程度 */
 export const PLATE_ALPHA = 0.78
@@ -24,7 +24,7 @@ export const STROKE_RATIO = 0.085
  */
 export const TEXT_STYLES = [
   { id: 'caption', color: '#ffffff', stroke: null, plate: false, plateColor: '#2b1d14' },
-  { id: 'cream', color: '#f6e6c8', stroke: null, plate: false, plateColor: '#2b1d14' },
+  { id: 'cream', color: '#f3e2a0', stroke: null, plate: false, plateColor: '#2b1d14' },
   { id: 'outline', color: '#ffffff', stroke: '#2b1d14', plate: false, plateColor: '#2b1d14' },
   { id: 'accent', color: '#ffd84d', stroke: '#2b1d14', plate: false, plateColor: '#2b1d14' },
   { id: 'plate-dark', color: '#fff6e6', stroke: null, plate: true, plateColor: '#2b1d14' },
@@ -45,31 +45,36 @@ export function currentStyle(o: TextOverlay): TextStyleId | undefined {
 }
 
 /**
- * フォント：ゴシック（字幕）・太ゴシック（見出し）・丸ゴシック・明朝・手書きの 5 種。
- * 手書き（Yusei Magic）だけ、同梱（SIL OFL 1.1。public/fonts。日本語の主な文字だけの woff2 約 0.4 MB。使うときだけ読み込む）。
- * ほかは、iPhone・iPad 標準のヒラギノ。プレビューも書き出しも、同じ WebView の canvas で描くので、同じ見た目になる。収録に無い字は、後ろの候補で描く
+ * フォント：ゴシック（字幕）・丸ゴシック・明朝・手書き・セリフ・セリフ斜体・細字（大文字）の 7 種。
+ * ゴシック・丸ゴシック・明朝は、iPhone・iPad 標準のヒラギノ。手書き（Yusei Magic）・セリフ（Playfair Display）・セリフ斜体・細字（Josefin Sans）は、同梱
+ * （SIL OFL 1.1。public/fonts。使うときだけ読み込む）。セリフ・細字は、英数字だけのフォント（おしゃれなタイトル用）で、日本語は、後ろの候補（明朝・ゴシック）で描く
+ * （英字はおしゃれに、日本語は落ち着いた明朝に、という見え方になる）。細字は、字間を広げ、英字を大文字にする。
+ * プレビューも書き出しも、同じ WebView の canvas で描くので、同じ見た目になる
  */
 export const TEXT_FONTS = [
-  { id: 'gothic', family: '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", system-ui, sans-serif', weight: 600 },
-  { id: 'bold', family: '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", system-ui, sans-serif', weight: 800 },
-  { id: 'maru', family: '"Hiragino Maru Gothic ProN", "Zen Maru Gothic", "Hiragino Sans", system-ui, sans-serif', weight: 700 },
-  { id: 'mincho', family: '"Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif', weight: 600 },
-  { id: 'hand', family: '"Yusei Magic", "Hiragino Maru Gothic ProN", system-ui, sans-serif', weight: 400 },
+  { id: 'gothic', scale: 1, family: '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", system-ui, sans-serif', weight: 600, italic: false, tracking: 0, upper: false },
+  { id: 'maru', scale: 1, family: '"Hiragino Maru Gothic ProN", "Zen Maru Gothic", "Hiragino Sans", system-ui, sans-serif', weight: 700, italic: false, tracking: 0, upper: false },
+  { id: 'mincho', scale: 1, family: '"Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif', weight: 600, italic: false, tracking: 0, upper: false },
+  { id: 'hand', scale: 1, family: '"Yusei Magic", "Hiragino Maru Gothic ProN", system-ui, sans-serif', weight: 400, italic: false, tracking: 0, upper: false },
+  { id: 'serif', scale: 1.08, family: '"Playfair Display", "Hiragino Mincho ProN", "Yu Mincho", serif', weight: 600, italic: false, tracking: -0.02, upper: false },
+  { id: 'serifi', scale: 1.08, family: '"Playfair Display", "Hiragino Mincho ProN", "Yu Mincho", serif', weight: 500, italic: true, tracking: -0.01, upper: false },
+  { id: 'wide', scale: 0.68, family: '"Josefin Sans", "Hiragino Sans", "Hiragino Kaku Gothic ProN", system-ui, sans-serif', weight: 400, italic: false, tracking: 0.24, upper: true },
 ] as const
 
 export type TextFontId = (typeof TEXT_FONTS)[number]['id']
 
 const fontOf = (id: TextFontId) => TEXT_FONTS.find((f) => f.id === id) ?? TEXT_FONTS[0]
 
+/** canvas の font 指定（斜体・太さ・大きさ・フォント） */
+export function fontCss(id: TextFontId, px: number): string {
+  const f = fontOf(id)
+  return `${f.italic ? 'italic ' : ''}${f.weight} ${px}px ${f.family}`
+}
+
 /** 同梱のフォントは、使う前に読み込む（canvas は、読み込み中のフォントで描くと、代わりの字で描いてしまう） */
 export async function loadTextFonts(ids: TextFontId[]): Promise<void> {
   if (typeof document === 'undefined' || !document.fonts) return
-  await Promise.all(
-    [...new Set(ids)].map((id) => {
-      const f = fontOf(id)
-      return document.fonts.load(`${f.weight} 40px ${f.family}`, 'あいうAa').catch(() => [])
-    }),
-  )
+  await Promise.all([...new Set(ids)].map((id) => document.fonts.load(fontCss(id, 40), 'あいうAa').catch(() => [])))
 }
 
 /** 文字の大きさ（絵の高さに対する割合）の範囲と、はじめの値 */
@@ -214,14 +219,30 @@ export type Measure = (s: string) => number
 export function wrapLines(text: string, maxWidth: number, measure: Measure): string[] {
   const lines: string[] = []
   for (const para of text.split('\n')) {
+    // 英単語は、1 つのまとまりとして、単語の途中では折らない（日本語は、1 文字ずつ）。単語が 1 行に入らなければ、文字で折る
+    const units = para.match(/[A-Za-z0-9'’.,!?&:;()-]+|\s+|[\s\S]/gu) ?? ['']
     let cur = ''
-    for (const ch of Array.from(para)) {
-      if (cur && measure(cur + ch) > maxWidth) {
-        lines.push(cur)
-        cur = ch
-      } else cur += ch
+    for (const u of units) {
+      if (measure(cur + u) <= maxWidth) {
+        cur += u
+        continue
+      }
+      if (/^\s+$/.test(u)) continue
+      if (cur) lines.push(cur.trimEnd())
+      cur = ''
+      if (measure(u) <= maxWidth) {
+        cur = u
+        continue
+      }
+      // 1 行に入らない長い単語は、文字で折る
+      for (const ch of Array.from(u)) {
+        if (cur && measure(cur + ch) > maxWidth) {
+          lines.push(cur)
+          cur = ch
+        } else cur += ch
+      }
     }
-    lines.push(cur)
+    lines.push(cur.trimEnd())
   }
   return lines
 }
@@ -263,17 +284,44 @@ const isLight = (hex: string) => {
  * テキスト 1 つを、絵（W×H px）に描く。描いた外枠を返す。
  * 文字は太め。背景の板なしのときは影をつける（明るい動画の上でも読めるように）
  */
+/** 1 行の幅（字間 tracking を足す。字ごとに測る） */
+function lineWidth(ctx: CanvasRenderingContext2D, line: string, px: number, tracking: number): number {
+  if (tracking === 0) return ctx.measureText(line).width
+  const chars = Array.from(line)
+  return chars.reduce((n, c) => n + ctx.measureText(c).width, 0) + tracking * px * Math.max(0, chars.length - 1)
+}
+
+/** 1 行を、中央そろえで描く（字間があるときは、字ごとに、左から並べる） */
+function drawLine(ctx: CanvasRenderingContext2D, line: string, cx: number, y: number, px: number, tracking: number, stroke: boolean) {
+  if (tracking === 0) {
+    if (stroke) ctx.strokeText(line, cx, y)
+    else ctx.fillText(line, cx, y)
+    return
+  }
+  const chars = Array.from(line)
+  let x = cx - lineWidth(ctx, line, px, tracking) / 2
+  ctx.textAlign = 'left'
+  for (const c of chars) {
+    if (stroke) ctx.strokeText(c, x, y)
+    else ctx.fillText(c, x, y)
+    x += ctx.measureText(c).width + tracking * px
+  }
+  ctx.textAlign = 'center'
+}
+
 export function drawText(ctx: CanvasRenderingContext2D, W: number, H: number, o: TextOverlay): TextBox | undefined {
   if (!o.text.trim()) return undefined
-  const px = o.size * H
-  ctx.save()
   const font = fontOf(o.font)
-  ctx.font = `${font.weight} ${px}px ${font.family}`
+  // 細字（大文字）は、字が横に長いので、同じ「大きさ」でも、小さく描く（ほかのフォントと、同じくらいの幅になる）
+  const px = o.size * H * font.scale
+  ctx.save()
+  ctx.font = fontCss(o.font, px)
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  const lines = wrapLines(o.text, W * WRAP_WIDTH, (s) => ctx.measureText(s).width)
+  const text = font.upper ? o.text.toUpperCase() : o.text
+  const lines = wrapLines(text, W * WRAP_WIDTH, (s) => lineWidth(ctx, s, px, font.tracking))
   const lh = px * 1.3
-  const w = Math.max(...lines.map((l) => ctx.measureText(l).width))
+  const w = Math.max(...lines.map((l) => lineWidth(ctx, l, px, font.tracking)))
   const h = lh * lines.length
   const cx = o.x * W
   const cy = o.y * H
@@ -291,17 +339,17 @@ export function drawText(ctx: CanvasRenderingContext2D, W: number, H: number, o:
     ctx.shadowOffsetY = px * 0.05
     ctx.fillStyle = o.color
     // 3 回重ねて、影を濃くする（細い字でも、泡の白い所の上で、輪郭が出るように）
-    for (let k = 0; k < 2; k++) lines.forEach((l, i) => ctx.fillText(l, cx, cy - h / 2 + lh * (i + 0.5)))
+    for (let k = 0; k < 2; k++) lines.forEach((l, i) => drawLine(ctx, l, cx, cy - h / 2 + lh * (i + 0.5), px, font.tracking, false))
   }
   if (o.stroke) {
     // 縁取り：太い線を先に引いて、その上に文字を重ねる（外側にだけ縁が出る）。角は丸める
     ctx.lineJoin = 'round'
     ctx.lineWidth = px * STROKE_RATIO * 2
     ctx.strokeStyle = o.stroke
-    lines.forEach((l, i) => ctx.strokeText(l, cx, cy - h / 2 + lh * (i + 0.5)))
+    lines.forEach((l, i) => drawLine(ctx, l, cx, cy - h / 2 + lh * (i + 0.5), px, font.tracking, true))
   }
   ctx.fillStyle = o.color
-  lines.forEach((l, i) => ctx.fillText(l, cx, cy - h / 2 + lh * (i + 0.5)))
+  lines.forEach((l, i) => drawLine(ctx, l, cx, cy - h / 2 + lh * (i + 0.5), px, font.tracking, false))
   ctx.restore()
   return { x: cx - w / 2 - padX, y: cy - h / 2 - padY, w: w + padX * 2, h: h + padY * 2 }
 }

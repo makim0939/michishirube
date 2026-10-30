@@ -3987,11 +3987,35 @@ h1.wordmark {
 }
 
 
-/* 同梱のフォント（手書き。OFL。public/fonts。日本語の主な文字だけの woff2）。canvas で描く前に、読み込む（loadTextFonts） */
+/* 同梱のフォント（手書き・セリフ・セリフ斜体・細字。OFL。public/fonts）。canvas で描く前に、読み込む（loadTextFonts） */
 @font-face {
   font-family: 'Yusei Magic';
   src: url('/fonts/YuseiMagic-Regular.woff2') format('woff2');
   font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Playfair Display';
+  src: url('/fonts/PlayfairDisplay.woff2') format('woff2');
+  font-weight: 400 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Playfair Display';
+  src: url('/fonts/PlayfairDisplay-Italic.woff2') format('woff2');
+  font-weight: 400 900;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Josefin Sans';
+  src: url('/fonts/JosefinSans.woff2') format('woff2');
+  font-weight: 100 700;
+  font-style: normal;
   font-display: swap;
 }
 

@@ -104,6 +104,15 @@ function Swatches({
   )
 }
 
+/** 指を捉える（画面の外へ出ても、追い続けるため）。捉えられない指（合成された操作など）でも、止まらない */
+function capture(el: Element, id: number) {
+  try {
+    el.setPointerCapture(id)
+  } catch {
+    // 捉えられなくても、操作は続ける
+  }
+}
+
 /** 帯の絵 1 枚の幅（px） */
 const TILE = 34
 /** 最初に作る粗い絵の数と、あとから作る細かい絵の数（1 本あたり。取得は、粗い順に全部、そのあと細かく） */
@@ -570,7 +579,7 @@ export function Composer({
     return ((e.clientX - r.left) / r.width) * T
   }
   const ovDown = (e: PointerEvent) => {
-    e.currentTarget.setPointerCapture(e.pointerId)
+    capture(e.currentTarget, e.pointerId)
     const gg = ovAt(e)
     scrubTo(gg, pxs1)
     selectAt(gg)
@@ -580,7 +589,7 @@ export function Composer({
   const pts = useRef(new Map<number, number>())
   const cu = useRef<{ x0: number; g0: number; dist0: number; z0: number } | null>(null)
   const cuDown = (e: PointerEvent) => {
-    e.currentTarget.setPointerCapture(e.pointerId)
+    capture(e.currentTarget, e.pointerId)
     pts.current.set(e.pointerId, e.clientX)
     const xs = [...pts.current.values()]
     cu.current = { x0: e.clientX, g0: g, dist0: xs.length === 2 ? Math.abs(xs[0] - xs[1]) : 0, z0: zoom }
@@ -612,7 +621,7 @@ export function Composer({
   const handleDown = (edge: 'start' | 'end', pxs: number) => (e: PointerEvent) => {
     if (!target) return
     e.stopPropagation()
-    e.currentTarget.setPointerCapture(e.pointerId)
+    capture(e.currentTarget, e.pointerId)
     stopAll()
     // 引いている間に再生ヘッドが動いても、対象が変わらないよう、選んだ状態にする
     setSel(target.id)
@@ -834,7 +843,7 @@ export function Composer({
   const sizeDown = (e: PointerEvent) => {
     if (!selT || !selBox || !textCanvas.current) return
     e.stopPropagation()
-    e.currentTarget.setPointerCapture(e.pointerId)
+    capture(e.currentTarget, e.pointerId)
     const r = textCanvas.current.getBoundingClientRect()
     const cx = r.left + selBox.x + selBox.w / 2
     const cy = r.top + selBox.y + selBox.h / 2
@@ -855,7 +864,7 @@ export function Composer({
     sizeHandle.current = null
   }
   const textDown = (e: PointerEvent) => {
-    e.currentTarget.setPointerCapture(e.pointerId)
+    capture(e.currentTarget, e.pointerId)
     tPts.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
     if (tPts.current.size === 2 && selT) {
       const [a, b] = [...tPts.current.values()]
@@ -925,7 +934,7 @@ export function Composer({
   // 帯の中をつかむと、長さを保ったまま、ずらせる（動かさずに離せば、選ぶだけ）
   const textBarDown = (o: TextOverlay) => (e: PointerEvent) => {
     e.stopPropagation()
-    e.currentTarget.setPointerCapture(e.pointerId)
+    capture(e.currentTarget, e.pointerId)
     if (editing) finishEdit()
     stopAll()
     setSelText(o.id)
@@ -935,7 +944,7 @@ export function Composer({
   }
   const textHandleDown = (o: TextOverlay, edge: 'start' | 'end') => (e: PointerEvent) => {
     e.stopPropagation()
-    e.currentTarget.setPointerCapture(e.pointerId)
+    capture(e.currentTarget, e.pointerId)
     stopAll()
     setSelText(o.id)
     th.current = { id: o.id, edge, x0: e.clientX, t0: o[edge], len: 0, moved: true, recorded: false }
@@ -1224,7 +1233,7 @@ export function Composer({
                         key={f.id}
                         type="button"
                         className={`cmp-font-tile${selT.font === f.id ? ' on' : ''}`}
-                        style={{ fontFamily: f.family, fontWeight: f.weight }}
+                        style={{ fontFamily: f.family, fontWeight: f.weight, fontStyle: f.italic ? 'italic' : 'normal', letterSpacing: f.tracking ? `${f.tracking * 0.4}em` : undefined }}
                         aria-label={t.compose.textFonts[i]}
                         aria-pressed={selT.font === f.id}
                         onClick={() => patchText(selT.id, { font: f.id })}

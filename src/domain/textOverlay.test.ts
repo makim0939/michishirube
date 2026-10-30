@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyStyle, clampRange, currentStyle, TEXT_STYLES, fitAll, fitFrom, fitTo, lanes, moveEnd, moveStart, newText, outputIntervals, snapCenter, TEXT_MIN_SECONDS, wrapLines, type TextOverlay } from './textOverlay'
+import { applyStyle, clampRange, currentStyle, fontCss, TEXT_FONTS, TEXT_STYLES, fitAll, fitFrom, fitTo, lanes, moveEnd, moveStart, newText, outputIntervals, snapCenter, TEXT_MIN_SECONDS, wrapLines, type TextOverlay } from './textOverlay'
 
 const base = (over: Partial<TextOverlay> = {}): TextOverlay => ({
   id: 'x',
@@ -131,6 +131,18 @@ describe('重なるテキストの段', () => {
 describe('折り返し', () => {
   const measure = (s: string) => Array.from(s).length * 10
 
+  it('英単語は、途中で折らない（空白で折る）', () => {
+    expect(wrapLines('cooking journaling and study', 150, measure)).toEqual(['cooking', 'journaling and', 'study'])
+  })
+
+  it('1 行に入らない長い英単語だけは、文字で折る', () => {
+    expect(wrapLines('abcdefghijkl', 50, measure)).toEqual(['abcde', 'fghij', 'kl'])
+  })
+
+  it('日本語と英語が混ざっても、日本語は 1 文字ずつ、英語は単語ごと', () => {
+    expect(wrapLines('ラテ art です', 60, measure)).toEqual(['ラテ art', 'です'])
+  })
+
   it('改行で分ける', () => {
     expect(wrapLines('ab\ncd', 100, measure)).toEqual(['ab', 'cd'])
   })
@@ -160,5 +172,24 @@ describe('スタイル（1 タップで、色・縁取り・板をまとめて�
     expect(TEXT_STYLES).toHaveLength(6)
     const keys = new Set(TEXT_STYLES.map((s) => `${s.color}|${s.stroke}|${s.plate}`))
     expect(keys.size).toBe(6)
+  })
+})
+
+describe('フォント', () => {
+  it('役割の違う 7 種で、字間・大文字・斜体は、それぞれのフォントが持つ', () => {
+    expect(TEXT_FONTS.map((f) => f.id)).toEqual(['gothic', 'maru', 'mincho', 'hand', 'serif', 'serifi', 'wide'])
+    const wide = TEXT_FONTS.find((f) => f.id === 'wide')!
+    expect([wide.upper, wide.tracking > 0]).toEqual([true, true])
+    expect(TEXT_FONTS.find((f) => f.id === 'serifi')!.italic).toBe(true)
+  })
+
+  it('canvas の font 指定に、斜体・太さ・大きさ・フォントが入る', () => {
+    expect(fontCss('serifi', 40)).toMatch(/^italic 500 40px "Playfair Display"/)
+    expect(fontCss('gothic', 20)).toMatch(/^600 20px "Hiragino Sans"/)
+  })
+
+  it('セリフ・細字は、日本語のために、後ろの候補に標準の明朝・ゴシックを持つ（英字だけのフォントのため）', () => {
+    expect(TEXT_FONTS.find((f) => f.id === 'serif')!.family).toContain('Hiragino Mincho ProN')
+    expect(TEXT_FONTS.find((f) => f.id === 'wide')!.family).toContain('Hiragino Sans')
   })
 })
