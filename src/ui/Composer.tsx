@@ -233,6 +233,9 @@ export function Composer({
   const [bgmVolume, setBgmVolume] = useState(0.3)
   const [bgmListOpen, setBgmListOpen] = useState(false)
   const bgmInput = useRef<HTMLInputElement>(null)
+  /** 曲を選んだ直後に、再生して聴かせるか（曲を読み込み終えたとき） */
+  const previewNext = useRef(false)
+  const previewRef = useRef<() => void>(() => {})
   const bgmVolumeRef = useRef(0.3)
   const bgmAudio = useRef<{ el: HTMLAudioElement; ctx: AudioContext; gain: GainNode } | null>(null)
   /** 読み込み直しのあとに、動かす位置（動画の中の秒）と、続けて再生するか */
@@ -405,6 +408,11 @@ export function Composer({
         gain.gain.value = bgmVolumeRef.current
         ctx.createMediaElementSource(el).connect(gain).connect(ctx.destination)
         bgmAudio.current = { el, ctx, gain }
+        // 選んだ曲は、その場で聴けるように、続けて再生する（映像も、BGM といっしょに流れる）
+        if (previewNext.current) {
+          previewNext.current = false
+          previewRef.current()
+        }
       })
       .catch(() => {})
     return () => {
@@ -546,6 +554,20 @@ export function Composer({
     if (a) {
       if (a.ctx.state === 'suspended') void a.ctx.resume()
       a.el.currentTime = a.el.duration > 0 && Number.isFinite(a.el.duration) ? keptBefore(at) % a.el.duration : 0
+      void a.el.play().catch(() => {})
+    }
+  }
+
+  // 曲を選んだとき：止まっていれば、再生を始める。もう再生中なら、BGM だけ、その位置から流す
+  previewRef.current = () => {
+    if (!playing) {
+      togglePlay()
+      return
+    }
+    const a = bgmAudio.current
+    if (a) {
+      if (a.ctx.state === 'suspended') void a.ctx.resume()
+      a.el.currentTime = a.el.duration > 0 && Number.isFinite(a.el.duration) ? keptBefore(g) % a.el.duration : 0
       void a.el.play().catch(() => {})
     }
   }
@@ -1340,7 +1362,10 @@ export function Composer({
                     accept="audio/*,.m4a,.mp3,.wav,.aac"
                     onChange={(e) => {
                       const file = e.target.files?.[0]
-                      if (file) setBgm({ kind: 'file', file })
+                      if (file) {
+                        previewNext.current = true
+                        setBgm({ kind: 'file', file })
+                      }
                       e.target.value = ''
                     }}
                   />
@@ -1356,6 +1381,7 @@ export function Composer({
                       type="button"
                       className="editor-text-button"
                       onClick={() => {
+                        previewNext.current = true
                         setBgm({ kind: 'bundled', track: track0 })
                         setBgmListOpen(false)
                       }}
