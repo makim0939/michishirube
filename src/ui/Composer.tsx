@@ -1122,6 +1122,8 @@ export function Composer({
           <canvas
             ref={textCanvas}
             className="cmp-txt-canvas"
+            role="img"
+            aria-label={shownTexts.map((o) => o.text).join(' / ') || t.compose.text}
             style={{ left: vr.x, top: vr.y, width: vr.w, height: vr.h, pointerEvents: busy ? 'none' : 'auto' }}
             onPointerDown={textDown}
             onPointerMove={textMove}
@@ -1135,10 +1137,10 @@ export function Composer({
             {/* 選んだテキストの角：左上＝消す、右上＝文字を直す、右下＝引いて大きさ（見つけやすいように、箱に付ける） */}
             {!editing && (
               <>
-                <button type="button" className="cmp-txt-badge del" aria-label={t.compose.textBadgeDelete} style={{ left: Math.max(2, vr.x + selBox.x - 14), top: Math.max(2, vr.y + selBox.y - 14) }} onClick={removeText}>
+                <button type="button" className="cmp-txt-badge del" aria-label={t.compose.textBadgeDelete} style={{ left: Math.max(2, vr.x + selBox.x - 20), top: Math.max(2, vr.y + selBox.y - 20) }} onClick={removeText}>
                   ×
                 </button>
-                <button type="button" className="cmp-txt-badge edit" aria-label={t.compose.textBadgeEdit} style={{ left: Math.min(vr.x + vr.w - 26, vr.x + selBox.x + selBox.w - 14), top: Math.max(2, vr.y + selBox.y - 14) }} onClick={startEdit}>
+                <button type="button" className="cmp-txt-badge edit" aria-label={t.compose.textBadgeEdit} style={{ left: Math.min(vr.x + vr.w - 28, vr.x + selBox.x + selBox.w - 8), top: Math.max(2, vr.y + selBox.y - 20) }} onClick={startEdit}>
                   <TextIcon size={14} />
                 </button>
                 <span
@@ -1146,7 +1148,7 @@ export function Composer({
                   role="slider"
                   aria-label={t.compose.textSize}
                   aria-valuenow={selT.size}
-                  style={{ left: Math.min(vr.x + vr.w - 26, vr.x + selBox.x + selBox.w - 14), top: Math.min(vr.y + vr.h - 26, vr.y + selBox.y + selBox.h - 14) }}
+                  style={{ left: Math.min(vr.x + vr.w - 28, vr.x + selBox.x + selBox.w - 8), top: Math.min(vr.y + vr.h - 28, vr.y + selBox.y + selBox.h - 8) }}
                   onPointerDown={sizeDown}
                   onPointerMove={sizeMove}
                   onPointerUp={sizeUp}

@@ -286,11 +286,12 @@ export function drawText(ctx: CanvasRenderingContext2D, W: number, H: number, o:
     ctx.fill()
   } else if (!o.stroke) {
     // やわらかい影（二重に描いて、白い泡の上でも、字の輪郭が分かる程度に）
-    ctx.shadowColor = isLight(o.color) ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.6)'
-    ctx.shadowBlur = px * 0.2
+    ctx.shadowColor = isLight(o.color) ? 'rgba(20,10,0,0.62)' : 'rgba(255,255,255,0.7)'
+    ctx.shadowBlur = px * 0.26
     ctx.shadowOffsetY = px * 0.05
     ctx.fillStyle = o.color
-    lines.forEach((l, i) => ctx.fillText(l, cx, cy - h / 2 + lh * (i + 0.5)))
+    // 3 回重ねて、影を濃くする（細い字でも、泡の白い所の上で、輪郭が出るように）
+    for (let k = 0; k < 2; k++) lines.forEach((l, i) => ctx.fillText(l, cx, cy - h / 2 + lh * (i + 0.5)))
   }
   if (o.stroke) {
     // 縁取り：太い線を先に引いて、その上に文字を重ねる（外側にだけ縁が出る）。角は丸める
