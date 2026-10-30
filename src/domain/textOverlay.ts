@@ -6,10 +6,10 @@
  */
 
 /**
- * はじめから並べる色：白・クリーム黄（おしゃれ系のタイトルで見られる、やわらかい黄）・黄・金茶・濃い茶（ラテアート・カフェの動画で、実際に多かった白を中心に、ラテ帳の温かい色）。
+ * はじめから並べる色：白・ベージュ（やわらかい白）・クリーム黄（おしゃれ系のタイトルで見られる、やわらかい黄）・金茶・濃い茶（ラテアート・カフェの動画で、実際に多かった白を中心に、ラテ帳の温かい色）。
  * 動画の背景（ラテの茶・泡の白）の上で読めるよう、明るい色は、影・縁・板と組み合わせて使う。ほかの色は、システムのカラーピッカーで選ぶ
  */
-export const TEXT_COLORS = ['#ffffff', '#f3e2a0', '#ffd84d', '#c99b66', '#3b2a1e'] as const
+export const TEXT_COLORS = ['#ffffff', '#f6e6c8', '#f3e2a0', '#c99b66', '#3b2a1e'] as const
 
 /** 背景の板の濃さ（0〜1）。動画が透けて見える程度 */
 export const PLATE_ALPHA = 0.78
@@ -24,9 +24,9 @@ export const STROKE_RATIO = 0.085
  */
 export const TEXT_STYLES = [
   { id: 'caption', color: '#ffffff', stroke: null, plate: false, plateColor: '#2b1d14' },
-  { id: 'cream', color: '#f3e2a0', stroke: null, plate: false, plateColor: '#2b1d14' },
+  { id: 'cream', color: '#f6e6c8', stroke: null, plate: false, plateColor: '#2b1d14' },
   { id: 'outline', color: '#ffffff', stroke: '#2b1d14', plate: false, plateColor: '#2b1d14' },
-  { id: 'accent', color: '#ffd84d', stroke: '#2b1d14', plate: false, plateColor: '#2b1d14' },
+  { id: 'accent', color: '#f3e2a0', stroke: '#2b1d14', plate: false, plateColor: '#2b1d14' },
   { id: 'plate-dark', color: '#fff6e6', stroke: null, plate: true, plateColor: '#2b1d14' },
   { id: 'plate-cream', color: '#3b2a1e', stroke: null, plate: true, plateColor: '#fff3df' },
 ] as const

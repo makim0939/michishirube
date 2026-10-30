@@ -156,7 +156,7 @@ describe('スタイル（1 タップで、色・縁取り・板をまとめて�
   it('当てても、位置・時間・文字・大きさ・フォントは変わらない', () => {
     const o = base({ x: 0.3, y: 0.4, size: 0.08, font: 'maru', text: 'ラテ' })
     const next = applyStyle(o, 'accent')
-    expect(next).toMatchObject({ x: 0.3, y: 0.4, size: 0.08, font: 'maru', text: 'ラテ', start: 2, end: 5, color: '#ffd84d', stroke: '#2b1d14', plate: false })
+    expect(next).toMatchObject({ x: 0.3, y: 0.4, size: 0.08, font: 'maru', text: 'ラテ', start: 2, end: 5, color: '#f3e2a0', stroke: '#2b1d14', plate: false })
   })
 
   it('板つきは、縁取りなしで板が付く', () => {
