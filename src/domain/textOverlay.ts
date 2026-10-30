@@ -5,20 +5,56 @@
  * 画面のプレビューと、書き出す画像は、同じ drawText で描く（見た目が、ずれないように）
  */
 
-/** はじめから並べる色（白・黒・金・赤・青）。ほかの色は、システムのカラーピッカーで選ぶ（どんな色でも持てる） */
-export const TEXT_COLORS = ['#ffffff', '#1d1712', '#f3c64f', '#e8604c', '#5aa7e8'] as const
+/**
+ * はじめから並べる色。日本のテロップで多い、白・黄・ピンク・水色・赤、と、黒（縁・板用）。
+ * 動画の背景（ラテの茶・白い泡）の上でも読めるよう、明るい色は、縁取りと組み合わせて使う。ほかの色は、システムのカラーピッカーで選ぶ
+ */
+export const TEXT_COLORS = ['#ffffff', '#ffe14d', '#ff7dae', '#6ccbff', '#ff5252', '#1d1712'] as const
 
 /** 背景の板の濃さ（0〜1）。動画が透けて見える程度 */
 export const PLATE_ALPHA = 0.8
 
+/** 縁取りの太さ（文字の大きさに対する、縁の外側の幅の割合） */
+export const STROKE_RATIO = 0.13
+
 /**
- * フォント。日本語に合う 4 種類：ゴシック・明朝・丸ゴシックは iPhone・iPad の標準（ヒラギノ）、手書きは、同梱の Yusei Magic（OFL。public/fonts）。
- * プレビューも書き出しも、同じ WebView の canvas で描くので、同じ見た目になる。標準のフォントが無い端末では、後ろの候補に落ちる
+ * スタイル（1 タップで、文字の色・縁取り・背景の板・影をまとめて決める）。
+ * 日本のテロップの定番（太い字に、白＋黒縁・黄＋黒縁・白＋色縁・板つき）と、細い字幕風（縁なし・影のみ）
+ */
+export const TEXT_STYLES = [
+  { id: 'white-black', color: '#ffffff', stroke: '#1d1712', plate: false, plateColor: '#1d1712' },
+  { id: 'yellow-black', color: '#ffe14d', stroke: '#1d1712', plate: false, plateColor: '#1d1712' },
+  { id: 'white-pink', color: '#ffffff', stroke: '#e8458b', plate: false, plateColor: '#1d1712' },
+  { id: 'white-blue', color: '#ffffff', stroke: '#2f8fd8', plate: false, plateColor: '#1d1712' },
+  { id: 'plate', color: '#ffffff', stroke: null, plate: true, plateColor: '#1d1712' },
+  { id: 'plain', color: '#ffffff', stroke: null, plate: false, plateColor: '#1d1712' },
+] as const
+
+export type TextStyleId = (typeof TEXT_STYLES)[number]['id']
+
+/** スタイルを、テキストに当てる（位置・時間・文字・大きさ・フォントは変えない） */
+export function applyStyle(o: TextOverlay, id: TextStyleId): TextOverlay {
+  const st = TEXT_STYLES.find((x) => x.id === id) ?? TEXT_STYLES[0]
+  return { ...o, color: st.color, stroke: st.stroke, plate: st.plate, plateColor: st.plateColor }
+}
+
+/** いま、どのスタイルに当たっているか（細かく変えて、どれにも当たらなければ undefined） */
+export function currentStyle(o: TextOverlay): TextStyleId | undefined {
+  return TEXT_STYLES.find((st) => st.color === o.color && st.stroke === o.stroke && st.plate === o.plate && (!st.plate || st.plateColor === o.plateColor))?.id
+}
+
+/**
+ * フォント。役割の違う 6 種類：ゴシック（字幕）・極太（見出し）・ポップ・丸ゴシック・明朝・手書き。
+ * ゴシック・丸ゴシック・明朝は、iPhone・iPad 標準のヒラギノ。極太（Dela Gothic One）・ポップ（Mochiy Pop One）・手書き（Yusei Magic）は、
+ * 同梱（いずれも SIL OFL 1.1。public/fonts。日本語の主な文字だけに絞った woff2）。使うときだけ読み込む。
+ * プレビューも書き出しも、同じ WebView の canvas で描くので、同じ見た目になる。収録に無い字は、後ろの候補で描く
  */
 export const TEXT_FONTS = [
-  { id: 'gothic', family: '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", system-ui, sans-serif', weight: 700 },
-  { id: 'mincho', family: '"Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif', weight: 700 },
+  { id: 'gothic', family: '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", system-ui, sans-serif', weight: 800 },
+  { id: 'dela', family: '"Dela Gothic One", "Hiragino Sans", system-ui, sans-serif', weight: 400 },
+  { id: 'pop', family: '"Mochiy Pop One", "Hiragino Maru Gothic ProN", system-ui, sans-serif', weight: 400 },
   { id: 'maru', family: '"Hiragino Maru Gothic ProN", "Zen Maru Gothic", "Hiragino Sans", system-ui, sans-serif', weight: 700 },
+  { id: 'mincho', family: '"Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif', weight: 700 },
   { id: 'hand', family: '"Yusei Magic", "Hiragino Maru Gothic ProN", system-ui, sans-serif', weight: 400 },
 ] as const
 
@@ -63,6 +99,8 @@ export interface TextOverlay {
   /** 文字の大きさ（絵の高さに対する割合） */
   size: number
   color: string
+  /** 縁取りの色（無ければ null） */
+  stroke: string | null
   font: TextFontId
   /** 背景の板を敷くか（敷かないときは、影をつける） */
   plate: boolean
@@ -82,7 +120,7 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
 export function newText(key: string, at: number, duration: number): TextOverlay {
   const len = Math.min(TEXT_SECONDS, duration)
   const start = clamp(at, 0, Math.max(0, duration - len))
-  return { id: newTextId(), key, start, end: start + len, text: '', x: 0.5, y: 0.78, size: TEXT_SIZE_DEFAULT, color: TEXT_COLORS[0], font: 'gothic', plate: false, plateColor: TEXT_COLORS[1] }
+  return { id: newTextId(), key, start, end: start + len, text: '', x: 0.5, y: 0.78, size: TEXT_SIZE_DEFAULT, color: '#ffffff', stroke: '#1d1712', font: 'gothic', plate: false, plateColor: '#1d1712' }
 }
 
 /** 時間の範囲を、動画の長さの中に収める（最小の長さを割らない） */
@@ -247,10 +285,17 @@ export function drawText(ctx: CanvasRenderingContext2D, W: number, H: number, o:
     ctx.beginPath()
     roundedRect(ctx, cx - w / 2 - padX, cy - h / 2 - padY, w + padX * 2, h + padY * 2, px * 0.35)
     ctx.fill()
-  } else {
+  } else if (!o.stroke) {
     ctx.shadowColor = isLight(o.color) ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.7)'
     ctx.shadowBlur = px * 0.14
     ctx.shadowOffsetY = px * 0.04
+  }
+  if (o.stroke) {
+    // 縁取り：太い線を先に引いて、その上に文字を重ねる（外側にだけ縁が出る）。角は丸める
+    ctx.lineJoin = 'round'
+    ctx.lineWidth = px * STROKE_RATIO * 2
+    ctx.strokeStyle = o.stroke
+    lines.forEach((l, i) => ctx.strokeText(l, cx, cy - h / 2 + lh * (i + 0.5)))
   }
   ctx.fillStyle = o.color
   lines.forEach((l, i) => ctx.fillText(l, cx, cy - h / 2 + lh * (i + 0.5)))

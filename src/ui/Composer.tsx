@@ -21,6 +21,8 @@ import {
 } from '../domain/clipEdit'
 import { BackIcon, ForwardIcon, MusicIcon, PauseIcon, PlayIcon, RedoIcon, ScissorsIcon, SpeakerIcon, TextIcon, TrashIcon, UndoIcon } from './icons'
 import {
+  applyStyle,
+  currentStyle,
   drawText,
   fitAll,
   fitFrom,
@@ -33,6 +35,7 @@ import {
   snapCenter,
   TEXT_COLORS,
   TEXT_FONTS,
+  TEXT_STYLES,
   TEXT_SIZE_MAX,
   TEXT_SIZE_MIN,
   type TextBox,
@@ -192,7 +195,7 @@ export function Composer({
   /** いま描いているテキストの外枠（画面の px）。つかむ・選ぶ範囲の判定に使う */
   const textBoxes = useRef<{ id: string; box: TextBox }[]>([])
   /** 選んだテキストの、設定の種類（フォント・文字の色・背景・大きさ）。続けて使えるよう、前回の種類を覚えておく */
-  const [styleTab, setStyleTab] = useState<'font' | 'color' | 'bg' | 'time'>('color')
+  const [styleTab, setStyleTab] = useState<'font' | 'style' | 'color' | 'time'>('style')
   /** 同梱のフォントを読み終えたら、描き直す */
   const [fontTick, setFontTick] = useState(0)
   /** カラーピッカーを開いている間の、取り消しの 1 手（開くたびに 1 回だけ積む） */
@@ -677,7 +680,7 @@ export function Composer({
   // 外した（斜線の）区間では、できあがりに無いので、プレビューにも出さない（書き出しと同じ見え方にする）
   const inOff = ready && !!segAtG(g)?.off
   const shownTexts = ready && !inOff ? texts.filter((o) => o.key === curKey && localNow >= o.start && localNow < o.end) : []
-  const shownSig = shownTexts.map((o) => `${o.id}|${o.text}|${o.x}|${o.y}|${o.size}|${o.color}|${o.plate}`).join('/')
+  const shownSig = shownTexts.map((o) => `${o.id}|${o.text}|${o.x}|${o.y}|${o.size}|${o.color}|${o.stroke}|${o.font}|${o.plate}|${o.plateColor}`).join('/')
   const laneOf = textLanes(texts, Object.fromEntries(lay.map((c) => [c.key, c.off])))
   const laneCount = texts.length ? Math.min(3, Math.max(...Object.values(laneOf)) + 1) : 0
   const [selBox, setSelBox] = useState<TextBox>()
@@ -742,7 +745,7 @@ export function Composer({
   }, [fontSig])
 
   /** カラーピッカーで選んだ色（選んでいる間は、細かく変わるので、取り消しの 1 手は、開いて最初の 1 回だけ積む） */
-  const pickerChange = (c: string, key: 'color' | 'plateColor' = 'color') => {
+  const pickerChange = (c: string, key: 'color' | 'plateColor' | 'stroke' = 'color') => {
     if (!selT) return
     if (!pickerRecorded.current) {
       pickerRecorded.current = true
@@ -1202,8 +1205,8 @@ export function Composer({
                   {(
                     [
                       ['font', t.compose.textTabFont, <span key="f" className="cmp-tab-aa">Aa</span>],
+                      ['style', t.compose.textTabStyle, <span key="y" className="cmp-tab-style" style={{ color: selT.color, WebkitTextStrokeColor: selT.stroke ?? 'transparent', background: selT.plate ? selT.plateColor : undefined }}>あ</span>],
                       ['color', t.compose.textTabColor, <span key="c" className="cmp-tab-dot" style={{ background: selT.color }} />],
-                      ['bg', t.compose.textTabBg, <span key="b" className={`cmp-tab-bg${selT.plate ? ' on' : ''}`}>A</span>],
                       ['time', t.compose.textTabTime, <svg key="s" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></svg>],
                     ] as const
                   ).map(([id, label, icon]) => (
@@ -1228,22 +1231,41 @@ export function Composer({
                       </button>
                     ))}
                   {styleTab === 'color' && (
-                    <Swatches value={selT.color} label={t.compose.textColors} custom={t.compose.textColorCustom} onPick={(c) => patchText(selT.id, { color: c })} onPicker={pickerChange} onPickerOpen={() => (pickerRecorded.current = false)} />
-                  )}
-                  {styleTab === 'bg' && (
                     <>
-                      <button type="button" className={`cmp-bg-tile${selT.plate ? ' on' : ''}`} aria-label={selT.plate ? t.compose.textBgPlate : t.compose.textBgNone} aria-pressed={selT.plate} onClick={() => patchText(selT.id, { plate: !selT.plate })}>
-                        <span className={`cmp-tab-bg${selT.plate ? ' on' : ''}`} style={selT.plate ? { background: selT.plateColor, color: selT.color } : undefined}>
-                          A
-                        </span>
-                      </button>
-                      {selT.plate && (
+                      <Swatches value={selT.color} label={t.compose.textColors} custom={t.compose.textColorCustom} onPick={(c) => patchText(selT.id, { color: c })} onPicker={pickerChange} onPickerOpen={() => (pickerRecorded.current = false)} />
+                      {/* ふち・板がついているときだけ、その色も選べる（スタイルで付ける） */}
+                      {(selT.stroke || selT.plate) && (
                         <>
-                          <Swatches small value={selT.plateColor} label={t.compose.textColors} custom={t.compose.textColorCustom} onPick={(c) => patchText(selT.id, { plateColor: c })} onPicker={(c) => pickerChange(c, 'plateColor')} onPickerOpen={() => (pickerRecorded.current = false)} />
+                          <span className="cmp-opts-sep" aria-hidden="true" />
+                          <span className="cmp-opts-label">{selT.stroke ? t.compose.textColorStroke : t.compose.textColorPlate}</span>
+                          <Swatches
+                            small
+                            value={selT.stroke ?? selT.plateColor}
+                            label={t.compose.textColors}
+                            custom={t.compose.textColorCustom}
+                            onPick={(c) => patchText(selT.id, selT.stroke ? { stroke: c } : { plateColor: c })}
+                            onPicker={(c) => pickerChange(c, selT.stroke ? 'stroke' : 'plateColor')}
+                            onPickerOpen={() => (pickerRecorded.current = false)}
+                          />
                         </>
                       )}
                     </>
                   )}
+                  {styleTab === 'style' &&
+                    TEXT_STYLES.map((st, i) => (
+                      <button
+                        key={st.id}
+                        type="button"
+                        className={`cmp-style-tile${currentStyle(selT) === st.id ? ' on' : ''}`}
+                        aria-label={t.compose.textStyles[i]}
+                        aria-pressed={currentStyle(selT) === st.id}
+                        onClick={() => patchText(selT.id, (o) => applyStyle(o, st.id))}
+                      >
+                        <span className="cmp-style-sample" style={{ color: st.color, WebkitTextStrokeColor: st.stroke ?? 'transparent', background: st.plate ? st.plateColor : undefined, textShadow: !st.stroke && !st.plate ? '0 1px 3px rgb(0 0 0 / 70%)' : undefined }}>
+                          あA
+                        </span>
+                      </button>
+                    ))}
                   {styleTab === 'time' &&
                     [0, 1, 2].map((i) => {
                       const c = lay.find((x) => x.key === selT.key)

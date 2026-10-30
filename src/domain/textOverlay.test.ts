@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clampRange, fitAll, fitFrom, fitTo, lanes, moveEnd, moveStart, newText, outputIntervals, snapCenter, TEXT_MIN_SECONDS, wrapLines, type TextOverlay } from './textOverlay'
+import { applyStyle, clampRange, currentStyle, TEXT_STYLES, fitAll, fitFrom, fitTo, lanes, moveEnd, moveStart, newText, outputIntervals, snapCenter, TEXT_MIN_SECONDS, wrapLines, type TextOverlay } from './textOverlay'
 
 const base = (over: Partial<TextOverlay> = {}): TextOverlay => ({
   id: 'x',
@@ -11,6 +11,7 @@ const base = (over: Partial<TextOverlay> = {}): TextOverlay => ({
   y: 0.78,
   size: 0.055,
   color: '#ffffff',
+  stroke: '#1d1712',
   font: 'gothic',
   plate: false,
   plateColor: '#1d1712',
@@ -29,9 +30,9 @@ describe('テキストを置く', () => {
     expect(o.end - o.start).toBe(3)
   })
 
-  it('はじめは、ゴシックで、白い文字。背景の板は暗い色（まだ敷かない）', () => {
+  it('はじめは、ゴシックで、白い文字に黒い縁取り（定番）。背景の板は敷かない', () => {
     const o = newText('a', 0, 10)
-    expect([o.font, o.color, o.plate, o.plateColor]).toEqual(['gothic', '#ffffff', false, '#1d1712'])
+    expect([o.font, o.color, o.stroke, o.plate]).toEqual(['gothic', '#ffffff', '#1d1712', false])
   })
 
   it('動画が 3 秒より短ければ、動画の長さまでにする', () => {
@@ -136,5 +137,28 @@ describe('折り返し', () => {
 
   it('幅を超えたら、文字ごとに折り返す', () => {
     expect(wrapLines('あいうえおかき', 30, measure)).toEqual(['あいう', 'えおか', 'き'])
+  })
+})
+
+describe('スタイル（1 タップで、色・縁取り・板をまとめて決める）', () => {
+  it('当てても、位置・時間・文字・大きさ・フォントは変わらない', () => {
+    const o = base({ x: 0.3, y: 0.4, size: 0.08, font: 'pop', text: 'ラテ' })
+    const next = applyStyle(o, 'yellow-black')
+    expect(next).toMatchObject({ x: 0.3, y: 0.4, size: 0.08, font: 'pop', text: 'ラテ', start: 2, end: 5, color: '#ffe14d', stroke: '#1d1712', plate: false })
+  })
+
+  it('板つきは、縁取りなしで板が付く', () => {
+    expect(applyStyle(base(), 'plate')).toMatchObject({ stroke: null, plate: true })
+  })
+
+  it('いまのスタイルが分かる。細かく色を変えたら、どれにも当たらない', () => {
+    expect(currentStyle(applyStyle(base(), 'white-pink'))).toBe('white-pink')
+    expect(currentStyle({ ...applyStyle(base(), 'white-pink'), color: '#123456' })).toBeUndefined()
+  })
+
+  it('スタイルは 6 つ、どれも別の見た目', () => {
+    expect(TEXT_STYLES).toHaveLength(6)
+    const keys = new Set(TEXT_STYLES.map((s) => `${s.color}|${s.stroke}|${s.plate}`))
+    expect(keys.size).toBe(6)
   })
 })
