@@ -92,6 +92,8 @@ export function trimEdge(segs: Seg[], key: string, id: string, edge: 'start' | '
   const i = segs.findIndex((s) => s.id === id)
   if (i < 0) return segs
   const s = segs[i]
+  // 動画の頭・尻にある「外した区間」の外側の端は、動かしようがない（動かすと、外した区間が 2 つに割れて、片方だけ戻せてしまう）
+  if (s.off && ((edge === 'start' && i === 0) || (edge === 'end' && i === segs.length - 1))) return segs
   if (edge === 'start') {
     if (i > 0) return moveBoundary(segs, i - 1, t)
     const v = Math.min(t, s.end - MIN_SEG)
