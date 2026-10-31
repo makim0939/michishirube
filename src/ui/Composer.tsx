@@ -1151,14 +1151,17 @@ export function Composer({
 
   // 診断に出す、動画のまわりの状態（描画のたびに最新にする。診断を出していなければ、読まれない）
   const diagInfo = useRef<DiagInfo>({ source: 'blob', clips: 0, segments: 0, filmstrip: false, bgm: false, muted: false, texts: 0 })
-  diagInfo.current = {
-    source: clips.some((c) => c.src) ? 'file' : 'blob',
-    clips: clips.length,
-    segments: allSegs.length,
-    filmstrip: filmBusy.current,
-    bgm: !!bgm,
-    muted,
-    texts: doc.texts.length,
+  // 診断を出しているときだけ作る（再生中は毎コマ描き直すので、出していない間は、何も増やさない）
+  if (diag) {
+    diagInfo.current = {
+      source: clips.some((c) => c.src) ? 'file' : 'blob',
+      clips: clips.length,
+      segments: allSegs.length,
+      filmstrip: filmBusy.current,
+      bgm: !!bgm,
+      muted,
+      texts: doc.texts.length,
+    }
   }
   const readDiag = useRef(() => diagInfo.current).current
   const holdStart = () => {
@@ -1166,6 +1169,7 @@ export function Composer({
     diagHold.current = window.setTimeout(() => setDiag((d) => !d), DIAG_HOLD_MS)
   }
   const holdEnd = () => window.clearTimeout(diagHold.current)
+  useEffect(() => holdEnd, [])
 
   const delLabel = !selT && target?.off ? t.compose.restore : t.compose.remove
 

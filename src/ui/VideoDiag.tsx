@@ -47,10 +47,11 @@ function platformName() {
   return isIosApp ? 'iOS アプリ' : isAndroidApp ? 'Android アプリ' : 'Web'
 }
 
-async function copyText(text: string) {
+/** クリップボードへ。できたか */
+async function copyText(text: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(text)
-    return
+    return true
   } catch {
     // 許可されない・使えないときは、選択して写す
   }
@@ -59,13 +60,14 @@ async function copyText(text: string) {
   ta.style.cssText = 'position:fixed;left:-9999px;top:0'
   document.body.appendChild(ta)
   ta.select()
-  document.execCommand('copy')
+  const ok = document.execCommand('copy')
   ta.remove()
+  return ok
 }
 
 export function VideoDiag({ video, info, onClose }: { video: RefObject<HTMLVideoElement | null>; info: () => DiagInfo; onClose: () => void }) {
   const [text, setText] = useState('')
-  const [copied, setCopied] = useState(false)
+  const [copied, setCopied] = useState<'ok' | 'ng'>()
   const textRef = useRef('')
 
   useEffect(() => {
@@ -82,10 +84,13 @@ export function VideoDiag({ video, info, onClose }: { video: RefObject<HTMLVideo
     let startMs: number | null = null
     let maxStartMs = 0
     let gaps = 0
+    /** 前回の確認からの、シークの回数（区間を飛ぶ・位置を動かしたときは、currentTime が一気に進んでも、途切れではない） */
+    let seeks = 0
     let lastCheck = { t: v.currentTime, f: 0, at: performance.now() }
     let total = 0
     const onEvent = (e: Event) => {
       counts[e.type] = (counts[e.type] ?? 0) + 1
+      if (e.type === 'seeking') seeks++
       if (e.type === 'play') sincePlay = performance.now()
       if (e.type === 'pause') sincePlay = null
       // 軽い出来事（suspend・loadeddata）は、回数だけ。経過には、止まりに関わるものを残す
@@ -117,13 +122,17 @@ export function VideoDiag({ video, info, onClose }: { video: RefObject<HTMLVideo
       if (!v.paused && hasFrames) {
         const dT = v.currentTime - lastCheck.t
         if (now - lastCheck.at >= 700) {
-          if (dT > 0.3 && total === lastCheck.f) {
+          if (dT > 0.3 && total === lastCheck.f && seeks === 0) {
             gaps++
             diagLog(`映像のコマが来ない（currentTime +${dT.toFixed(2)}s）`)
           }
           lastCheck = { t: v.currentTime, f: total, at: now }
+          seeks = 0
         }
-      } else lastCheck = { t: v.currentTime, f: total, at: now }
+      } else {
+        lastCheck = { t: v.currentTime, f: total, at: now }
+        seeks = 0
+      }
       const i = info()
       const head = [
         `rs ${v.readyState}  ns ${v.networkState}  t ${v.currentTime.toFixed(2)}  ${v.paused ? '停止' : '再生中'}${v.seeking ? '  シーク中' : ''}`,
@@ -150,13 +159,13 @@ export function VideoDiag({ video, info, onClose }: { video: RefObject<HTMLVideo
         <button
           type="button"
           onClick={() => {
-            void copyText(textRef.current).then(() => {
-              setCopied(true)
-              window.setTimeout(() => setCopied(false), 1500)
+            void copyText(textRef.current).then((ok) => {
+              setCopied(ok ? 'ok' : 'ng')
+              window.setTimeout(() => setCopied(undefined), 1500)
             })
           }}
         >
-          {copied ? 'コピーした' : 'コピー'}
+          {copied === 'ok' ? 'コピーした' : copied === 'ng' ? 'できません' : 'コピー'}
         </button>
         <button type="button" onClick={onClose}>
           閉じる
