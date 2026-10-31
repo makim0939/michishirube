@@ -140,7 +140,8 @@ const ascDownloads = async () => {
       }
       days.push({ date, firstDownloads: first, redownloads: redownload })
     } catch (e) {
-      days.push({ date, note: String(e.message).slice(0, 80) }) // その日のレポートがまだ無いと 404
+      // 404 は、その日の売上が 0（ダウンロードなし）か、レポートがまだ無い。0 として扱い、印を付ける
+      days.push(String(e.message).startsWith('404') ? { date, firstDownloads: 0, redownloads: 0, note: '404（0 件、またはまだ無い）' } : { date, note: String(e.message).slice(0, 80) })
     }
   }
   return days

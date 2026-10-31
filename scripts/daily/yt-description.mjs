@@ -50,6 +50,8 @@ if (cmd === 'list') {
 } else if (cmd === 'apply' || cmd === 'restore') {
   const v = (await api(t, `videos?part=snippet&id=${id}`)).items?.[0]
   if (!v) throw new Error('動画が見つからない')
+  // アプリから上がった練習の限定公開の動画には、触らない（公開の動画だけ）
+  if (cmd === 'apply' && (await api(t, `videos?part=status&id=${id}`)).items[0].status.privacyStatus !== 'public') throw new Error('公開の動画だけが対象')
   mkdirSync(join(HOME, 'backup'), { recursive: true })
   let description
   if (cmd === 'apply') {

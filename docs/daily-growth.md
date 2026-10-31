@@ -30,7 +30,7 @@ mkdir -p ~/.latte-daily && chmod 700 ~/.latte-daily && touch ~/.latte-daily/env 
 
 1. <https://appstoreconnect.apple.com/access/integrations/api> を開く（「ユーザとアクセス」→「統合」→「App Store Connect API」。アカウントの持ち主（アカウント管理者）だけが開ける）。
 2. 初めてなら「キーをリクエスト」でアクセスを有効にする。
-3. 「キーを生成」→ 名前は `latte-daily`、アクセス権は **App Manager**（読み取りだけで足りるが、解析レポートの依頼を作るために、Developer より上が要る）。
+3. 「キーを生成」→ 名前は `latte-daily`、アクセス権は **Admin**（App Manager では、売上と解析が 403 で取れない。Apple のロール表で、App Manager には「アプリ分析」「売上とトレンド」の権限がない。売上と解析だけなら Sales でも取れるが、レビューは取れない）。
 4. 一覧の **Issuer ID** と、作ったキーの **Key ID** を控える。
 5. 「APIキーをダウンロード」で `.p8` を取る（**ダウンロードは 1 回だけ**）。`~/.latte-daily/` に置いて `chmod 600` する。
 6. 「売上およびトレンド」（<https://appstoreconnect.apple.com/trends/>）の左上、アカウント名の横に出る数字が **Vendor Number**（ベンダー番号。「支払いと財務レポート」にも出る）。
@@ -98,7 +98,7 @@ node scripts/daily/collect.mjs
 
 実行してよいもの（1 日に公開の変更は **1 つまで**）。
 
-- **らておの動画の説明欄に、案内ブロックを入れる・直す**（`yt-description.mjs`）。ブロックは「何が撮れるアプリか 1 行 ＋ `https://latte.makimura.me/yt`」。`/yt` が転送されること（`curl -sI https://latte.makimura.me/yt` が 302）を確かめてから使う。直した動画は、1 日 1 本ずつ、視聴の多い順に進める。効果は、`/yt` のアクセスで測る。
+- **らておの動画の説明欄に、案内ブロックを入れる・直す**（`yt-description.mjs`）。ブロックは「何が撮れるアプリか 1 行 ＋ `https://latte.makimura.me/yt`」。`/yt` が転送されること（`curl -sI https://latte.makimura.me/yt` が 302）を確かめてから使う。対象は、公開の動画だけ（アプリから上がった限定公開の練習動画には触らない。スクリプトも断る）。直した動画は、1 日 1 本ずつ、視聴の多い順に進める。効果は、`/yt` のアクセスで測る。
 - **サイトや App Store の説明文の改善案を、PR にする**（マージはしない。審査中の版は、CLAUDE.md の「審査中は…」に従う）。
 - **次に撮る動画・投稿の案を、日報に書く**（当たった動画の共通点から）。
 
