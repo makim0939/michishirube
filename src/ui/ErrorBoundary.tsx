@@ -3,13 +3,12 @@ import { t } from '../i18n'
 import { isChunkLoadError, reloadOnce } from './recover'
 
 /** 読み込み直しても直らないときの、いちばん静かな画面。説明は並べず、ボタンを1つだけ出す */
-export function RecoverScreen({ detail }: { detail?: string }) {
+export function RecoverScreen() {
   return (
     <div className="screen recover">
       <button type="button" className="btn primary" onClick={() => window.location.reload()}>
         {t.app.reload}
       </button>
-      {detail && <p className="muted">{detail}</p>}
     </div>
   )
 }
@@ -34,7 +33,8 @@ interface State {
  * 部品の読み込み失敗（デプロイ直後の古い画面）は、静かに読み込み直す
  */
 export class ErrorBoundary extends Component<Props, State> {
-  state: State = { retries: 0 }
+  // 全体の境界は、描き直すと App が作り直され、片づけのない watch が二重になるので、黙って描き直さない
+  state: State = { retries: this.props.root ? 1 : 0 }
 
   static getDerivedStateFromError(error: unknown): Partial<State> {
     return { error }
@@ -51,14 +51,16 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidUpdate(prev: Props) {
     if (prev.resetKey !== this.props.resetKey && this.state.error !== undefined) {
-      this.setState({ error: undefined, retries: 0 })
+      this.setState({ error: undefined, retries: this.props.root ? 1 : 0 })
+    } else if (prev.resetKey !== this.props.resetKey && this.state.retries !== 0 && !this.props.root) {
+      // 別の画面に移ったら、また1回は黙って描き直せるようにする
+      this.setState({ retries: 0 })
     }
   }
 
   render() {
     if (this.state.error !== undefined) {
-      const message = this.state.error instanceof Error ? this.state.error.message : undefined
-      return <RecoverScreen detail={this.props.root ? message : undefined} />
+      return <RecoverScreen />
     }
     return this.props.children
   }

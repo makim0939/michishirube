@@ -30,7 +30,7 @@ export function isChunkLoadError(e: unknown): boolean {
 export function watchChunkErrors() {
   // Vite が、動的 import の失敗で出す
   window.addEventListener('vite:preloadError', (e) => {
-    e.preventDefault()
-    reloadOnce()
+    // 読み込み直せないとき（直前にやったばかり）は、握りつぶさず、元の例外を画面の ErrorBoundary に渡す
+    if (reloadOnce()) e.preventDefault()
   })
 }
