@@ -4445,3 +4445,10 @@ input.bgm-volume[type='range'] {
   min-width: 44px;
   padding: 0 6px;
 }
+
+/* 描画で落ちたときの画面。ボタンだけを真ん中に */
+.recover {
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+}
