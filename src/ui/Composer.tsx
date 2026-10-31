@@ -969,10 +969,12 @@ export function Composer({
     capture(e.currentTarget, e.pointerId)
     if (editing) finishEdit()
     stopAll()
+    // すでに選んでいる帯を押し直したときは、再生ヘッドを動かさない（先頭を直したあと、末尾の端を引こうとして帯に触れるたびに、先頭へ飛ばないように）
+    const reselect = o.id === selText
     setSelText(o.id)
     th.current = { id: o.id, edge: 'move', x0: e.clientX, t0: o.start, len: o.end - o.start, moved: false, recorded: false }
     const c = lay.find((x) => x.key === o.key)
-    if (c) seekGlobal(c.off + Math.min(c.d - 0.01, o.start), false)
+    if (c && !reselect) seekGlobal(c.off + Math.min(c.d - 0.01, o.start), false)
   }
   const textHandleDown = (o: TextOverlay, edge: 'start' | 'end') => (e: PointerEvent) => {
     e.stopPropagation()
