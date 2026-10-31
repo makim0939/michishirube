@@ -490,6 +490,8 @@ export const ja = {
     bgmVolume: 'BGM の音量',
     bgmOff: 'なし',
     bgmFile: 'ファイルから選ぶ',
+    bgmListen: '試聴',
+    bgmStopListen: '試聴を止める',
     done: '完了',
     working: 'つないでいます…',
     discarded: '破棄しました',

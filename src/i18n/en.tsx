@@ -493,6 +493,8 @@ export const en: Messages = {
     bgmVolume: 'Music volume',
     bgmOff: 'None',
     bgmFile: 'Choose a file',
+    bgmListen: 'Listen',
+    bgmStopListen: 'Stop listening',
     done: 'Done',
     working: 'Joining…',
     discarded: 'Discarded',

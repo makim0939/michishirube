@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
+import { BgmPlayer } from '../data/bgmPlayer'
+import { BgmSheet } from './BgmSheet'
 import { BUNDLED_BGM, bgmBlob, bgmExtension, bgmTitle, type BgmChoice } from '../data/bgm'
 import { composeClips } from '../data/compose'
 import { cancelComposeVideoFiles, ComposeCancelled } from '../data/files'
@@ -19,7 +21,7 @@ import {
   type Doc,
   type Seg,
 } from '../domain/clipEdit'
-import { BackIcon, ForwardIcon, MusicIcon, PauseIcon, PlayIcon, RedoIcon, ScissorsIcon, SpeakerIcon, TextIcon, TrashIcon, UndoIcon } from './icons'
+import { ChevronDownIcon, BackIcon, ForwardIcon, MusicIcon, PauseIcon, PlayIcon, RedoIcon, ScissorsIcon, SpeakerIcon, TextIcon, TrashIcon, UndoIcon } from './icons'
 import {
   applyStyle,
   currentStyle,
@@ -213,6 +215,24 @@ export function Composer({
   const [sel, setSel] = useState<string>()
   /** 再生ヘッドの位置（つないだ並びの、先頭からの秒） */
   const [g, setG] = useState(0)
+  /**
+   * 端（取っ手）・帯を引いている間、下の段を止めておく位置（動画の中の秒）。
+   * 引くたびに再生ヘッドも動くので、止めないと、下の段が指と同じ向きに流れて、引いている端が、中央から動かなくなる
+   * （指を動かしても、端が追ってこない）。止めている間は、再生ヘッドの線が、端といっしょに動く
+   */
+  const [freezeG, setFreezeG] = useState<number | null>(null)
+  /** 引き終わったあと、下の段を中央へ戻す間だけ、滑らかに動かす */
+  const [settling, setSettling] = useState(false)
+  const viewG = freezeG ?? g
+  const freezeView = () => {
+    setSettling(false)
+    setFreezeG(g)
+  }
+  const releaseView = () => {
+    setFreezeG(null)
+    setSettling(true)
+    window.setTimeout(() => setSettling(false), 220)
+  }
   const [curKey, setCurKey] = useState(originalOrder[0])
   const [url, setUrl] = useState<string>()
   const [playing, setPlaying] = useState(false)
@@ -237,7 +257,7 @@ export function Composer({
   const previewNext = useRef(false)
   const previewRef = useRef<() => void>(() => {})
   const bgmVolumeRef = useRef(0.3)
-  const bgmAudio = useRef<{ el: HTMLAudioElement; ctx: AudioContext; gain: GainNode } | null>(null)
+  const bgmAudio = useRef<BgmPlayer | null>(null)
   /** 読み込み直しのあとに、動かす位置（動画の中の秒）と、続けて再生するか */
   const pendingSeek = useRef<number | null>(null)
   const wantPlay = useRef(false)
@@ -392,22 +412,19 @@ export function Composer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready])
 
-  // BGM を、画面で聞けるようにする（iPhone は audio 要素の音量を変えられないので、GainNode で音量を決める）
+  // BGM を、画面で聞けるようにする（継ぎ目の無い繰り返しと、iPhone での音量の変更は BgmPlayer）
   useEffect(() => {
     if (!bgm) return
     let cancelled = false
-    let objectUrl: string | undefined
-    void bgmBlob(bgm)
-      .then((b) => {
-        if (cancelled) return
-        objectUrl = URL.createObjectURL(b)
-        const el = new Audio(objectUrl)
-        el.loop = true
-        const ctx = new AudioContext()
-        const gain = ctx.createGain()
-        gain.gain.value = bgmVolumeRef.current
-        ctx.createMediaElementSource(el).connect(gain).connect(ctx.destination)
-        bgmAudio.current = { el, ctx, gain }
+    let player: BgmPlayer | undefined
+    void BgmPlayer.create(bgm, bgmVolumeRef.current)
+      .then((p) => {
+        if (cancelled) {
+          p.dispose()
+          return
+        }
+        player = p
+        bgmAudio.current = p
         // 選んだ曲は、その場で聴けるように、続けて再生する（映像も、BGM といっしょに流れる）
         if (previewNext.current) {
           previewNext.current = false
@@ -417,19 +434,14 @@ export function Composer({
       .catch(() => {})
     return () => {
       cancelled = true
-      const a = bgmAudio.current
-      bgmAudio.current = null
-      if (a) {
-        a.el.pause()
-        void a.ctx.close().catch(() => {})
-      }
-      if (objectUrl) URL.revokeObjectURL(objectUrl)
+      if (bgmAudio.current === player) bgmAudio.current = null
+      player?.dispose()
     }
   }, [bgm])
 
   useEffect(() => {
     bgmVolumeRef.current = bgmVolume
-    if (bgmAudio.current) bgmAudio.current.gain.gain.value = bgmVolume
+    bgmAudio.current?.setVolume(bgmVolume)
   }, [bgmVolume])
 
   useEffect(() => {
@@ -460,7 +472,7 @@ export function Composer({
   /** 再生を止める（BGM も） */
   function stopAll() {
     video.current?.pause()
-    bgmAudio.current?.el.pause()
+    bgmAudio.current?.pause()
     wantPlay.current = false
   }
   L.current = { lay, curKey, seekGlobal, stopAll }
@@ -541,6 +553,12 @@ export function Composer({
     return sum
   }
 
+  /** BGM の一覧を開く（流れている映像と曲は止める。一覧の試聴と重ならないように） */
+  const openBgmSheet = () => {
+    stopAll()
+    setBgmListOpen(true)
+  }
+
   const togglePlay = () => {
     if (!ready || busy) return
     if (playing) {
@@ -550,12 +568,7 @@ export function Composer({
     const at = snapToKept(g)
     if (at === undefined) return
     seekGlobal(at, true)
-    const a = bgmAudio.current
-    if (a) {
-      if (a.ctx.state === 'suspended') void a.ctx.resume()
-      a.el.currentTime = a.el.duration > 0 && Number.isFinite(a.el.duration) ? keptBefore(at) % a.el.duration : 0
-      void a.el.play().catch(() => {})
-    }
+    bgmAudio.current?.play(keptBefore(at))
   }
 
   // 曲を選んだとき：止まっていれば、再生を始める。もう再生中なら、BGM だけ、その位置から流す
@@ -564,12 +577,7 @@ export function Composer({
       togglePlay()
       return
     }
-    const a = bgmAudio.current
-    if (a) {
-      if (a.ctx.state === 'suspended') void a.ctx.resume()
-      a.el.currentTime = a.el.duration > 0 && Number.isFinite(a.el.duration) ? keptBefore(g) % a.el.duration : 0
-      void a.el.play().catch(() => {})
-    }
+    bgmAudio.current?.play(keptBefore(g))
   }
 
   // 隠したら（キャンセルして、トーストが出ている間）、再生を止める
@@ -618,7 +626,7 @@ export function Composer({
     stopAll()
     if (xs.length === 1) {
       const rect = e.currentTarget.getBoundingClientRect()
-      selectAt(g + (e.clientX - rect.left - W / 2) / zoom)
+      selectAt(viewG + (e.clientX - rect.left - W / 2) / zoom)
     }
   }
   const cuMove = (e: PointerEvent) => {
@@ -648,6 +656,7 @@ export function Composer({
     // 引いている間に再生ヘッドが動いても、対象が変わらないよう、選んだ状態にする
     setSel(target.id)
     hd.current = { id: target.id, edge, x0: e.clientX, t0: target[edge], pxs, recorded: false }
+    freezeView()
   }
   const handleMove = (e: PointerEvent) => {
     const d = hd.current
@@ -664,6 +673,7 @@ export function Composer({
     seekGlobal(targetClip.off + Math.min(targetClip.d - 0.01, t), false)
   }
   const handleUp = () => {
+    if (hd.current) releaseView()
     hd.current = null
   }
 
@@ -970,6 +980,7 @@ export function Composer({
     stopAll()
     setSelText(o.id)
     th.current = { id: o.id, edge, x0: e.clientX, t0: o[edge], len: 0, moved: true, recorded: false }
+    freezeView()
   }
   const textHandleMove = (e: PointerEvent) => {
     const d = th.current
@@ -978,6 +989,7 @@ export function Composer({
     if (!d || !o || !c) return
     e.stopPropagation()
     if (d.edge === 'move' && !d.moved && Math.abs(e.clientX - d.x0) < 5) return
+    if (!d.moved) freezeView()
     d.moved = true
     if (!d.recorded) {
       d.recorded = true
@@ -994,6 +1006,7 @@ export function Composer({
     seekGlobal(c.off + Math.min(c.d - 0.01, t), false)
   }
   const textHandleUp = () => {
+    if (th.current?.moved) releaseView()
     th.current = null
   }
 
@@ -1230,7 +1243,7 @@ export function Composer({
 
         {ready && !busy && (
           <>
-            {/* 音：元の音のあり・なし（スピーカー 1 つ）。BGM は、同梱の曲が入るまでは出さない（曲の持ち合わせがない人には使えないため） */}
+            {/* 音：元の音のあり・なし（スピーカー 1 つ）・テキスト・BGM（押すと一覧のシート） */}
             {selT && !editing ? (
               <div className="cmp-sound cmp-txt-style">
                 {/* 左：設定の種類（フォント・文字の色・背景・大きさ）。右：選んだ種類の中身（横に流せる） */}
@@ -1334,27 +1347,13 @@ export function Composer({
               </button>
               {BUNDLED_BGM.length > 0 && (
                 <>
-                  <button type="button" className="editor-text-button bgm-button" onClick={() => setBgmListOpen((o) => !o)}>
+                  {/* 行の名前（BGM）と、いまの選択（なし・曲名）。押すと、一覧のシートが開く */}
+                  <button type="button" className="editor-text-button bgm-button bgm-row-button" aria-haspopup="dialog" onClick={openBgmSheet}>
                     <MusicIcon size={18} />
-                    {bgm ? bgmTitle(bgm) : t.compose.bgm}
+                    <span className="bgm-row-label">{t.compose.bgm}</span>
+                    <span className={`bgm-row-value${bgm ? ' on' : ''}`}>{bgm ? bgmTitle(bgm) : t.compose.bgmOff}</span>
+                    <ChevronDownIcon size={16} />
                   </button>
-                  {bgm && (
-                    <>
-                      <input
-                        type="range"
-                        className="bgm-volume"
-                        min={0.05}
-                        max={1}
-                        step={0.05}
-                        value={bgmVolume}
-                        aria-label={t.compose.bgmVolume}
-                        onChange={(e) => setBgmVolume(Number(e.target.value))}
-                      />
-                      <button type="button" className="editor-text-button" onClick={() => setBgm(undefined)}>
-                        {t.compose.bgmOff}
-                      </button>
-                    </>
-                  )}
                   <input
                     ref={bgmInput}
                     hidden
@@ -1365,6 +1364,7 @@ export function Composer({
                       if (file) {
                         previewNext.current = true
                         setBgm({ kind: 'file', file })
+                        setBgmListOpen(false)
                       }
                       e.target.value = ''
                     }}
@@ -1373,29 +1373,38 @@ export function Composer({
               )}
             </div>
             )}
-            {BUNDLED_BGM.length > 0 && bgmListOpen && (
-              <ul className="bgm-list">
-                {BUNDLED_BGM.map((track0) => (
-                  <li key={track0.id}>
-                    <button
-                      type="button"
-                      className="editor-text-button"
-                      onClick={() => {
-                        previewNext.current = true
-                        setBgm({ kind: 'bundled', track: track0 })
-                        setBgmListOpen(false)
-                      }}
-                    >
-                      {track0.title}
-                    </button>
-                  </li>
-                ))}
-                <li>
-                  <button type="button" className="editor-text-button" onClick={() => bgmInput.current?.click()}>
-                    {t.compose.bgmFile}
-                  </button>
-                </li>
-              </ul>
+            {/* 曲を選んだら、音量（0〜100%。指でなぞって決める） */}
+            {bgm && !(selT && !editing) && (
+              <div className="bgm-volume-row">
+                <SpeakerIcon size={18} />
+                <input
+                  type="range"
+                  className="bgm-volume"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={Math.round(bgmVolume * 100)}
+                  aria-label={t.compose.bgmVolume}
+                  onChange={(e) => setBgmVolume(Number(e.target.value) / 100)}
+                />
+                <span className="bgm-volume-value">{Math.round(bgmVolume * 100)}%</span>
+              </div>
+            )}
+            {bgmListOpen && (
+              <BgmSheet
+                current={bgm}
+                onPick={(choice) => {
+                  setBgmListOpen(false)
+                  if (!choice) {
+                    setBgm(undefined)
+                    return
+                  }
+                  previewNext.current = true
+                  setBgm(choice)
+                }}
+                onFile={() => bgmInput.current?.click()}
+                onClose={() => setBgmListOpen(false)}
+              />
             )}
 
             {/* 上の段：全体（なぞると、再生ヘッドが動く） */}
@@ -1413,13 +1422,13 @@ export function Composer({
 
             {/* 下の段：再生ヘッドの周りの拡大（再生ヘッドは中央に固定。2 本指で倍率） */}
             <div className="cmp-cu" style={{ height: 76 + laneCount * LANE }} onPointerDown={cuDown} onPointerMove={cuMove} onPointerUp={cuUp} onPointerCancel={cuUp}>
-              <div className="cmp-cu-in" style={{ width: T * zoom, transform: `translateX(${W / 2 - g * zoom}px)` }}>
+              <div className={`cmp-cu-in${settling ? ' settling' : ''}`} style={{ width: T * zoom, transform: `translateX(${W / 2 - viewG * zoom}px)` }}>
                 {cuTrack}
                 {frame(zoom)}
               </div>
               {/* テキストの時間の帯（動画の下）。タップで選び、選んだ帯の両端を引いて、表示する時間を変える */}
               {laneCount > 0 && (
-                <div className="cmp-cu-txt" style={{ top: 76, height: laneCount * LANE, width: T * zoom, transform: `translateX(${W / 2 - g * zoom}px)` }}>
+                <div className={`cmp-cu-txt${settling ? ' settling' : ''}`} style={{ top: 76, height: laneCount * LANE, width: T * zoom, transform: `translateX(${W / 2 - viewG * zoom}px)` }}>
                   {texts.map((o) => {
                     const c = lay.find((x) => x.key === o.key)
                     if (!c) return null
@@ -1452,7 +1461,7 @@ export function Composer({
                   })}
                 </div>
               )}
-              <div className="filmstrip-head" style={{ left: W / 2 }} aria-hidden="true" />
+              <div className={`filmstrip-head${settling ? ' settling' : ''}`} style={{ left: W / 2 + (g - viewG) * zoom }} aria-hidden="true" />
             </div>
 
             {/* 操作：よく使う順 */}

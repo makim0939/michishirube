@@ -10,16 +10,18 @@ export interface BgmTrack {
   title: string
   /** public/bgm/ の中の場所（例：bgm/morning.m4a） */
   path: string
+  /** 繰り返しの 1 回分の長さ（秒。一覧に出す。scripts/make-bgm.py が出した値） */
+  seconds: number
 }
 
-/** 同梱の曲。曲を足すときは、public/bgm/ に置き、ここに足し、出典とライセンスを docs/bgm.md に書く */
+/** 同梱の曲（一覧の並び順）。曲を足す・差し替えるときは docs/bgm.md の手順で、public/bgm/ に置き、ここに足す */
 export const BUNDLED_BGM: BgmTrack[] = [
-  { id: 'poor-but-happy', title: 'Poor But Happy', path: 'bgm/poor-but-happy.m4a' },
-  { id: 'blue-skies', title: 'Blue Skies', path: 'bgm/blue-skies.m4a' },
-  { id: 'puppy-love', title: 'Puppy Love', path: 'bgm/puppy-love.m4a' },
-  { id: 'clouds', title: 'Clouds', path: 'bgm/clouds.m4a' },
-  { id: 'letting-go', title: 'Letting Go', path: 'bgm/letting-go.m4a' },
-  { id: 'a-little-off', title: 'A Little Off', path: 'bgm/a-little-off.m4a' },
+  { id: 'dreams-of-tomorrow', title: 'Dreams of Tomorrow', path: 'bgm/dreams-of-tomorrow.m4a', seconds: 25.7 },
+  { id: 'playful-toy', title: 'Playful Toy', path: 'bgm/playful-toy.m4a', seconds: 22 },
+  { id: 'cosy-feeling', title: 'Cosy Feeling', path: 'bgm/cosy-feeling.m4a', seconds: 36.5 },
+  { id: 'quiet-days', title: 'Quiet Days', path: 'bgm/quiet-days.m4a', seconds: 24 },
+  { id: '8bit-bossa', title: '8bit Bossa', path: 'bgm/8bit-bossa.m4a', seconds: 56.8 },
+  { id: 'april-groove', title: 'April Groove', path: 'bgm/april-groove.m4a', seconds: 28.7 },
 ]
 
 /** 選んだ BGM。同梱の曲か、利用者のファイル */
@@ -45,4 +47,10 @@ export async function bgmBlob(choice: BgmChoice): Promise<Blob> {
   const blob = await res.blob()
   if (blob.size === 0) throw new Error('BGM を読めません（空のファイル）')
   return blob
+}
+
+/** 一覧に出す長さ（0:26 の形） */
+export function formatSeconds(sec: number): string {
+  const s = Math.round(sec)
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 }
