@@ -3570,35 +3570,190 @@ h1.wordmark {
 
 /* ---- BGM（つなぐ画面） ---- */
 
-.bgm-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
+/* 「仕上げる」の BGM の行：名前（BGM）と、いまの選択（なし・曲名）を 1 行に。押すと、一覧のシートが開く */
 .bgm-button {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  max-width: 55%;
-  overflow: hidden;
   white-space: nowrap;
-  text-overflow: ellipsis;
 }
 
-.bgm-volume {
+.bgm-row-button {
   flex: 1;
   min-width: 0;
-  accent-color: #f5c542;
 }
 
-.bgm-list {
+.bgm-row-label {
+  font-weight: 700;
+}
+
+.bgm-row-value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  color: #b8aca0;
+}
+
+.bgm-row-value.on {
+  color: #f5c542;
+}
+
+/* 音量：0〜100% をなぞる。指でつかめる大きさ（高さ 44px・つまみ 28px） */
+.bgm-volume-row {
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 4px;
+  color: #b8aca0;
+}
+
+/* 入力欄の共通の見た目（枠・白い背景・余白）を打ち消すので、同じ強さの書き方にする */
+input.bgm-volume[type='range'] {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  height: 44px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+  touch-action: pan-y;
+}
+
+.bgm-volume::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 3px;
+  background: #4a403a;
+}
+
+.bgm-volume::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 28px;
+  height: 28px;
+  margin-top: -11px;
+  border-radius: 50%;
+  border: none;
+  background: #f5c542;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 45%);
+}
+
+.bgm-volume::-moz-range-track {
+  height: 6px;
+  border-radius: 3px;
+  background: #4a403a;
+}
+
+.bgm-volume::-moz-range-thumb {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: #f5c542;
+}
+
+.bgm-volume-value {
+  min-width: 3.4em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9rem;
+}
+
+/* BGM を選ぶシート（編集画面に合わせた暗い色） */
+.bgm-sheet {
+  background: #1b1714;
+  color: #fff;
+}
+
+.bgm-sheet .picker-head h2 {
+  font-size: 1rem;
+}
+
+.bgm-sheet .btn {
+  background: #2a2420;
+  border-color: #3a322c;
+  color: #fff;
+}
+
+.bgm-sheet-list {
   margin: 0;
   padding: 0;
   list-style: none;
+  overflow-y: auto;
+}
+
+.bgm-sheet-list li {
+  display: flex;
+  align-items: center;
+  border-top: 1px solid #2f2824;
+}
+
+.bgm-sheet-list li:first-child {
+  border-top: none;
+}
+
+.bgm-pick {
+  appearance: none;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 0 4px;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bgm-pick[aria-current='true'] {
+  color: #f5c542;
+  font-weight: 700;
+}
+
+.bgm-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bgm-len {
+  color: #b8aca0;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.bgm-check {
+  flex: none;
+}
+
+.bgm-listen {
+  appearance: none;
+  flex: none;
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: #fff;
+  cursor: pointer;
+}
+
+.bgm-listen[aria-pressed='true'] {
+  background: #f5c542;
+  color: #1b1714;
 }
 
 /* ---- 仕上げる画面の 2 段のタイムライン（写真アプリの見た目に、Resolve の操作） ---- */
@@ -3986,6 +4141,16 @@ h1.wordmark {
   user-select: text;
 }
 
+
+/* 端・帯を引き終わったあと、下の段を中央へ戻す間だけ、滑らかに動かす */
+.cmp-cu-in.settling,
+.cmp-cu-txt.settling {
+  transition: transform 0.2s ease-out;
+}
+
+.filmstrip-head.settling {
+  transition: left 0.2s ease-out;
+}
 
 /* 同梱のフォント（手書き・セリフ・セリフ斜体・細字。OFL。public/fonts）。canvas で描く前に、読み込む（loadTextFonts） */
 @font-face {

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { bgmBlob, bgmExtension, bgmTitle } from './bgm'
+import { existsSync } from 'node:fs'
+import { BUNDLED_BGM, bgmBlob, bgmExtension, bgmTitle, formatSeconds } from './bgm'
 
 const file = (name: string): { kind: 'file'; file: File } => ({ kind: 'file', file: new File(['x'], name) })
 
@@ -14,12 +15,12 @@ describe('BGM の名前と種類', () => {
   })
 
   it('同梱の曲は、置き場所の拡張子を使う', () => {
-    expect(bgmExtension({ kind: 'bundled', track: { id: 'a', title: 'A', path: 'bgm/a.m4a' } })).toBe('m4a')
+    expect(bgmExtension({ kind: 'bundled', track: { id: 'a', title: 'A', path: 'bgm/a.m4a', seconds: 10 } })).toBe('m4a')
   })
 })
 
 describe('同梱の曲を読む', () => {
-  const track = { kind: 'bundled' as const, track: { id: 'a', title: 'A', path: 'bgm/a.m4a' } }
+  const track = { kind: 'bundled' as const, track: { id: 'a', title: 'A', path: 'bgm/a.m4a', seconds: 10 } }
   afterEach(() => vi.unstubAllGlobals())
 
   it('iPhone のアプリは、成功でも status が 0（HTTP でない応答）になるので、中身があれば読めたことにする', async () => {
@@ -35,5 +36,18 @@ describe('同梱の曲を読む', () => {
   it('中身が空なら、読めなかったことにする', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ status: 200, ok: true, blob: async () => new Blob([]) }))
     await expect(bgmBlob(track)).rejects.toThrow('空')
+  })
+})
+
+describe('同梱の曲', () => {
+  it('id が重ならず、public/bgm/ にファイルがある', () => {
+    expect(new Set(BUNDLED_BGM.map((x) => x.id)).size).toBe(BUNDLED_BGM.length)
+    for (const x of BUNDLED_BGM) expect(existsSync(`public/${x.path}`), x.path).toBe(true)
+  })
+
+  it('一覧に出す長さは、分:秒（秒は 2 桁）', () => {
+    expect(formatSeconds(25.7)).toBe('0:26')
+    expect(formatSeconds(56.8)).toBe('0:57')
+    expect(formatSeconds(125)).toBe('2:05')
   })
 })
