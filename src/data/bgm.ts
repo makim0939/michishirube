@@ -17,7 +17,7 @@ export interface BgmTrack {
 /** 同梱の曲（一覧の並び順）。曲を足す・差し替えるときは docs/bgm.md の手順で、public/bgm/ に置き、ここに足す */
 export const BUNDLED_BGM: BgmTrack[] = [
   { id: 'dreams-of-tomorrow', title: 'Dreams of Tomorrow', path: 'bgm/dreams-of-tomorrow.m4a', seconds: 27.4 },
-  { id: 'playful-toy', title: 'Playful Toy', path: 'bgm/playful-toy.m4a', seconds: 22 },
+  { id: 'playful-toy', title: 'Playful Toy', path: 'bgm/playful-toy.m4a', seconds: 24 },
   { id: 'cosy-feeling', title: 'Cosy Feeling', path: 'bgm/cosy-feeling.m4a', seconds: 36.5 },
   { id: 'quiet-days', title: 'Quiet Days', path: 'bgm/quiet-days.m4a', seconds: 24 },
   { id: '8bit-bossa', title: '8bit Bossa', path: 'bgm/8bit-bossa.m4a', seconds: 59.5 },
