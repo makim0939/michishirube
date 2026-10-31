@@ -3081,6 +3081,49 @@ a.notice {
   font-variant-numeric: tabular-nums;
 }
 
+/* 「仕上げる」だけ：長押しで診断を出し入れする。空のときも押せる広さにする */
+.cmp .editor-title {
+  min-width: 72px;
+  text-align: center;
+  padding: 8px 0;
+}
+
+/* 映像が止まる不具合を調べる診断（Composer の時間表示の長押しで出る。ふだんは出ない） */
+.video-diag {
+  position: absolute;
+  z-index: 60;
+  top: calc(env(safe-area-inset-top, 0px) + 56px);
+  left: 8px;
+  right: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.78);
+  color: #bdf5bd;
+  font: 10px/1.4 ui-monospace, Menlo, monospace;
+}
+
+.video-diag pre {
+  margin: 0;
+  white-space: pre-wrap;
+  pointer-events: none;
+}
+
+.video-diag-buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.video-diag-buttons button {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: none;
+  color: #fff;
+  font: inherit;
+  padding: 4px 10px;
+  border-radius: 6px;
+}
+
 .editor-text-button {
   appearance: none;
   border: none;
