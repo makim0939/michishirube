@@ -764,3 +764,24 @@ describe('取ってくるあいだに中身を差し替えたとき', () => {
     expect((await db.media.get('m1'))?.poster).toBeUndefined()
   })
 })
+
+describe('送っていない削除がある行は、サーバーの古い版で戻さない', () => {
+  it('削除の印が2回目以降の送信になっても、1回目に届いたサーバーの古い版で行が戻らない', async () => {
+    const server = fakeServer()
+    vi.stubGlobal('fetch', server.fetch)
+    // サーバーには、ほかの端末が少し前に書いた型がある（端末の削除より古い）
+    server.rows.set('skill:gone', { kind: 'skill', id: 'gone', updatedAt: 5, deleted: false, data: { id: 'gone', domainId: 'd', name: '古い', description: '', prereqIds: [], references: [], status: 'idle', createdAt: 1 }, seq: 1 })
+    await db.meta.put({ key: 'sync:config', value: { url: 'https://api.example', token: 't' } })
+    await db.meta.put({ key: 'sync:cursor', value: 0 })
+    // outbox は 200 件ずつ送る。分野（domain）の印が先に並び、型（skill）の削除の印は 2 回目になる
+    const now = Date.now()
+    const domains = Array.from({ length: 200 }, (_, i) => ({ id: `d${String(i).padStart(3, '0')}`, name: `分野${i}`, order: i, createdAt: now, updatedAt: now }))
+    await db.domains.bulkAdd(domains)
+    await db.outbox.bulkPut([...domains.map((d) => ({ kind: 'domain' as const, id: d.id, at: now })), { kind: 'skill' as const, id: 'gone', at: now }])
+
+    await runSync()
+
+    expect(await db.skills.get('gone')).toBeUndefined()
+    expect(server.rows.get('skill:gone')?.deleted).toBe(true)
+  })
+})
