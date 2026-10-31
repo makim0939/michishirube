@@ -478,21 +478,25 @@ export function Composer({
   L.current = { lay, curKey, seekGlobal, stopAll }
 
   // 動画を設定したら、決めた位置へ動かす。iPhone は、タップするまで動画のデータを読み込まず（loadeddata も来ない）、最初のコマが出ないので、
-  // 音なしで一度再生して、コマを出す。続けて再生するときは、そのまま再生を続ける
+  // 音なしで一度再生して、コマを出す。続けて再生するときは、そのまま再生を続ける。
+  // コマが出るまでの間（端末や動画によっては 1 秒ほどかかる）に、利用者が再生を押すことがある。再生するかは、始める前ではなく、
+  // 終わったときに読み直す（始める前の値で止めると、押した再生を取り消して、位置も 0 に戻してしまう）
   useEffect(() => {
     const v = video.current
     if (!v || !url) return
     let cancelled = false
     void (async () => {
-      const keep = wantPlay.current
       v.muted = true
       await v.play().catch(() => {})
       if (cancelled) return
-      const at = pendingSeek.current ?? 0
+      const at = pendingSeek.current
       pendingSeek.current = null
-      if (!keep) v.pause()
-      v.currentTime = at
+      if (!wantPlay.current) v.pause()
+      // 押された再生は、押した位置のまま続ける。止まっているときと、別の動画へ切り替えたときだけ、位置を決める
+      if (!wantPlay.current || at !== null) v.currentTime = at ?? 0
       v.muted = muted
+      // コマ出しの再生が、押された再生を中断していたら、始め直す
+      if (wantPlay.current && v.paused) void v.play().catch(() => {})
     })()
     return () => {
       cancelled = true
