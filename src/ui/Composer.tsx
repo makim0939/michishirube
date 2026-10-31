@@ -46,6 +46,7 @@ import {
 import { PlusSheet } from './PlusSheet'
 import { renderTextOverlays } from './textRender'
 import { formatTime, makeFilmstrip } from './Trimmer'
+import { DIAG_HOLD_MS, VideoDiag, diagLog, diagPlayRejected, type DiagInfo } from './VideoDiag'
 import { useBackHandler } from './useBackHandler'
 import { t } from '../i18n'
 
@@ -242,6 +243,11 @@ export function Composer({
   /** 作っている間に「キャンセル」を押された（ネイティブが始まる前でも、始めないようにする） */
   const cancelRequested = useRef(false)
   const [error, setError] = useState<string>()
+  /** 映像が止まる不具合を調べる診断を、出しているか（時間表示の長押しで出し入れ。保存しない） */
+  const [diag, setDiag] = useState(false)
+  const diagHold = useRef<number | undefined>(undefined)
+  /** 帯の絵づくりが動いているか（診断に出すだけ） */
+  const filmBusy = useRef(false)
   const [plusSheet, setPlusSheet] = useState(false)
   const [frames, setFrames] = useState<Record<string, string[]>>({})
   const [zoom, setZoom] = useState(ZOOM_DEFAULT)
@@ -391,6 +397,8 @@ export function Composer({
     if (!ready) return
     let cancelled = false
     void (async () => {
+      filmBusy.current = true
+      diagLog('帯の絵づくり 開始')
       for (const n of [COARSE, FINE]) {
         for (const key of originalOrder) {
           try {
@@ -404,9 +412,12 @@ export function Composer({
           }
         }
       }
+      filmBusy.current = false
+      diagLog('帯の絵づくり 終わり')
     })()
     return () => {
       cancelled = true
+      filmBusy.current = false
     }
     // 長さが全部分かったとき（区間が増えても、作り直さない）
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -417,8 +428,11 @@ export function Composer({
     if (!bgm) return
     let cancelled = false
     let player: BgmPlayer | undefined
+    const loadStart = performance.now()
+    diagLog('BGM 読み込み 開始')
     void BgmPlayer.create(bgm, bgmVolumeRef.current)
       .then((p) => {
+        diagLog(`BGM 読み込み 終わり ${Math.round(performance.now() - loadStart)}ms`)
         if (cancelled) {
           p.dispose()
           return
@@ -431,7 +445,7 @@ export function Composer({
           previewRef.current()
         }
       })
-      .catch(() => {})
+      .catch((e) => diagLog(`BGM 読み込み 失敗 ${e instanceof Error ? e.name : e}`))
     return () => {
       cancelled = true
       if (bgmAudio.current === player) bgmAudio.current = null
@@ -466,7 +480,7 @@ export function Composer({
     const v = video.current
     if (!v) return
     v.currentTime = local
-    if (play) void v.play().catch(() => {})
+    if (play) void v.play().catch(diagPlayRejected)
   }
 
   /** 再生を止める（BGM も） */
@@ -478,21 +492,25 @@ export function Composer({
   L.current = { lay, curKey, seekGlobal, stopAll }
 
   // 動画を設定したら、決めた位置へ動かす。iPhone は、タップするまで動画のデータを読み込まず（loadeddata も来ない）、最初のコマが出ないので、
-  // 音なしで一度再生して、コマを出す。続けて再生するときは、そのまま再生を続ける
+  // 音なしで一度再生して、コマを出す。続けて再生するときは、そのまま再生を続ける。
+  // コマが出るまでの間（端末や動画によっては 1 秒ほどかかる）に、利用者が再生を押すことがある。再生するかは、始める前ではなく、
+  // 終わったときに読み直す（始める前の値で止めると、押した再生を取り消して、位置も 0 に戻してしまう）
   useEffect(() => {
     const v = video.current
     if (!v || !url) return
     let cancelled = false
     void (async () => {
-      const keep = wantPlay.current
       v.muted = true
-      await v.play().catch(() => {})
+      await v.play().catch((e) => diagLog(`コマ出しの play() 拒否 ${e instanceof Error ? e.name : e}`))
       if (cancelled) return
-      const at = pendingSeek.current ?? 0
+      const at = pendingSeek.current
       pendingSeek.current = null
-      if (!keep) v.pause()
-      v.currentTime = at
+      if (!wantPlay.current) v.pause()
+      // 押された再生は、押した位置のまま続ける。止まっているときと、別の動画へ切り替えたときだけ、位置を決める
+      if (!wantPlay.current || at !== null) v.currentTime = at ?? 0
       v.muted = muted
+      // コマ出しの再生が、押された再生を中断していたら、始め直す
+      if (wantPlay.current && v.paused) void v.play().catch(diagPlayRejected)
     })()
     return () => {
       cancelled = true
@@ -1131,6 +1149,28 @@ export function Composer({
   const ovTrack = useMemo(() => buildTrack(pxs1), [lay, frames, pxs1])
   const cuTrack = useMemo(() => buildTrack(zoom), [lay, frames, zoom])
 
+  // 診断に出す、動画のまわりの状態（描画のたびに最新にする。診断を出していなければ、読まれない）
+  const diagInfo = useRef<DiagInfo>({ source: 'blob', clips: 0, segments: 0, filmstrip: false, bgm: false, muted: false, texts: 0 })
+  // 診断を出しているときだけ作る（再生中は毎コマ描き直すので、出していない間は、何も増やさない）
+  if (diag) {
+    diagInfo.current = {
+      source: clips.some((c) => c.src) ? 'file' : 'blob',
+      clips: clips.length,
+      segments: allSegs.length,
+      filmstrip: filmBusy.current,
+      bgm: !!bgm,
+      muted,
+      texts: doc.texts.length,
+    }
+  }
+  const readDiag = useRef(() => diagInfo.current).current
+  const holdStart = () => {
+    window.clearTimeout(diagHold.current)
+    diagHold.current = window.setTimeout(() => setDiag((d) => !d), DIAG_HOLD_MS)
+  }
+  const holdEnd = () => window.clearTimeout(diagHold.current)
+  useEffect(() => holdEnd, [])
+
   const delLabel = !selT && target?.off ? t.compose.restore : t.compose.remove
 
   return (
@@ -1146,11 +1186,22 @@ export function Composer({
         <button className="editor-text-button" onClick={cancel}>
           {t.editor.cancel}
         </button>
-        <span className="editor-title">{ready ? formatTime(total) : ''}</span>
+        <span
+          className="editor-title"
+          onPointerDown={holdStart}
+          onPointerUp={holdEnd}
+          onPointerLeave={holdEnd}
+          onPointerCancel={holdEnd}
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          {ready ? formatTime(total) : ''}
+        </span>
         <button className="editor-text-button primary" onClick={() => void done()} disabled={!ready || busy}>
           {t.compose.done}
         </button>
       </div>
+
+      {diag && <VideoDiag video={video} info={readDiag} onClose={() => setDiag(false)} />}
 
       <div className="editor-stage" ref={stage}>
         <video
