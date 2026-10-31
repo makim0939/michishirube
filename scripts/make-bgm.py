@@ -25,7 +25,8 @@ SR = 44100
 # id・元のファイル（元のフォルダの中の相対パス）・method。
 # bars：bpm（テンポの分析で求めた値）・bars（1 周の小節数）・skip_bars（音の始まりから外す小節数）・tail（余韻を頭に重ねる最大の秒数）
 # legacy：fade（重ねる秒数。Loopable は 0.03）
-# beats_per_bar は 4（省略可）。check-bgm-seam.py も、この表の bpm を使う
+# beats_per_bar は 4（省略可）。check-bgm-seam.py も、この表の bpm を使う。
+# legacy の bpm・bars は、check-bgm-seam.py の参考値（加工には使わない。Cosy の実際の 1 周は 15.99 小節）
 TRACKS = [
     {"id": "dreams-of-tomorrow", "src": "⭐️3/oma-dreams-of-tomorrow-lofi-hCsVNxfshixaX84jmBnKtX.mp3", "method": "bars", "bpm": 70, "bars": 8, "skip_bars": 4, "tail": 5.0},
     {"id": "playful-toy", "src": "⭐️3/oma-playful-toy-lo-fi-SF5KFpjai4FHNZirie2roW.mp3", "method": "bars", "bpm": 160, "bars": 16, "skip_bars": 0, "tail": 0},
@@ -121,6 +122,8 @@ def bars_loop(x, bpm, bars, skip_bars=0, tail=0.0, beats_per_bar=4):
     bar = beats_per_bar * 60.0 / bpm * SR
     s = first_sound(x) + int(round(skip_bars * bar))
     e = s + int(round(bars * bar))
+    if e > len(x) + SR // 20:  # 書き出しの端の丸め（数十 ms）は許す。それより足りないなら、bpm・bars の間違い
+        raise ValueError(f"1 周分（{(e - s) / SR:.2f} 秒）が、ファイル（音の始まりから {(len(x) - s) / SR:.2f} 秒）より長い。bpm・bars・skip_bars を確かめて")
     body = np.zeros((e - s, 2), np.float32)
     have = x[s : min(e, len(x))]
     body[: len(have)] = have

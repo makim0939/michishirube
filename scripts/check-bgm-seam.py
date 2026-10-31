@@ -16,6 +16,7 @@ BGM（m4a）の、繰り返しの継ぎ目を数字で確かめる（docs/bgm.md
 - 和声の連続：継ぎ目の前後 1 小節のクロマ（音名ごとの強さ）の似かたを、曲の中の隣り合う 1 小節どうしの似かたと比べる
 - 大きさ：継ぎ目の前後 1.5 秒の最小を、曲の中の下位 10 % と比べる（間があいていないか）。段差（クリック）も
 
+TRACKS に無い曲は、環境変数 BGM_BPM=<BPM> を付けると、拍の指標も出す（曲を足す前の試作用）。
 macOS（afinfo）・ffmpeg・numpy が要る。画像は matplotlib があれば出す。
 """
 import importlib.util, os, re, subprocess, sys, wave
@@ -122,18 +123,6 @@ def wrap(v, period):
     return (v + period / 2) % period - period / 2
 
 
-def phase_jump(onsets, t0, span, period):
-    """時刻 t0 の前後 span 秒の onset で、位相の差（後 − 前。秒）。まとまりが弱い（拍が読めない）ときは None"""
-    t, w = onsets[:, 0], onsets[:, 1]
-    L = (t >= t0 - span) & (t < t0)
-    R = (t >= t0) & (t < t0 + span)
-    pl, cl = circ_phase(t[L], w[L], period)
-    pr, cr = circ_phase(t[R], w[R], period)
-    if min(cl, cr) < 0.35:
-        return None
-    return wrap(pr - pl, period)
-
-
 def chroma(mag):
     freqs = np.fft.rfftfreq(NFFT, 1 / SR)
     sel = (freqs >= 55) & (freqs < 2000)
@@ -171,10 +160,10 @@ def check(path, tracks, out=None):
     # ---- スペクトル・onset ----
     mag = stft_mag(y)
     db = band_db(mag)
-    onsets = pick_onsets(onset_envelope(db))
-    seam_t = n / SR
-    beat = bar = None
     env = onset_envelope(db)
+    onsets = pick_onsets(env)
+    seam_t = n / SR
+    bar = None
     k = 1
     if meta:
         beat = 60.0 / meta["bpm"]
@@ -186,24 +175,27 @@ def check(path, tracks, out=None):
         # 拍が合っていれば、前後とも、曲の中と同じくらい（数 ms〜十数 ms）。小節の途中で切っていれば、後ろ（または前）が大きくずれる
         sub = beat / 4
         mid = onsets[(onsets[:, 0] >= seam_t + (n / SR) * 0.3) & (onsets[:, 0] < seam_t + (n / SR) * 0.7)]
-        strong = lambda o: o[o[:, 1] >= np.median(mid[:, 1])]
-        grid_phase, conc = circ_phase(strong(mid)[:, 0], strong(mid)[:, 1], sub)
-        resid = lambda lo, hi: np.abs(wrap(strong(onsets[(onsets[:, 0] >= lo) & (onsets[:, 0] < hi)])[:, 0] - grid_phase, sub)) * 1000
-        span = 4.0
-        rb, ra = resid(seam_t - span, seam_t), resid(seam_t, seam_t + span)
-        inner_means = [resid(t0, t0 + span).mean() for t0 in np.arange(seam_t + 1, seam_t + n / SR - span - 1, 2.0)]
-        print(f"  拍の位相（16 分の格子からの onset のずれ。ms）：継ぎ目の前 平均{rb.mean():.1f}・後 平均{ra.mean():.1f}（曲の中の {span:.0f} 秒の窓 中央値={np.median(inner_means):.1f}・最大={max(inner_means):.1f}）")
-        # リズムの似かた：k 小節の前後で、onset の強さの形がどれだけ似ているか（相関）。k は、曲の中で最も似る長さ（1・2・4 小節）
-        fb = int(bar / FRAME_SEC)
-        corr = lambda a, kk: float(np.corrcoef(env[a - kk * fb : a], env[a : a + kk * fb])[0, 1])
-        first = int(seam_t / FRAME_SEC) + 4 * fb
-        inner_of = lambda kk: range(first, first + n // HOP - (kk + 5) * fb, fb)
-        ks = [kk for kk in (1, 2, 4) if len(inner_of(kk)) >= 3] or [1]
-        k = max(ks, key=lambda kk: np.median([corr(a, kk) for a in inner_of(kk)]))
-        inner_t = inner_of(k)
-        c_seam = corr(int(seam_t / FRAME_SEC), k)
-        c_inner = [corr(a, k) for a in inner_t]
-        print(f"  リズムの似かた（{k} 小節の前後の onset の相関）：継ぎ目={c_seam:.2f}（曲の中 中央値={np.median(c_inner):.2f}・最小={min(c_inner):.2f}）")
+        if len(mid) < 8:
+            print("  （曲の中ほどの onset が少なく、拍の位相・リズムは測れない）")
+        else:
+            strong = lambda o: o[o[:, 1] >= np.median(mid[:, 1])]
+            grid_phase, _ = circ_phase(strong(mid)[:, 0], strong(mid)[:, 1], sub)
+            resid = lambda lo, hi: np.abs(wrap(strong(onsets[(onsets[:, 0] >= lo) & (onsets[:, 0] < hi)])[:, 0] - grid_phase, sub)) * 1000
+            span = 4.0
+            rb, ra = resid(seam_t - span, seam_t), resid(seam_t, seam_t + span)
+            inner_means = [resid(t0, t0 + span).mean() for t0 in np.arange(seam_t + 1, seam_t + n / SR - span - 1, 2.0)]
+            print(f"  拍の位相（16 分の格子からの onset のずれ。ms）：継ぎ目の前 平均{rb.mean():.1f}・後 平均{ra.mean():.1f}（曲の中の {span:.0f} 秒の窓 中央値={np.median(inner_means):.1f}・最大={max(inner_means):.1f}）")
+            # リズムの似かた：k 小節の前後で、onset の強さの形がどれだけ似ているか（相関）。k は、曲の中で最も似る長さ（1・2・4 小節）
+            fb = int(bar / FRAME_SEC)
+            corr = lambda a, kk: float(np.corrcoef(env[a - kk * fb : a], env[a : a + kk * fb])[0, 1])
+            first = int(seam_t / FRAME_SEC) + 4 * fb
+            inner_of = lambda kk: range(first, first + n // HOP - (kk + 5) * fb, fb)
+            ks = [kk for kk in (1, 2, 4) if len(inner_of(kk)) >= 3] or [1]
+            k = max(ks, key=lambda kk: np.median([corr(a, kk) for a in inner_of(kk)]))
+            inner_t = inner_of(k)
+            c_seam = corr(int(seam_t / FRAME_SEC), k)
+            c_inner = [corr(a, k) for a in inner_t]
+            print(f"  リズムの似かた（{k} 小節の前後の onset の相関）：継ぎ目={c_seam:.2f}（曲の中 中央値={np.median(c_inner):.2f}・最小={min(c_inner):.2f}）")
     near = onsets[(onsets[:, 0] >= seam_t - 2.5) & (onsets[:, 0] < seam_t + 2.5)]
     ioi = np.diff(near[:, 0]) * 1000
     cross = int(np.searchsorted(near[:, 0], seam_t))  # 継ぎ目をまたぐ間隔の番号
@@ -236,10 +228,10 @@ def check(path, tracks, out=None):
 
     if out:
         os.makedirs(out, exist_ok=True)
-        write_outputs(out, name, stereo, y, db, onsets, seam_t, near, ioi, beat)
+        write_outputs(out, name, stereo, y, db, onsets, seam_t, near)
 
 
-def write_outputs(out, name, stereo, y, db, onsets, seam_t, near, ioi, beat):
+def write_outputs(out, name, stereo, y, db, onsets, seam_t, near):
     # 2 周分をつなげた wav（耳で聴く用。継ぎ目は 2 周の間）
     two = np.concatenate([stereo, stereo])
     with wave.open(os.path.join(out, f"{name}-loop2.wav"), "wb") as f:
