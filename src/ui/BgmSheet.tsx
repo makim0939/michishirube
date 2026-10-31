@@ -61,16 +61,16 @@ export function BgmSheet({
             {t.common.close}
           </button>
         </div>
-        <ul className="bgm-sheet-list" role="listbox" aria-label={t.compose.bgm}>
+        <ul className="bgm-sheet-list">
           <li>
-            <button type="button" role="option" aria-selected={!current} className="bgm-pick" onClick={() => onPick(undefined)}>
+            <button type="button" aria-current={!current} className="bgm-pick" onClick={() => onPick(undefined)}>
               <span className="bgm-name">{t.compose.bgmOff}</span>
               {!current && <Check />}
             </button>
           </li>
           {BUNDLED_BGM.map((track) => (
             <li key={track.id} className="bgm-track">
-              <button type="button" role="option" aria-selected={currentId === track.id} className="bgm-pick" onClick={() => onPick({ kind: 'bundled', track })}>
+              <button type="button" aria-current={currentId === track.id} className="bgm-pick" onClick={() => onPick({ kind: 'bundled', track })}>
                 <span className="bgm-name">{track.title}</span>
                 <span className="bgm-len">{formatSeconds(track.seconds)}</span>
                 {currentId === track.id && <Check />}
@@ -87,7 +87,7 @@ export function BgmSheet({
             </li>
           ))}
           <li>
-            <button type="button" role="option" aria-selected={isFile} className="bgm-pick" onClick={() => { stop(); onFile() }}>
+            <button type="button" aria-current={isFile} className="bgm-pick" onClick={() => { stop(); onFile() }}>
               <span className="bgm-name">{isFile ? current.file.name.replace(/\.[^.]+$/, '') : t.compose.bgmFile}</span>
               {isFile && <Check />}
             </button>

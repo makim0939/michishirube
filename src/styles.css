@@ -3714,7 +3714,7 @@ input.bgm-volume[type='range'] {
   cursor: pointer;
 }
 
-.bgm-pick[aria-selected='true'] {
+.bgm-pick[aria-current='true'] {
   color: #f5c542;
   font-weight: 700;
 }
