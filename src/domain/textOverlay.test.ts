@@ -193,3 +193,10 @@ describe('フォント', () => {
     expect(TEXT_FONTS.find((f) => f.id === 'wide')!.family).toContain('Hiragino Sans')
   })
 })
+
+describe('有料の判定に使う、書き出しに載るテキスト', () => {
+  it('外した区間にしかかからないテキストは、できあがりの時間を持たない', () => {
+    const o = { ...newText('a', 6, 10), text: 'x', start: 6, end: 9 }
+    expect(outputIntervals([o], [{ key: 'a', start: 0, end: 5 }])).toEqual([])
+  })
+})

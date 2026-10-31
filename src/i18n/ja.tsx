@@ -492,6 +492,7 @@ export const ja = {
     bgmFile: 'ファイルから選ぶ',
     bgmListen: '試聴',
     bgmStopListen: '試聴を止める',
+    bgmFailed: 'この曲を読み込めませんでした（書き出しでも使えないかもしれません）',
     done: '完了',
     working: 'つないでいます…',
     discarded: '破棄しました',
