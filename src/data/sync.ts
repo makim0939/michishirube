@@ -206,6 +206,12 @@ export async function applyRemote(changes: EntityChange[]) {
     for (const c of changes) {
       const local = await readLocal(c.kind, c.id)
       if (local && local.updatedAt >= c.updatedAt) continue
+      // 端末で消して、まだ送っていない行（印の時刻＝消した時刻）は、それより古いサーバーの版で戻さない。
+      // 印が 200 件を超えて 2 回目以降の送信になるとき、1 回目の応答で古い版が届くと、行が戻り、次の回で更新として送られて削除が消える
+      if (!local && c.kind !== 'settings') {
+        const pending = await db.outbox.get([c.kind, c.id])
+        if (pending && pending.at >= c.updatedAt) continue
+      }
       if (c.kind === 'settings') {
         if (!c.deleted) await db.meta.put({ key: 'settings', value: { ...c.data, updatedAt: c.updatedAt } })
         continue

@@ -12,6 +12,7 @@ import { CupIcon, LeafIcon, NotebookIcon, SlidersIcon } from './ui/icons'
 import { EditSkillScreen, NewSkillScreen } from './ui/EditSkillScreen'
 import { CupScreen } from './ui/CupScreen'
 import { DebugOverlay } from './ui/DebugOverlay'
+import { ErrorBoundary, RecoverScreen } from './ui/ErrorBoundary'
 import { FeedbackProvider, useToast } from './ui/feedback'
 import { MapScreen } from './ui/MapScreen'
 import { RecordScreen } from './ui/RecordScreen'
@@ -86,10 +87,14 @@ const TABS = [
   { path: '/settings', label: t.app.tabSettings, Icon: SlidersIcon, match: (r: Route) => r.name === 'settings' },
 ]
 
+/** 起動の準備を待つ長さ。これを過ぎても終わらなければ、「もう一度」を出す */
+const BOOT_TIMEOUT_MS = 10_000
+
 export function App() {
   const route = useRoute()
   const [ready, setReady] = useState(false)
   const [error, setError] = useState<string>()
+  const [stuck, setStuck] = useState(false)
 
   useEffect(() => {
     // アプリでは、ファイルの置き場所を用意し、画面の中の保存場所が消えていたら写しから戻してから始める
@@ -112,6 +117,13 @@ export function App() {
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
   }, [])
 
+  // 起動の準備（ファイル・保存場所・購入の確認）が終わらないまま、真っ白で止まらないように、一定時間で戻る手段を出す
+  useEffect(() => {
+    if (ready) return
+    const timer = setTimeout(() => setStuck(true), BOOT_TIMEOUT_MS)
+    return () => clearTimeout(timer)
+  }, [ready])
+
   if (error) {
     return (
       <div className="screen">
@@ -121,14 +133,17 @@ export function App() {
       </div>
     )
   }
-  if (!ready) return null
+  if (!ready) return stuck ? <RecoverScreen /> : null
 
   return (
     <FeedbackProvider>
       <DebugOverlay />
       <Background />
       <main className="main">
-        <Screen route={route} />
+        {/* 画面の描画で落ちても、タブは残す。画面を移ったら、描き直す */}
+        <ErrorBoundary resetKey={window.location.hash}>
+          <Screen route={route} />
+        </ErrorBoundary>
       </main>
       {route.name !== 'record' && (
         <nav className="tabbar">

@@ -53,6 +53,7 @@ export const ja = {
     tabRecords: 'ラテ帳',
     tabSkills: '型',
     tabSettings: '設定',
+    reload: 'もう一度',
     dbOpenFailed: 'データベースを開けませんでした',
     dbOpenHint: 'プライベートブラウズでは保存できないことがあります。通常のウィンドウで開いてください。',
     tidied: (count: number, size: string) =>
@@ -492,6 +493,7 @@ export const ja = {
     bgmFile: 'ファイルから選ぶ',
     bgmListen: '試聴',
     bgmStopListen: '試聴を止める',
+    bgmFailed: 'この曲を読み込めませんでした（書き出しでも使えないかもしれません）',
     done: '完了',
     working: 'つないでいます…',
     discarded: '破棄しました',

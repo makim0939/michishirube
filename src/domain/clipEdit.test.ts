@@ -103,3 +103,14 @@ describe('つなぐ動画', () => {
     expect(isUntouched(keptRanges(cut, dur), ['a', 'b'], dur)).toBe(false)
   })
 })
+
+describe('頭・尻の「外した区間」の外側の端', () => {
+  it('動かしても何も変わらない（外した区間が 2 つに割れない）', () => {
+    let s = initSegs('a', 10)
+    s = trimEdge(s, 'a', s[0].id, 'start', 3, 10)
+    s = trimEdge(s, 'a', s[1].id, 'end', 8, 10)
+    expect(s.map((x) => [x.start, x.end, x.off])).toEqual([[0, 3, true], [3, 8, false], [8, 10, true]])
+    expect(trimEdge(s, 'a', s[0].id, 'start', 1, 10)).toBe(s)
+    expect(trimEdge(s, 'a', s[2].id, 'end', 9, 10)).toBe(s)
+  })
+})

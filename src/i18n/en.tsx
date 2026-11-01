@@ -50,6 +50,7 @@ export const en: Messages = {
     tabRecords: 'Journal',
     tabSkills: 'Patterns',
     tabSettings: 'Settings',
+    reload: 'Try again',
     dbOpenFailed: "Couldn't open the database",
     dbOpenHint: "Private browsing may block saving. Please open it in a normal window.",
     tidied: (count, size) =>
@@ -495,6 +496,7 @@ export const en: Messages = {
     bgmFile: 'Choose a file',
     bgmListen: 'Listen',
     bgmStopListen: 'Stop listening',
+    bgmFailed: "Couldn't load this track (it may not work in the export either)",
     done: 'Done',
     working: 'Joining…',
     discarded: 'Discarded',
