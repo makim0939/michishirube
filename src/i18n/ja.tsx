@@ -53,6 +53,7 @@ export const ja = {
     tabRecords: 'ラテ帳',
     tabSkills: '型',
     tabSettings: '設定',
+    reload: 'もう一度',
     dbOpenFailed: 'データベースを開けませんでした',
     dbOpenHint: 'プライベートブラウズでは保存できないことがあります。通常のウィンドウで開いてください。',
     tidied: (count: number, size: string) =>

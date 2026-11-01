@@ -50,6 +50,7 @@ export const en: Messages = {
     tabRecords: 'Journal',
     tabSkills: 'Patterns',
     tabSettings: 'Settings',
+    reload: 'Try again',
     dbOpenFailed: "Couldn't open the database",
     dbOpenHint: "Private browsing may block saving. Please open it in a normal window.",
     tidied: (count, size) =>
