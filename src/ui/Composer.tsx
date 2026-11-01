@@ -41,6 +41,7 @@ import {
   TEXT_SIZE_MAX,
   TEXT_SIZE_MIN,
   type TextBox,
+  outputIntervals,
   type TextOverlay,
 } from '../domain/textOverlay'
 import { PlusSheet } from './PlusSheet'
@@ -293,7 +294,8 @@ export function Composer({
   const ready = clips.every((c) => (durs[c.key] ?? 0) > 0) && lay.every((c) => c.segs.length > 0)
   const ranges = useMemo(() => keptRanges(doc, durs), [doc, durs])
   const total = totalSeconds(ranges)
-  const hasText = doc.texts.some((o) => o.text.trim())
+  // 書き出しに実際に載るテキストだけ数える（外した区間にしかかからないテキストは、できあがりに無い）
+  const hasText = outputIntervals(doc.texts, ranges).length > 0
   const paid = ranges.length > 1 || !!bgm || hasText
   const needsCompose = paid || muted || !isUntouched(ranges, originalOrder, durs)
 
@@ -431,7 +433,12 @@ export function Composer({
           previewRef.current()
         }
       })
-      .catch(() => {})
+      .catch(() => {
+        // 試聴できない曲は、書き出しでも読めないことがある。無言のままにしない
+        if (cancelled) return
+        previewNext.current = false
+        setError(t.compose.bgmFailed)
+      })
     return () => {
       cancelled = true
       if (bgmAudio.current === player) bgmAudio.current = null
