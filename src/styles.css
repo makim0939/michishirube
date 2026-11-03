@@ -575,6 +575,8 @@ ul {
   flex-direction: column;
   border-radius: 20px 20px 0 0;
   background: var(--bg);
+  /* 動画の編集画面（.editor は白文字）の上に出しても、見出しが背景に溶けないように、文字色を自分で決める */
+  color: var(--text);
   padding: 14px 16px calc(env(safe-area-inset-bottom) + 16px);
   animation: sheet-in 0.2s ease-out;
 }
