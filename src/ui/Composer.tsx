@@ -3,6 +3,8 @@ import { BgmPlayer } from '../data/bgmPlayer'
 import { BgmSheet } from './BgmSheet'
 import { BUNDLED_BGM, bgmBlob, bgmExtension, bgmTitle, type BgmChoice } from '../data/bgm'
 import { composeClips } from '../data/compose'
+import { usePlusAccess } from '../data/purchases'
+import { useToast } from './feedback'
 import { cancelComposeVideoFiles, ComposeCancelled } from '../data/files'
 import { inMemory, probeDuration, QUALITY } from '../data/mediaPrep'
 import type { VideoQuality } from '../data/videoStorage'
@@ -21,7 +23,7 @@ import {
   type Doc,
   type Seg,
 } from '../domain/clipEdit'
-import { ChevronDownIcon, BackIcon, ForwardIcon, MusicIcon, PauseIcon, PlayIcon, RedoIcon, ScissorsIcon, SpeakerIcon, TextIcon, TrashIcon, UndoIcon } from './icons'
+import { ChevronDownIcon, BackIcon, ForwardIcon, LockIcon, MusicIcon, PauseIcon, PlayIcon, RedoIcon, ScissorsIcon, SparkleIcon, SpeakerIcon, TextIcon, TrashIcon, UndoIcon } from './icons'
 import {
   applyStyle,
   currentStyle,
@@ -249,7 +251,12 @@ export function Composer({
   const diagHold = useRef<number | undefined>(undefined)
   /** 帯の絵づくりが動いているか（診断に出すだけ） */
   const filmBusy = useRef(false)
-  const [plusSheet, setPlusSheet] = useState(false)
+  /** 購入の案内。'done'：「完了」で、無料の回数が尽きていた（買えば、そのまま書き出す）／'try'：「Plus を試す」から開いた */
+  const [plusSheet, setPlusSheet] = useState<false | 'done' | 'try'>(false)
+  const toast = useToast()
+  const access = usePlusAccess()
+  /** 「Plus を試す」で、有料の機能を並べている */
+  const [tryPlus, setTryPlus] = useState(false)
   const [frames, setFrames] = useState<Record<string, string[]>>({})
   const [zoom, setZoom] = useState(ZOOM_DEFAULT)
   const [W, setW] = useState(362)
@@ -303,6 +310,27 @@ export function Composer({
   // 書き出しに実際に載るテキストだけ数える（外した区間にしかかからないテキストは、できあがりに無い）
   const hasText = outputIntervals(doc.texts, ranges).length > 0
   const paid = ranges.length > 1 || !!bgm || hasText
+  /**
+   * 有料の機能（分割・テキスト・BGM）を並べるか。無料の人は、最初は無料の機能だけ並べて（使えない機能で画面を埋めない）、
+   * 「Plus を試す」で並べる。2 本以上つないでいるなど、すでに有料の中身があるときは、最初から並べる
+   */
+  const plusView = access.open || tryPlus || paid
+  const trying = access.trial && plusView
+  // 試している間（無料の回数を使う編集）に入ったとき、残りを 1 度だけ知らせる
+  useEffect(() => {
+    if (trying) toast.show(t.compose.plusTrying(access.left))
+    // 残りが変わる（購入・使い切り）たびには出さない。入った時だけ
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trying])
+  /** 「Plus を試す」を押す。使い切っていれば、購入の案内（有料の機能は並べない）。並べたあとは、この編集の間、そのまま（試した中身を、閉じるだけで消さない） */
+  const startTry = () => {
+    if (access.locked) {
+      stopAll()
+      setPlusSheet('try')
+      return
+    }
+    setTryPlus(true)
+  }
   const needsCompose = paid || muted || !isUntouched(ranges, originalOrder, durs)
 
   const locate = (gg: number) => {
@@ -1053,7 +1081,7 @@ export function Composer({
     try {
       // 無料で試せる回数を使い切っていたら、書き出す前に購入の案内（画面を見て、触れたうえで判断してもらう）
       if (paid && !(await mayUsePaid())) {
-        setPlusSheet(true)
+        setPlusSheet('done')
         return
       }
       const file = await composeClips(
@@ -1392,7 +1420,7 @@ export function Composer({
                 </div>
               </div>
             ) : (
-            <div className="cmp-sound">
+            <div className="cmp-sound" style={access.loading ? { visibility: 'hidden' } : undefined}>
               <button
                 type="button"
                 className={`editor-sound${muted ? ' off' : ''}`}
@@ -1402,11 +1430,13 @@ export function Composer({
               >
                 <SpeakerIcon size={22} off={muted} />
               </button>
-              <button type="button" className="editor-text-button bgm-button" onClick={addText}>
-                <TextIcon size={18} />
-                {t.compose.text}
-              </button>
-              {BUNDLED_BGM.length > 0 && (
+              {plusView && (
+                <button type="button" className="editor-text-button bgm-button" onClick={addText}>
+                  <TextIcon size={18} />
+                  {t.compose.text}
+                </button>
+              )}
+              {plusView && BUNDLED_BGM.length > 0 && (
                 <>
                   {/* 行の名前（BGM）と、いまの選択（なし・曲名）。押すと、一覧のシートが開く */}
                   <button type="button" className="editor-text-button bgm-button bgm-row-button" aria-haspopup="dialog" onClick={openBgmSheet}>
@@ -1431,6 +1461,13 @@ export function Composer({
                     }}
                   />
                 </>
+              )}
+              {/* 無料の人の入口。有料の機能は、ここを押すまで並べない。使い切ったあとは、鍵が付き、購入の案内になる */}
+              {access.trial && !plusView && (
+                <button type="button" className="editor-text-button bgm-button plus-try" onClick={startTry}>
+                  {access.locked ? <LockIcon size={16} /> : <SparkleIcon size={16} />}
+                  {t.compose.plusTry}
+                </button>
               )}
             </div>
             )}
@@ -1526,14 +1563,16 @@ export function Composer({
             </div>
 
             {/* 操作：よく使う順 */}
-            <div className="cmp-tools">
+            <div className="cmp-tools" style={access.loading ? { visibility: 'hidden' } : undefined}>
               <button className="cmp-tool" aria-label={playing ? t.player.pause : t.player.play} onClick={togglePlay}>
                 {playing ? <PauseIcon size={24} /> : <PlayIcon size={24} />}
               </button>
-              <button className="cmp-tool" aria-label={t.compose.split} disabled={!canSplit} onClick={split}>
-                <ScissorsIcon size={24} />
-                <span>{t.compose.split}</span>
-              </button>
+              {plusView && (
+                <button className="cmp-tool" aria-label={t.compose.split} disabled={!canSplit} onClick={split}>
+                  <ScissorsIcon size={24} />
+                  <span>{t.compose.split}</span>
+                </button>
+              )}
               <button className="cmp-tool" aria-label={delLabel} disabled={!canDelete} onClick={remove}>
                 <TrashIcon size={24} />
                 <span>{delLabel}</span>
@@ -1567,8 +1606,9 @@ export function Composer({
         <PlusSheet
           exhausted
           onUnlocked={() => {
+            const finish = plusSheet === 'done'
             setPlusSheet(false)
-            void done()
+            if (finish) void done()
           }}
           onClose={() => setPlusSheet(false)}
         />

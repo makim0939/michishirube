@@ -18,6 +18,7 @@ import {
   FREE_COMPOSE_USES,
   isCancelled,
   mayCompose,
+  plusAccessOf,
   noteComposeUse,
   isPlus,
   loadProducts,
@@ -152,5 +153,33 @@ describe('「つなぐ」を使ってよいか', () => {
   it('ストアから Plus の商品が取れないときは、買う手段が無いので止めない', async () => {
     await db.meta.put({ key: 'purchase:composeUses', value: FREE_COMPOSE_USES })
     expect(await mayCompose(false)).toBe(true)
+  })
+})
+
+describe('Plus の見せ方（編集画面・設定）', () => {
+  const base = { canBuy: true, plus: false, listed: true, checked: true, uses: 0 }
+
+  it('買う手段があり未購入なら、有料の機能は並べず、「試す」入口を出す。残りは回数から出す', () => {
+    expect(plusAccessOf(base)).toEqual({ open: false, trial: true, locked: false, left: FREE_COMPOSE_USES })
+    expect(plusAccessOf({ ...base, uses: 2 }).left).toBe(FREE_COMPOSE_USES - 2)
+  })
+
+  it('使い切ると、試す入口は鍵（購入の案内）になる', () => {
+    expect(plusAccessOf({ ...base, uses: FREE_COMPOSE_USES })).toMatchObject({ open: false, trial: true, locked: true, left: 0 })
+    expect(plusAccessOf({ ...base, uses: FREE_COMPOSE_USES + 5 }).left).toBe(0)
+  })
+
+  it('Plus を買っていれば、最初から全部並べ、入口は出さない', () => {
+    expect(plusAccessOf({ ...base, plus: true, uses: FREE_COMPOSE_USES })).toMatchObject({ open: true, trial: false, locked: false })
+  })
+
+  it('買う手段が無い端末（Android・Web）は、最初から全部並べる', () => {
+    expect(plusAccessOf({ ...base, canBuy: false, listed: false })).toMatchObject({ open: true, trial: false })
+  })
+
+  it('商品を確かめるまでは決めず、取れないと分かれば全部並べる。前に取れていれば、確認を待たない', () => {
+    expect(plusAccessOf({ ...base, listed: false, checked: false })).toMatchObject({ open: false, trial: false })
+    expect(plusAccessOf({ ...base, listed: false, checked: true })).toMatchObject({ open: true, trial: false })
+    expect(plusAccessOf({ ...base, listed: true, checked: false })).toMatchObject({ open: false, trial: true })
   })
 })
