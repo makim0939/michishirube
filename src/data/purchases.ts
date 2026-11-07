@@ -155,9 +155,6 @@ export function plusAccessOf(s: { canBuy: boolean; plus: boolean; listed: boolea
 /** 画面で使う Plus の状態（端末に覚えているものと、ストアの商品の確認から） */
 export function usePlusAccess(): PlusAccess {
   const [checked, setChecked] = useState(!canPurchase)
-  useEffect(() => {
-    if (canPurchase) void loadProducts().finally(() => setChecked(true))
-  }, [])
   const stored = useLiveQuery(
     async () => ({
       plus: await isPlus(),
@@ -166,6 +163,11 @@ export function usePlusAccess(): PlusAccess {
     }),
     [],
   )
+  // 前に商品が取れたことがあれば、画面を開くたびにストアへ問い合わせない（確かめるのは、まだ一度も取れていないときだけ）
+  const needsCheck = !!stored && !stored.listed
+  useEffect(() => {
+    if (canPurchase && needsCheck) void loadProducts().finally(() => setChecked(true))
+  }, [needsCheck])
   // 読み込み前は、決めない（無料の見た目）
   if (!stored) return { open: false, trial: false, locked: false, left: FREE_COMPOSE_USES, loading: true }
   return plusAccessOf({ canBuy: canPurchase, ...stored, checked })
