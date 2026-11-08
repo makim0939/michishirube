@@ -1,6 +1,6 @@
 # BGM（動画の仕上げ）
 
-「仕上げる」画面（記録の編集 → 動画 → 仕上げる）で、動画に BGM を足せる。元の動画の音はそのままで、BGM は動画の長さまで繰り返し、終わりの 1.5 秒で小さくなる。BGM の行を押すと、下から曲の一覧（なし・同梱の曲・ファイルから選ぶ）が開き、曲の行の ▶ で聴ける。選ぶと閉じて、音量（0〜100 %）のスライダーが出る。書き出しは `VideoComposer` プラグイン（iOS・Android）。コードは `src/data/bgm.ts`・`src/ui/Composer.tsx`。
+「仕上げる」画面（記録の編集 → 動画 → 仕上げる）で、動画に BGM を足せる。元の動画の音はそのままで、BGM は動画の長さまで繰り返し、終わりの 1.5 秒で小さくなる。BGM の行を押すと、下から曲の一覧（なし・同梱の曲・ファイルから選ぶ）が開き、曲の行の ▶ で聴ける。選ぶと閉じて、音量（0〜100 %）のスライダーが出る。書き出しは `VideoComposer` プラグイン（実装は iOS・Android にあるが、「つなぐ」の入口を出すのは、いまは iPhone・iPad のアプリだけ。`canJoinVideos`）。コードは `src/data/bgm.ts`・`src/ui/Composer.tsx`。
 
 ## 曲の出どころ
 
@@ -10,7 +10,7 @@
 | ファイル | 名前（画面） | 出典・作った人 | ライセンス | 確認日 | 大きさ・繰り返し 1 回分 |
 |---|---|---|---|---|---|
 | `dreams-of-tomorrow.m4a` | Dreams of Tomorrow | Open Music Academy「Dreams of Tomorrow (Lofi)」Ludwig Orel | CC0 | 2026-10-31 | 0.4 MB・0:27 |
-| `playful-toy.m4a` | Playful Toy | Open Music Academy「Playful Toy LoFi」 | CC0 | 2026-10-31 | 0.4 MB・0:22 |
+| `playful-toy.m4a` | Playful Toy | Open Music Academy「Playful Toy LoFi」 | CC0 | 2026-10-31 | 0.4 MB・0:24 |
 | `cosy-feeling.m4a` | Cosy Feeling | Open Music Academy「Cosy Kind Of Feeling (Jazztrio) Loopable」Johannes Söllner | CC0 | 2026-10-31 | 0.6 MB・0:37 |
 | `quiet-days.m4a` | Quiet Days | Open Music Academy「Quiet Days (Lo-Fi)」Florian Simon | CC0 | 2026-10-31 | 0.4 MB・0:24 |
 | `8bit-bossa.m4a` | 8bit Bossa | OpenGameArt「Bossa Nova」（ファイル名 8bit Bossa.mp3）Joth。2016-08-28 公開 | CC0 | 2026-10-31 | 1.0 MB・0:60 |
@@ -26,7 +26,7 @@
 
 動画は、曲より長いことが多く、曲を頭から繰り返す。**「数字が合っている」ではなく、音楽として（拍・小節・和声・フレーズ）つながる**ことが目的。実機で聴いて、曲によって、つなぎ目が分かる・曲が繋がっていない、という報告があり、原因は次のとおりだった：
 
-- 元の曲（MP3）の多くは、**整数小節（16 小節など）の長さで書き出された、ループ向けのファイル**（Playful Toy は 160 BPM・16 小節＝ちょうど 24.000 秒、Quiet Days は 120 BPM・16 小節＝32.000 秒）。それなのに、最初の加工は、無音を詰めたあと、「拍の形が合う所」を探して**小節の途中（Playful Toy は 14.67 小節、8bit Bossa は 30.5 小節、Dreams of Tomorrow は 7.5 小節、April Groove は 14.96 小節）で切って**、終わりを頭に重ねていた。小節の頭が半拍〜数拍ずれ、頭に別の拍の音が重なって二重に聞こえ、和声の区切り（コード進行・フレーズ）もずれる。Quiet Days（12 小節）と Cosy Feeling（16 小節）は、たまたま（または、ループ用に作られていて）小節の整数倍だったので、問題がなかった
+- 元の曲（MP3）の多くは、**整数小節（16 小節など）の長さで書き出された、ループ向けのファイル**（Playful Toy は 160 BPM・16 小節＝ちょうど 24.000 秒、Quiet Days は 120 BPM・12 小節＝24.000 秒）。それなのに、最初の加工は、無音を詰めたあと、「拍の形が合う所」を探して**小節の途中（Playful Toy は 14.67 小節、8bit Bossa は 30.5 小節、Dreams of Tomorrow は 7.5 小節、April Groove は 14.96 小節）で切って**、終わりを頭に重ねていた。小節の頭が半拍〜数拍ずれ、頭に別の拍の音が重なって二重に聞こえ、和声の区切り（コード進行・フレーズ）もずれる。Quiet Days（12 小節）と Cosy Feeling（16 小節）は、たまたま（または、ループ用に作られていて）小節の整数倍だったので、問題がなかった
 
 そこで、加工は 2 つの方式にした（`scripts/make-bgm.py`、macOS・ffmpeg・numpy）：
 
