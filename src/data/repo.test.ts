@@ -448,7 +448,9 @@ describe('すべて削除', () => {
       { key: 'purchase:composeUses', value: 2 },
       { key: 'sync:config', value: { token: 'x' } },
     ])
+    await db.outbox.put({ kind: 'domain', id: 'd1', at: 1 })
     await eraseAllData()
+    expect(await db.outbox.count()).toBe(0)
     expect(await db.domains.count()).toBe(0)
     expect(await db.skills.count()).toBe(0)
     expect((await db.meta.get('purchase:plus'))?.value).toBe(true)
