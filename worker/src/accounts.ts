@@ -174,7 +174,12 @@ export async function createAuthRequest(
 
 export async function readAuthRequest(db: D1Database, id: string, now = Date.now()): Promise<AuthRequestRow | null> {
   const row = await db.prepare('SELECT * FROM auth_requests WHERE id = ?1').bind(id).first<AuthRequestRow>()
-  if (!row || now - row.created_at > AUTH_TTL_MS) return null
+  if (!row) return null
+  if (now - row.created_at > AUTH_TTL_MS) {
+    // 期限が切れたら、その場で消す。受け取られなかった YouTube の鍵（refresh token）が、次にだれかが認可を始めるまで残らないように
+    await deleteAuthRequest(db, id)
+    return null
+  }
   return row
 }
 
