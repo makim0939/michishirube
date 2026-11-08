@@ -94,7 +94,9 @@ export function References({ skill }: { skill: Skill }) {
                 confirmLabel={t.refs.remove}
                 onConfirm={() => run(() => removeReference(skill.id, r.id))}
               >
-                ×
+                {/* 「×」だけでは、読み上げで何のボタンか分からないので、読み上げ用の文字を添える */}
+                <span aria-hidden="true">×</span>
+                <span className="sr-only">{t.refs.remove}</span>
               </ConfirmButton>
             </li>
           ))}
