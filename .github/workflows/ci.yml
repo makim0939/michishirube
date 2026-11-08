@@ -17,6 +17,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
+      # フックの呼び方の間違い（早い return より後ろのフック）を、画面を開く前に落とす
+      - run: pnpm lint
       - run: pnpm test
       - run: pnpm build
 
