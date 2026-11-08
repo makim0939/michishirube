@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { App } from './App'
 import { db } from './data/db'
 import { addRecord } from './data/repo'
@@ -12,8 +12,9 @@ import { t } from './i18n'
  * （#182：記録画面）を、PR の時点で落とすため。落ちると ErrorBoundary が「もう一度」を出し、console.error を出す
  */
 
-// jsdom に無い、画面が使うブラウザの機能（中身は使わないので、何もしない代わり）
-beforeAll(() => {
+// jsdom に無い、画面が使うブラウザの機能（中身は使わないので、何もしない代わり）。
+// afterEach で vi.unstubAllGlobals() するので、スタブは毎回入れ直す（beforeAll だと、最初のテストのあとで消える）
+function stubBrowserFeatures() {
   const none = () => {}
   class Observer {
     observe = none
@@ -40,11 +41,12 @@ beforeAll(() => {
   HTMLMediaElement.prototype.load = none
   HTMLMediaElement.prototype.pause = none
   HTMLMediaElement.prototype.play = () => Promise.resolve()
-})
+}
 
 let errors: unknown[][]
 
 beforeEach(() => {
+  stubBrowserFeatures()
   errors = []
   vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
     errors.push(args)
@@ -120,7 +122,7 @@ describe('主要な画面を開いても落ちない', () => {
     await waitFor(() => expect(screen.getByText('スモークテストの理由')).toBeTruthy(), { timeout: 5000 })
     expectNotCrashed('1杯の詳細')
     await visit(`#/skill/${skill.id}`)
-    await waitFor(() => expect(document.querySelector('.main')?.textContent?.length).toBeGreaterThan(0))
+    await waitFor(() => expect(screen.getAllByText(skill.name).length).toBeGreaterThan(0), { timeout: 5000 })
     expectNotCrashed('型の詳細')
   })
 })
