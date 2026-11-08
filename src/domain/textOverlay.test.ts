@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyStyle, clampRange, currentStyle, fontCss, TEXT_FONTS, TEXT_STYLES, fitAll, fitFrom, fitTo, lanes, moveEnd, moveStart, newText, outputIntervals, snapCenter, TEXT_MIN_SECONDS, wrapLines, type TextOverlay } from './textOverlay'
+import { applyStyle, clampRange, currentStyle, fontCss, TEXT_FONTS, TEXT_STYLES, fitAll, fitFrom, fitTo, lanes, moveEnd, moveStart, newText, outputIntervals, snapCenter, graphemes, TEXT_MIN_SECONDS, wrapLines, type TextOverlay } from './textOverlay'
 
 const base = (over: Partial<TextOverlay> = {}): TextOverlay => ({
   id: 'x',
@@ -198,5 +198,14 @@ describe('有料の判定に使う、書き出しに載るテキスト', () => {
   it('外した区間にしかかからないテキストは、できあがりの時間を持たない', () => {
     const o = { ...newText('a', 6, 10), text: 'x', start: 6, end: 9 }
     expect(outputIntervals([o], [{ key: 'a', start: 0, end: 5 }])).toEqual([])
+  })
+})
+
+describe('1 文字ずつに分ける（字間のあるフォントで、絵文字を壊さない）', () => {
+  it('複数の符号でできた絵文字（仕事・家族・国旗・異体字）を、1 文字として数える', () => {
+    expect(graphemes('👩‍🍳')).toHaveLength(1)
+    expect(graphemes('🇯🇵')).toHaveLength(1)
+    expect(graphemes('☕️')).toHaveLength(1)
+    expect(graphemes('Aラ👩‍🍳')).toEqual(['A', 'ラ', '👩‍🍳'])
   })
 })

@@ -284,10 +284,19 @@ const isLight = (hex: string) => {
  * テキスト 1 つを、絵（W×H px）に描く。描いた外枠を返す。
  * 文字は太め。背景の板なしのときは影をつける（明るい動画の上でも読めるように）
  */
+/**
+ * 1 文字ずつに分ける（絵文字は、肌の色・仕事の絵文字のように、複数の符号が 1 つの絵になるので、符号ではなく、見た目の 1 文字で分ける。
+ * Intl.Segmenter が無い古い WebView では、符号ごと）
+ */
+export function graphemes(s: string): string[] {
+  const Seg = (Intl as { Segmenter?: new (l?: string, o?: { granularity: 'grapheme' }) => { segment: (x: string) => Iterable<{ segment: string }> } }).Segmenter
+  return Seg ? Array.from(new Seg(undefined, { granularity: 'grapheme' }).segment(s), (x) => x.segment) : Array.from(s)
+}
+
 /** 1 行の幅（字間 tracking を足す。字ごとに測る） */
 function lineWidth(ctx: CanvasRenderingContext2D, line: string, px: number, tracking: number): number {
   if (tracking === 0) return ctx.measureText(line).width
-  const chars = Array.from(line)
+  const chars = graphemes(line)
   return chars.reduce((n, c) => n + ctx.measureText(c).width, 0) + tracking * px * Math.max(0, chars.length - 1)
 }
 
@@ -298,7 +307,7 @@ function drawLine(ctx: CanvasRenderingContext2D, line: string, cx: number, y: nu
     else ctx.fillText(line, cx, y)
     return
   }
-  const chars = Array.from(line)
+  const chars = graphemes(line)
   let x = cx - lineWidth(ctx, line, px, tracking) / 2
   ctx.textAlign = 'left'
   for (const c of chars) {
