@@ -13,6 +13,7 @@ import {
   deleteDomain,
   deleteRecord,
   deleteSkill,
+  eraseAllData,
   ensureSeeded,
   lastNextAction,
   recordsOf,
@@ -436,5 +437,22 @@ describe('分野の件数（消す前の確認）', () => {
     expect(await countDomainContents(domainId)).toEqual({ skills: 3, records: 2, media: 1 })
     await deleteDomain(domainId)
     expect(await countDomainContents(domainId)).toEqual({ skills: 0, records: 0, media: 0 })
+  })
+})
+
+describe('すべて削除', () => {
+  it('記録は消すが、買ったこと・無料で試した回数は残す（制限を戻さない）', async () => {
+    await createDomain('ピアノ')
+    await db.meta.bulkPut([
+      { key: 'purchase:plus', value: true },
+      { key: 'purchase:composeUses', value: 2 },
+      { key: 'sync:config', value: { url: 'x', token: 't' } },
+    ])
+    await eraseAllData()
+    expect(await db.domains.count()).toBe(0)
+    expect((await db.meta.get('purchase:plus'))?.value).toBe(true)
+    expect((await db.meta.get('purchase:composeUses'))?.value).toBe(2)
+    expect(await db.meta.get('sync:config')).toBeUndefined()
+    expect((await db.meta.get('seeded'))?.value).toBe(true)
   })
 })

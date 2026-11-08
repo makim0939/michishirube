@@ -454,3 +454,17 @@ export async function lastNextAction(skillId: string): Promise<{ text: string; a
   const hit = records.find((r) => r.nextAction)
   return hit && { text: hit.nextAction, at: hit.createdAt }
 }
+
+/**
+ * この端末の記録・設定をすべて消す（設定の「すべて削除」）。
+ * 買ったこと・無料で試した回数（purchase:）は残す：消すと、Plus を買った人が次に起動するまで無料の見た目に戻り、
+ * 無料で試せる回数も 3 回に戻って、制限を避けられてしまう。購入はストアの履歴が正で、データではない
+ */
+export async function eraseAllData() {
+  await db.transaction('rw', [db.domains, db.skills, db.records, db.media, db.meta, db.outbox], async () => {
+    const purchases = await db.meta.filter((m) => m.key.startsWith('purchase:')).toArray()
+    await Promise.all([db.domains.clear(), db.skills.clear(), db.records.clear(), db.media.clear()])
+    await Promise.all([db.meta.clear(), db.outbox.clear()])
+    await db.meta.bulkPut([...purchases, { key: 'seeded', value: true }])
+  })
+}
