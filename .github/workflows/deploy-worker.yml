@@ -10,6 +10,7 @@ on:
       - 'worker/**'
       - 'shared/**'
       - 'public/privacy.html'
+      - 'public/privacy-en.html'
       - 'package.json'
       - 'pnpm-lock.yaml'
       - '.github/workflows/deploy-worker.yml'
