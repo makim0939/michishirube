@@ -1631,6 +1631,19 @@ a.media.placeholder {
   color: var(--accent-text);
 }
 
+/* 編集画面（.recorder）の上に出す、明るい背景のシート（Plus）では、ボタンを暗い画面用の色にしない（閉じる・復元が、灰色に沈む）。BGM のシートは、暗い背景なので、そのまま */
+.recorder .picker-sheet:not(.bgm-sheet) .btn {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.recorder .picker-sheet:not(.bgm-sheet) .btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
 .recorder-time {
   padding: 4px 12px;
   border-radius: 999px;
