@@ -453,6 +453,7 @@ export const ja = {
   errors: {
     offline: 'つながりません。電波を確認してください',
     relogin: 'ログインし直してください',
+    syncUnexpected: '同期できませんでした。電波を確かめて、しばらくしてからもう一度試してください',
     /** サーバーからのエラー。日本語は、サーバーの文をそのまま出す（文が無ければ番号。code は英語で使う） */
     fromServer: (_code: string | undefined, message: string | undefined, status: number) =>
       message ?? `エラーが起きました（${status}）`,
