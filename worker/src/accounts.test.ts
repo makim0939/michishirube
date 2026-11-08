@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createAuthRequest, finishAuthRequest, finishLogin, userForSession } from './accounts'
+import { AUTH_TTL_MS, createAuthRequest, finishAuthRequest, finishLogin, readAuthRequest, userForSession } from './accounts'
 import { testD1 } from './testD1'
 
 async function setup() {
@@ -36,5 +36,14 @@ describe('ログインの認可を終える', () => {
     expect(await finishLogin(db, 'req1', 'u1', undefined)).toBeUndefined()
     expect(await finishAuthRequest(db, 'req1', 'done', { refreshToken: 'x' })).toBeUndefined()
     expect(await sessions(db)).toBe(0)
+  })
+})
+
+describe('期限が切れた認可', () => {
+  it('読もうとしたときに行ごと消す（受け取られなかった YouTube の鍵を残さない）', async () => {
+    const db = await setup()
+    await finishAuthRequest(db, 'req1', 'done', { refreshToken: 'secret-token' })
+    expect(await readAuthRequest(db, 'req1', Date.now() + AUTH_TTL_MS + 1000)).toBeNull()
+    expect(await db.prepare('SELECT COUNT(*) AS n FROM auth_requests').first<{ n: number }>()).toEqual({ n: 0 })
   })
 })
