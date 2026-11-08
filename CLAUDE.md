@@ -12,7 +12,7 @@
 - `public/world/`：型の見本（`patterns/`）と、記録がないときのホーム背景（`light/`）
 - `docs/`：`setup.md`（サーバーの運営）、`oauth-verification.md`（Google の審査）、`app-store-submission.md`（App Store の提出）、`play-store-submission.md`（Google Play の提出）、`versioning.md`（版の決め方・上げ方）、`iap.md`（アプリ内課金。投げ銭・ラテ帳 Plus）
 - `references/`：参考画像・ChatGPT への依頼の資料。**git に入れない**
-- コマンド：`pnpm test`、`pnpm typecheck`、`pnpm app:build`（`VITE_API_URL` をローカルの値にしたまま作らない）。`main` へのマージで、Web 版と Worker が自動で公開される。
+- コマンド：`pnpm test`、`pnpm typecheck`、`pnpm lint`（フックの呼び方）、`pnpm app:build`（`VITE_API_URL` をローカルの値にしたまま作らない）。`main` へのマージで、Web 版と Worker が自動で公開される。
 
 ## 開発の流れ
 
