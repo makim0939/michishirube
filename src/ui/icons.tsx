@@ -200,6 +200,21 @@ export const ChevronDownIcon = (p: P) => (
   </Icon>
 )
 
+/** 星（Plus の印） */
+export const SparkleIcon = (p: P) => (
+  <Icon {...p}>
+    <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" />
+  </Icon>
+)
+
+/** 鍵（使い切って、押すと案内が出る） */
+export const LockIcon = (p: P) => (
+  <Icon {...p}>
+    <rect x="5" y="11" width="14" height="9" rx="2" />
+    <path d="M8 11V8a4 4 0 018 0v3" />
+  </Icon>
+)
+
 export const MusicIcon = (p: P) => (
   <Icon {...p}>
     <path d="M9 18V6l10-2v12" />

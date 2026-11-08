@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from 'react'
 import { canJoinVideos } from '../data/compose'
 import { contentBlob, fileBackedVideo } from '../data/content'
 import { contentFileExists, contentUrl, playsFromFile } from '../data/files'
-import { loadProducts, mayCompose, noteComposeUse } from '../data/purchases'
+import { loadProducts, mayCompose, noteComposeUse, usePlusAccess } from '../data/purchases'
+import { PlusSheet } from './PlusSheet'
 import { db } from '../data/db'
 import { compressPhoto, inMemory, makePoster, type Poster } from '../data/mediaPrep'
 import { addRecord, deleteRecord, lastNextAction, updateRecord, type NewMedia } from '../data/repo'
@@ -488,6 +489,19 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
     })
     discardTimer.current = window.setTimeout(() => setJoining((j) => (j === 'hidden' ? false : j)), toastDuration(t.compose.discarded, 'ok', true))
   }
+  const plusAccess = usePlusAccess()
+  const [plusSheet, setPlusSheet] = useState(false)
+  /**
+   * 編集を開く。2 本以上の動画は、つなぐ（有料）ので、無料の回数を使い切っていたら、開く前に購入の案内を出す
+   * （開いてから止めると、無料の編集だけしたい人が、操作の途中で止まってしまう）。1 本なら、無料の編集として開ける
+   */
+  const openComposer = () => {
+    if (plusAccess.locked && joinable.length >= 2) {
+      setPlusSheet(true)
+      return
+    }
+    setJoining('open')
+  }
   /** 画面は誰でも開ける。有料の操作（2 本以上をつなぐ・BGM）は、「完了」を押したときに、回数を見る */
   const mayUsePaid = async () => {
     const { plus } = await loadProducts()
@@ -798,7 +812,7 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
         )}
         {/* 編集（頭・尻・中の削除・分割・つなぐ・BGM）。動画があるときに出す。iPhone・iPad だけ */}
         {joinable.length >= 1 && (
-          <button type="button" className="btn small join-button" onClick={() => setJoining('open')}>
+          <button type="button" className="btn small join-button" onClick={openComposer}>
             <ScissorsIcon size={16} />
             {t.common.edit}
           </button>
@@ -983,6 +997,8 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
       {pickingSkill && skills && (
         <SkillPicker skills={skills} current={skillId} onPick={pickSkill} onClose={() => setPickingSkill(false)} />
       )}
+
+      {plusSheet && <PlusSheet exhausted onUnlocked={() => { setPlusSheet(false); setJoining('open') }} onClose={() => setPlusSheet(false)} />}
 
       {joining && (
         <Composer

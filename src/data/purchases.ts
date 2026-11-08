@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { NativePurchases, type Product } from '@capgo/native-purchases'
 import { isIosApp } from '../platform'
@@ -122,6 +123,54 @@ export async function sendTip() {
 export async function restorePurchases(): Promise<boolean> {
   await NativePurchases.restorePurchases()
   return refreshPlus()
+}
+
+/** 編集画面・設定が、Plus の見せ方を決めるための状態 */
+export type PlusAccess = {
+  /** Plus の機能を、最初から並べる（買った・買う手段が無い端末）。「Plus を試す」は出さない */
+  open: boolean
+  /** 「Plus を試す」を出す（買う手段があり、まだ買っていない） */
+  trial: boolean
+  /** 無料で試せる回数を使い切った（試す入口は、購入の案内になる） */
+  locked: boolean
+  /** あと何回、無料で試せるか */
+  left: number
+  /** 端末に覚えているものを読み込む前（この間は、道具の行を見せない。無料の見た目から全部並ぶ見た目に、ちらつかないように） */
+  loading?: boolean
+}
+
+/**
+ * Plus の見せ方。買っている・買う手段が無い（Android・Web・商品が未登録）ときは、最初から全部並べる。
+ * 買う手段があるときは、無料の機能だけを並べ、「Plus を試す」から有料の機能を出す。
+ * 商品を確かめ終わるまで（checked が false で、前に取れた記録も無い間）は、どちらにも決めず、無料の見た目のままにする
+ * （ちらつきを避ける。商品が取れないと分かれば、そのあと全部並べる）
+ */
+export function plusAccessOf(s: { canBuy: boolean; plus: boolean; listed: boolean; checked: boolean; uses: number }): PlusAccess {
+  const left = Math.max(0, FREE_COMPOSE_USES - s.uses)
+  if (!s.canBuy || s.plus) return { open: true, trial: false, locked: false, left }
+  if (s.listed) return { open: false, trial: true, locked: left === 0, left }
+  return { open: s.checked, trial: false, locked: false, left }
+}
+
+/** 画面で使う Plus の状態（端末に覚えているものと、ストアの商品の確認から） */
+export function usePlusAccess(): PlusAccess {
+  const [checked, setChecked] = useState(!canPurchase)
+  const stored = useLiveQuery(
+    async () => ({
+      plus: await isPlus(),
+      listed: (await db.meta.get(PLUS_LISTED_KEY))?.value === true,
+      uses: ((await db.meta.get(COMPOSE_USES_KEY))?.value as number | undefined) ?? 0,
+    }),
+    [],
+  )
+  // 前に商品が取れたことがあれば、画面を開くたびにストアへ問い合わせない（確かめるのは、まだ一度も取れていないときだけ）
+  const needsCheck = !!stored && !stored.listed
+  useEffect(() => {
+    if (canPurchase && needsCheck) void loadProducts().finally(() => setChecked(true))
+  }, [needsCheck])
+  // 読み込み前は、決めない（無料の見た目）
+  if (!stored) return { open: false, trial: false, locked: false, left: FREE_COMPOSE_USES, loading: true }
+  return plusAccessOf({ canBuy: canPurchase, ...stored, checked })
 }
 
 /**

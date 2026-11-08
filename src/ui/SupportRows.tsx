@@ -6,6 +6,7 @@ import {
   PurchaseCancelled,
   sendTip,
   usePlus,
+  usePlusAccess,
 } from '../data/purchases'
 import { useToast } from './feedback'
 import { PlusSheet } from './PlusSheet'
@@ -54,6 +55,7 @@ export function useProducts() {
  */
 export function SupportRows() {
   const plus = usePlus()
+  const access = usePlusAccess()
   const products = useProducts()
   const { busy } = usePurchaseRunner()
   const [open, setOpen] = useState(false)
@@ -65,7 +67,7 @@ export function SupportRows() {
       <li>
         <button type="button" className="settings-row choice" disabled={busy || plus} onClick={() => setOpen(true)}>
           <span className="settings-label">{t.support.plus}</span>
-          <span className="settings-value">{plus ? t.support.purchased : t.support.plusKind}</span>
+          <span className="settings-value">{plus ? t.support.purchased : access.trial && !access.locked ? t.support.plusLeft(access.left) : t.support.plusKind}</span>
         </button>
       </li>
       {open && <PlusSheet onUnlocked={() => setOpen(false)} onClose={() => setOpen(false)} />}

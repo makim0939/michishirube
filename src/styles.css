@@ -1131,7 +1131,8 @@ select:focus {
   color: var(--bg);
   font-size: 0.9rem;
   font-weight: 600;
-  z-index: 30;
+  /* 編集画面（.recorder、50）の上にも出す（編集の中で出すトースト・購入の案内の結果が、画面の裏に隠れないように） */
+  z-index: 55;
   animation: toast-in 0.2s ease-out;
   /* 下にあるボタンを押せなくしない（トーストの中のボタンだけは押せる） */
   pointer-events: none;
@@ -3611,6 +3612,17 @@ h1.wordmark {
   /* 「編集」と同じ大きさ（横いっぱいに広げない） */
   align-self: flex-start;
   width: auto;
+}
+
+/* 無料の人の入口「Plus を試す」。静かな文字ボタン（黄色の文字・細い縁）。押すと、有料の機能が並ぶ */
+.plus-try {
+  margin-left: auto;
+  padding: 6px 12px;
+  min-height: 36px;
+  border: 1px solid rgb(245 197 66 / 55%);
+  border-radius: 999px;
+  color: #f5c542;
+  font-size: 0.9rem;
 }
 
 /* ---- BGM（つなぐ画面） ---- */
