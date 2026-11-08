@@ -14,6 +14,7 @@ import {
   deleteRecord,
   deleteSkill,
   ensureSeeded,
+  eraseAllData,
   lastNextAction,
   recordsOf,
   removeReference,
@@ -436,5 +437,24 @@ describe('分野の件数（消す前の確認）', () => {
     expect(await countDomainContents(domainId)).toEqual({ skills: 3, records: 2, media: 1 })
     await deleteDomain(domainId)
     expect(await countDomainContents(domainId)).toEqual({ skills: 0, records: 0, media: 0 })
+  })
+})
+
+describe('すべて削除', () => {
+  it('記録と同期の印は消すが、買った Plus と試した回数は残す', async () => {
+    await ensureSeeded()
+    await db.meta.bulkPut([
+      { key: 'purchase:plus', value: true },
+      { key: 'purchase:composeUses', value: 2 },
+      { key: 'sync:config', value: { token: 'x' } },
+    ])
+    await eraseAllData()
+    expect(await db.domains.count()).toBe(0)
+    expect(await db.skills.count()).toBe(0)
+    expect((await db.meta.get('purchase:plus'))?.value).toBe(true)
+    expect((await db.meta.get('purchase:composeUses'))?.value).toBe(2)
+    expect(await db.meta.get('sync:config')).toBeUndefined()
+    // 削除のあとに、同梱の型が勝手に戻らない
+    expect((await db.meta.get('seeded'))?.value).toBe(true)
   })
 })

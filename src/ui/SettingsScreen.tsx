@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { estimateBackupSize, exportBackup, importBackup, type BackupPart } from '../data/backup'
 import { db } from '../data/db'
+import { eraseAllData } from '../data/repo'
 import { contentFilesSize, KEEP_HIGH_DAYS, optimizeVideos, resetContentFiles } from '../data/content'
 import { saveSnapshotNow } from '../data/snapshot'
 import { isLoggedIn, logout } from '../data/account'
@@ -559,11 +560,7 @@ function DataPage() {
             await Promise.race([runSync().catch(() => {}), new Promise((r) => setTimeout(r, 5000))])
             // サーバーのログインも終える（端末の印を消すだけだと、トークンがサーバーで使えるまま残る）
             await logout()
-            await db.transaction('rw', [db.domains, db.skills, db.records, db.media, db.meta, db.outbox], async () => {
-              await Promise.all([db.domains.clear(), db.skills.clear(), db.records.clear(), db.media.clear()])
-              await Promise.all([db.meta.clear(), db.outbox.clear()])
-              await db.meta.put({ key: 'seeded', value: true })
-            })
+            await eraseAllData()
             // アプリでは、動画・写真のファイルも消し、記録の写しも空にする（次に開いたときに戻らないように）
             await resetContentFiles()
             await saveSnapshotNow()
