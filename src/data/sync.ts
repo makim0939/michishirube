@@ -319,9 +319,13 @@ async function doSync(): Promise<void> {
       ...(tooLarge > 0 ? { tooLarge } : {}),
     })
   } catch (e) {
+    // 画面に出す文は、アプリが日本語（英語）で書いた SyncError だけ。それ以外（Wi-Fi のログイン画面が返って JSON を読めない、など）の
+    // ブラウザの英語の例外文は、そのまま出さない（原因は、開発者向けのログに残す）
+    if (!(e instanceof SyncError)) dlog('同期で想定外の例外', e instanceof Error ? `${e.name}: ${e.message}` : String(e))
+    const shown = e instanceof SyncError ? e : new SyncError(t.errors.syncUnexpected)
     // ログアウトしたあとに失敗を書き戻さない（次にログインしたとき、前の失敗が出ないように）
-    if (await stillConnected(config)) await setStatus({ ...(await getSyncStatus()), error: e instanceof Error ? e.message : String(e) })
-    throw e
+    if (await stillConnected(config)) await setStatus({ ...(await getSyncStatus()), error: shown.message })
+    throw shown
   }
 }
 

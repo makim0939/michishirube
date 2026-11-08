@@ -445,6 +445,7 @@ export const en: Messages = {
   errors: {
     offline: "Can't connect. Please check your connection",
     relogin: 'Please sign in again',
+    syncUnexpected: "Couldn't sync. Check your connection and try again in a while",
     // サーバーの文は日本語なので、次にすることが分かるエラーは英語に置き換え、ほかは番号だけ出す
     fromServer: (code, _message, status) =>
       ({

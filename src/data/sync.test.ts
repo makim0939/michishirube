@@ -198,6 +198,23 @@ describe('サーバーの写真を取ってくる', () => {
 })
 
 describe('同期が止まらないようにする', () => {
+  it('Wi-Fi のログイン画面（HTML）が返っても、英語の例外文を出さず、日本語で止まる', async () => {
+    const server = fakeServer()
+    vi.stubGlobal('fetch', server.fetch)
+    await connectWithConfig({ url: 'https://api.example', token: 't' })
+    // カフェの Wi-Fi は、ログインするまで、どの URL にも 200 で HTML を返す
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('<!doctype html><html></html>', { status: 200, headers: { 'content-type': 'text/html' } })))
+    const e = await runSync().then(
+      () => undefined,
+      (err: unknown) => err,
+    )
+    expect(e).toBeInstanceOf(Error)
+    const status = await getSyncStatus()
+    expect(status.error).toBeTruthy()
+    expect(status.error).not.toMatch(/JSON|Unexpected|Failed to execute/)
+    expect((e as Error).message).toBe(status.error)
+  })
+
   it('写真の置ける量を超えても、記録の同期は続ける', async () => {
     const server = fakeServer()
     const base = server.fetch.getMockImplementation()!
