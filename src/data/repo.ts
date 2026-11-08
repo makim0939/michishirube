@@ -36,6 +36,19 @@ export async function ensureSeeded() {
   })
 }
 
+/**
+ * 「すべて削除」：記録・型・同期の印を消し、はじめの状態に戻す（同梱の型は入れ直さない）。
+ * 買った Plus と試した回数（purchase:）は、記録ではなく、ストアの購入に結びつく端末の状態なので残す
+ * （消すと、買った人が次に開き直すまで Plus を使えず、試す回数も3回に戻ってしまう）
+ */
+export async function eraseAllData() {
+  await db.transaction('rw', [db.domains, db.skills, db.records, db.media, db.meta, db.outbox], async () => {
+    await Promise.all([db.domains.clear(), db.skills.clear(), db.records.clear(), db.media.clear()])
+    await Promise.all([db.meta.filter((m) => !m.key.startsWith('purchase:')).delete(), db.outbox.clear()])
+    await db.meta.put({ key: 'seeded', value: true })
+  })
+}
+
 // ---- ロードマップ ----
 
 export async function importTemplate(json: unknown): Promise<string> {
