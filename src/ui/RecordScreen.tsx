@@ -306,6 +306,10 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
     return action !== 'leave'
   })
 
+  // 早い return より前に置く（記録を読み込むまえと後で、フックの数が変わると、画面が落ちる）
+  const plusAccess = usePlusAccess()
+  const [plusSheet, setPlusSheet] = useState(false)
+
   if (!data || !loaded) return missing ? <Empty>{t.common.recordNotFound}</Empty> : null
   const { next, count } = data
   if (!skill) return <Empty>{t.common.skillNotFound}</Empty>
@@ -489,8 +493,6 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
     })
     discardTimer.current = window.setTimeout(() => setJoining((j) => (j === 'hidden' ? false : j)), toastDuration(t.compose.discarded, 'ok', true))
   }
-  const plusAccess = usePlusAccess()
-  const [plusSheet, setPlusSheet] = useState(false)
   /**
    * 編集を開く。2 本以上の動画は、つなぐ（有料）ので、無料の回数を使い切っていたら、開く前に購入の案内を出す
    * （開いてから止めると、無料の編集だけしたい人が、操作の途中で止まってしまう）。1 本なら、無料の編集として開ける
