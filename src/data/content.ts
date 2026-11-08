@@ -86,6 +86,29 @@ function optimizedPath(m: Pick<Media, 'id' | 'contentAt' | 'createdAt'>, quality
 /** 画質をそろえるのに、この回数失敗したらあきらめる */
 const MAX_OPTIMIZE_TRIES = 3
 
+/**
+ * 画質をそろえる 1 本にかける時間の上限（ms）。ネイティブの作り直しには、時間切れも取り消しも無いので、
+ * 戻ってこないと、下の直列のキュー（記録の保存後に中身をファイルへ移す処理も同じ列）が、そこで止まってしまう。
+ * 動画の長さはここでは分からないので、大きさに比例させる（長い動画ほど大きい）。端末のエンコードは、実時間よりずっと速いので、
+ * 余裕を見た下限と、1 MB あたり 2 秒（数 Mbps の動画で、実時間の 10 倍以上）にする
+ */
+export function transcodeTimeoutMs(size: number): number {
+  return 120_000 + Math.max(0, size) / 1_000_000 * 2_000
+}
+
+class TranscodeTimeout extends Error {}
+
+function withTimeout<T>(task: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new TranscodeTimeout()), ms)
+  })
+  return Promise.race([task, timeout]).finally(() => clearTimeout(timer))
+}
+
+/** 時間切れにした動画。ネイティブが裏でまだ書いているかもしれないので、この起動の間は、同じ出力へ作り直しを重ねない */
+const timedOut = new Set<string>()
+
 /** 高画質で端末に置く動画を、この日数がたったら標準に軽くする（SNS に出すのは撮ってすぐのことが多いので） */
 export const KEEP_HIGH_DAYS = 3
 
@@ -160,7 +183,7 @@ async function optimizeNow(ids?: string[]) {
   const targets = ids ?? ((await db.media.filter((m) => m.type.startsWith('video/') && !!m.file).primaryKeys()) as string[])
   for (const id of targets) {
     const m = await db.media.get(id)
-    if (!m?.file || !m.type.startsWith('video/')) continue
+    if (!m?.file || !m.type.startsWith('video/') || timedOut.has(id)) continue
     const quality = targetQuality(m, settings, now)
     if (m.optimized === quality) continue
     // 作り直せない動画は、そのまま使う（作り直し済みの印を付けて、YouTube に上げられるようにする）
@@ -172,8 +195,9 @@ async function optimizeNow(ids?: string[]) {
     const out = optimizedPath(m, quality)
     let result: { skipped: boolean; size?: number }
     try {
-      result = await transcodeVideoFile(source, out, QUALITY[quality])
+      result = await withTimeout(transcodeVideoFile(source, out, QUALITY[quality]), transcodeTimeoutMs(m.size))
     } catch (e) {
+      if (e instanceof TranscodeTimeout) timedOut.add(id)
       // 作り直す仕組みが入っていない（古いアプリなど）ときは、印を付けずにやめる（入ったらそろえる）
       if ((e as { code?: string } | null)?.code === 'UNIMPLEMENTED') return
       console.warn('動画の画質をそろえられませんでした', id, e)
