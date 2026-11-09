@@ -122,7 +122,8 @@ describe('主要な画面を開いても落ちない', () => {
     await waitFor(() => expect(screen.getByText('スモークテストの理由')).toBeTruthy(), { timeout: 5000 })
     expectNotCrashed('1杯の詳細')
     await visit(`#/skill/${skill.id}`)
-    await waitFor(() => expect(screen.getAllByText(skill.name).length).toBeGreaterThan(0), { timeout: 5000 })
+    // 型の名前は「ロゼッタ」「（リーフ）」のように、画面で分けて出すことがある（どの型が選ばれるかは実行ごとに違う）ので、見出しがあることで見る
+    await waitFor(() => expect(screen.getByRole('heading', { level: 1 })).toBeTruthy(), { timeout: 5000 })
     expectNotCrashed('型の詳細')
   })
 })
