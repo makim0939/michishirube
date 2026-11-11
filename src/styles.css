@@ -2636,6 +2636,30 @@ a.notice {
   color: var(--muted);
 }
 
+/* カメラの上に出す、撮る型の名前（初めての記録だけ）。押すと型を選び直せる */
+.recorder-skill {
+  appearance: none;
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid rgb(255 255 255 / 45%);
+  border-radius: 999px;
+  background: rgb(0 0 0 / 35%);
+  color: #fff;
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.recorder-skill small {
+  margin-left: 6px;
+  color: rgb(255 255 255 / 70%);
+  font-size: 0.8rem;
+}
+
 /* 初めての記録だけ出す、型を選べることの一行（静かな補足。押すと型の選択を開く） */
 .title-hint {
   appearance: none;

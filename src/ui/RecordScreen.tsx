@@ -221,6 +221,8 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
   // 早い return（記録が見つからないとき）より前に置く（フックの数が変わらないように）
   useEffect(() => () => window.clearTimeout(discardTimer.current), [])
   const [pickingSkill, setPickingSkill] = useState(false)
+  // カメラから型を選びに来たときは、選び終えたらカメラに戻す（撮るために来ているので）
+  const backToCamera = useRef(false)
   const videoInput = useRef<HTMLInputElement>(null)
   const photoInput = useRef<HTMLInputElement>(null)
   const libraryInput = useRef<HTMLInputElement>(null)
@@ -326,9 +328,19 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
 
   const change = () => setDirty(true)
 
+  // 初めての記録（全部の型を通して0件）のときだけ、型を選べることを知らせる
+  const firstEver = !editing && shownStats?.total === 0 && !!skills && skills.length > 1
+  const closePicker = () => {
+    setPickingSkill(false)
+    if (backToCamera.current) {
+      backToCamera.current = false
+      setRecording(true)
+    }
+  }
+
   /** 型を選び直す。原因の選択肢は型ごとなので、選べなくなる型へ移るときは、選んでいた原因を外す */
   const pickSkill = (id: string) => {
-    setPickingSkill(false)
+    closePicker()
     if (id === skillId) return
     const target = skills?.find((s) => s.id === id)
     setDraft((d) => ({ ...d, skillId: id, ...(target && patternFor(target.name) ? {} : { causes: undefined }) }))
@@ -693,7 +705,7 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
             )}
           </h1>
           {/* 初めての記録のときだけ、型を選べることを一行で知らせる（見出しの ▾ だけでは気づきにくいため） */}
-          {!editing && shownStats?.total === 0 && skills && skills.length > 1 && (
+          {firstEver && (
             <button type="button" className="title-hint" aria-haspopup="dialog" onClick={() => setPickingSkill(true)}>
               {t.record.pickHint}
             </button>
@@ -979,6 +991,19 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
         <Recorder
           quality={videoSettings.quality}
           focus={editing ? undefined : next?.text}
+          skillSwitch={
+            firstEver
+              ? {
+                  name: splitName(skill.name).main,
+                  hint: t.record.pickHint,
+                  onClick: () => {
+                    backToCamera.current = true
+                    setRecording(false)
+                    setPickingSkill(true)
+                  },
+                }
+              : undefined
+          }
           references={skill.references}
           onDone={(video, photo, quality) => {
             setRecording(false)
@@ -1005,7 +1030,7 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
       )}
 
       {pickingSkill && skills && (
-        <SkillPicker skills={skills} current={skillId} onPick={pickSkill} onClose={() => setPickingSkill(false)} />
+        <SkillPicker skills={skills} current={skillId} onPick={pickSkill} onClose={closePicker} />
       )}
 
       {plusSheet && <PlusSheet exhausted onUnlocked={() => { setPlusSheet(false); setJoining('open') }} onClose={() => setPlusSheet(false)} />}

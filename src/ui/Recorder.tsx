@@ -16,7 +16,7 @@ import type { VideoQuality } from '../data/videoStorage'
 import { isWebUrl } from '../domain/template'
 import type { Reference } from '../domain/types'
 import { readStorage, writeStorage } from './storage'
-import { MicIcon, PhotoIcon } from './icons'
+import { ChevronDownIcon, MicIcon, PhotoIcon } from './icons'
 import { useBackHandler } from './useBackHandler'
 import { t } from '../i18n'
 
@@ -74,6 +74,7 @@ export function Recorder({
   onAlbum,
   focus,
   references = [],
+  skillSwitch,
   quality: defaultQuality,
 }: {
   /** video は録画（写真だけのときは無い）、photo はできあがりの写真（スキップしたら無い）。quality は、この動画を撮った画質 */
@@ -87,6 +88,8 @@ export function Recorder({
   focus?: string
   /** 手本の動画・記事 */
   references?: Reference[]
+  /** 撮る型の名前と、選び直すボタン（初めての記録のときだけ渡される。カメラが画面を覆うので、型を選べることはここで知らせる） */
+  skillSwitch?: { name: string; hint: string; onClick: () => void }
   /** 撮る画質の初めの値（設定の「画質」）。上の「画質」のボタンで、この1回だけ変えられる */
   quality: VideoQuality
 }) {
@@ -414,6 +417,13 @@ export function Recorder({
             )
           )}
         </div>
+        {skillSwitch && !recording && !finished && !shooting && (
+          <button type="button" className="recorder-skill" onClick={skillSwitch.onClick}>
+            <span>{skillSwitch.name}</span>
+            <ChevronDownIcon size={16} />
+            <small>{skillSwitch.hint}</small>
+          </button>
+        )}
         {/* 注ぐ直前に見たい、今回意識すること。手本のボタンは、今回の有無や長さで動かないよう、いつも左端に置く */}
         {(focus || (references.length > 0 && !recording)) && (
           <div className="recorder-sub">
