@@ -211,6 +211,7 @@ export const ja = {
     editTitle: '記録を編集',
     nth: (n: number) => `${n}杯目`,
     changeSkill: (name: string) => `${name}：型を変える`,
+    pickHint: 'ほかの型も選べます',
     leaveEdited: '編集した内容が保存されていません。保存せずに戻りますか？',
     leaveMedia: (n: number) => `撮った動画・写真が ${n} 件あります。保存せずに戻ると消えます。`,
     leaveInput: '入力した内容が保存されていません。保存せずに戻ると消えます。',

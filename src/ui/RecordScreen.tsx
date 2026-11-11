@@ -165,6 +165,8 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
     async () => ({
       next: !editing ? await lastNextAction(skillId) : undefined,
       count: await db.records.where('skillId').equals(skillId).count(),
+      // 全部の型を通した記録の数（初めての記録かどうか）
+      total: await db.records.count(),
     }),
     [skillId, editing],
   )
@@ -690,6 +692,12 @@ export function RecordScreen({ skillId: routeSkillId, recordId }: { skillId: str
               splitName(skill.name).main
             )}
           </h1>
+          {/* 初めての記録のときだけ、型を選べることを一行で知らせる（見出しの ▾ だけでは気づきにくいため） */}
+          {!editing && shownStats?.total === 0 && skills && skills.length > 1 && (
+            <button type="button" className="title-hint" aria-haspopup="dialog" onClick={() => setPickingSkill(true)}>
+              {t.record.pickHint}
+            </button>
+          )}
         </div>
       </header>
 

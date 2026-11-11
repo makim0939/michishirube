@@ -205,6 +205,7 @@ export const en: Messages = {
     editTitle: 'Edit record',
     nth: (n) => `Cup ${n}`,
     changeSkill: (name) => `${name}: change pattern`,
+    pickHint: 'Other patterns too',
     leaveEdited: "Your changes aren't saved. Go back without saving?",
     leaveMedia: (n) => `You have ${n} video${n === 1 ? '' : 's'}/photo${n === 1 ? '' : 's'}. ${n === 1 ? 'It' : 'They'} will be lost if you go back without saving.`,
     leaveInput: "What you entered isn't saved. It will be lost if you go back without saving.",
