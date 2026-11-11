@@ -399,6 +399,9 @@ export const en: Messages = {
     uploadFailed: ' (upload failed)',
   },
   records: {
+    layout: 'Layout',
+    byDay: 'By day',
+    tiles: 'Tiles',
     filter: 'Filter by pattern',
     all: 'All patterns',
     toToday: "Go to today's practice",

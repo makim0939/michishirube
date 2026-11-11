@@ -8,15 +8,25 @@ import { formatAgo, splitName } from './common'
 import { type Cup, CupGrid } from './CupGrid'
 import { pickCupMedia } from './cupImage'
 import { href } from './router'
+import { readStorage, writeStorage } from './storage'
 import { t } from '../i18n'
 
 /** 一度にたくさん読み込みすぎないよう、少しずつ出す（3列なので3の倍数） */
 const PAGE = 24
 
-/** ラテ帳：全部の型の杯を新しい順に、写真の格子で。日付ごとに区切り、押すとその1杯の詳細を開く */
+const LAYOUT_KEY = 'michishirube:records-layout'
+type Layout = 'days' | 'tiles'
+
+/** ラテ帳：全部の型の杯を新しい順に、写真の格子で。日付ごとに区切る表示と、区切らずに並べる表示を選べて、押すとその1杯の詳細を開く */
 export function RecordsScreen() {
   const [limit, setLimit] = useState(PAGE)
   const [skillFilter, setSkillFilter] = useState<string>('')
+  // 日付ごとに分ける表示が初め。並べ方は、次に開いたときも覚えておく
+  const [layout, setLayout] = useState<Layout>(() => (readStorage('local', LAYOUT_KEY) === 'tiles' ? 'tiles' : 'days'))
+  const changeLayout = (l: Layout) => {
+    setLayout(l)
+    writeStorage('local', LAYOUT_KEY, l)
+  }
 
   const data = useLiveQuery(async () => {
     const [skills, domains, all] = await Promise.all([
@@ -91,6 +101,27 @@ export function RecordsScreen() {
         </label>
       )}
 
+      {shown.length > 0 && (
+        <div className="segmented small view-switch" role="group" aria-label={t.records.layout}>
+          <button
+            type="button"
+            className={layout === 'days' ? 'selected' : ''}
+            aria-pressed={layout === 'days'}
+            onClick={() => changeLayout('days')}
+          >
+            {t.records.byDay}
+          </button>
+          <button
+            type="button"
+            className={layout === 'tiles' ? 'selected' : ''}
+            aria-pressed={layout === 'tiles'}
+            onClick={() => changeLayout('tiles')}
+          >
+            {t.records.tiles}
+          </button>
+        </div>
+      )}
+
       {shown.length === 0 ? (
         <div className="empty">
           <p>{t.common.noRecordsYet}</p>
@@ -98,6 +129,9 @@ export function RecordsScreen() {
             {t.records.toToday}
           </a>
         </div>
+      ) : layout === 'tiles' ? (
+        // 日付で区切らず、新しい順にそのまま並べる
+        <CupGrid cups={groups.flatMap((g) => g.cups)} />
       ) : (
         groups.map((g) => (
           <section key={g.label} className="section">
