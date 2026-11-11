@@ -59,20 +59,21 @@ export function RecordsScreen() {
   const shown = data.records.slice(0, limit)
   const more = data.records.length > limit
 
-  // 日付の見出しで区切る
-  const groups: { label: string; cups: Cup[] }[] = []
-  for (const r of shown) {
-    const label = formatAgo(r.createdAt)
-    const cup: Cup = {
+  const cups = shown.map((r): Cup => ({
       record: r,
       media: pickCupMedia((r.mediaIds ?? []).map((id) => mediaById.get(id))),
       number: data.numbers.get(r.id) ?? 0,
       skillName: skillById.get(r.skillId)?.name,
       failed: data.uploads && (r.mediaIds ?? []).some((id) => mediaById.get(id)?.upload === 'failed'),
-    }
-    if (groups.at(-1)?.label === label) groups.at(-1)!.cups.push(cup)
-    else groups.push({ label, cups: [cup] })
-  }
+  }))
+
+  // 日付の見出しで区切る（タイル表示では、cups をそのまま並べる）
+  const groups: { label: string; cups: Cup[] }[] = []
+  shown.forEach((r, i) => {
+    const label = formatAgo(r.createdAt)
+    if (groups.at(-1)?.label === label) groups.at(-1)!.cups.push(cups[i])
+    else groups.push({ label, cups: [cups[i]] })
+  })
 
   return (
     <div className="screen">
@@ -131,7 +132,7 @@ export function RecordsScreen() {
         </div>
       ) : layout === 'tiles' ? (
         // 日付で区切らず、新しい順にそのまま並べる
-        <CupGrid cups={groups.flatMap((g) => g.cups)} />
+        <CupGrid cups={cups} />
       ) : (
         groups.map((g) => (
           <section key={g.label} className="section">

@@ -126,4 +126,36 @@ describe('主要な画面を開いても落ちない', () => {
     await waitFor(() => expect(screen.getByRole('heading', { level: 1 })).toBeTruthy(), { timeout: 5000 })
     expectNotCrashed('型の詳細')
   })
+
+  it('ラテ帳の並べ方を、日付ごととタイルで切り替えられ、選んだ並べ方を覚えている', async () => {
+    window.localStorage.removeItem('michishirube:records-layout')
+    await boot()
+    const skill = (await db.skills.toArray())[0]
+    await addRecord({ skillId: skill.id, reason: 'ラテ帳の並べ方', nextAction: '', files: [] })
+    await visit('#/records')
+    // 初めは日付ごと：見出しが出ている
+    const byDay = await screen.findByRole('button', { name: t.records.byDay })
+    expect(byDay.getAttribute('aria-pressed')).toBe('true')
+    expect(document.querySelector('.screen .section h2')).toBeTruthy()
+
+    // タイル：日付の見出しがなくなり、杯は並んだまま
+    await act(async () => screen.getByRole('button', { name: t.records.tiles }).click())
+    expect(screen.getByRole('button', { name: t.records.tiles }).getAttribute('aria-pressed')).toBe('true')
+    expect(document.querySelector('.screen .section h2')).toBeNull()
+    expect(document.querySelectorAll('.cup-tile').length).toBe(1)
+    expect(window.localStorage.getItem('michishirube:records-layout')).toBe('tiles')
+    expectNotCrashed('ラテ帳（タイル）')
+
+    // 開き直しても、タイルのまま。壊れた値は、日付ごとに戻る
+    cleanup()
+    await boot()
+    await visit('#/records')
+    expect((await screen.findByRole('button', { name: t.records.tiles })).getAttribute('aria-pressed')).toBe('true')
+    cleanup()
+    window.localStorage.setItem('michishirube:records-layout', 'x')
+    await boot()
+    await visit('#/records')
+    expect((await screen.findByRole('button', { name: t.records.byDay })).getAttribute('aria-pressed')).toBe('true')
+    window.localStorage.removeItem('michishirube:records-layout')
+  })
 })
