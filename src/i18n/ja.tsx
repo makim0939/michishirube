@@ -407,6 +407,9 @@ export const ja = {
     uploadFailed: '（アップに失敗）',
   },
   records: {
+    layout: '並べ方',
+    byDay: '日付ごと',
+    tiles: 'タイル',
     filter: '型で絞り込む',
     all: 'すべての型',
     toToday: '今日の練習へ',
